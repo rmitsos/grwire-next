@@ -1,4 +1,4 @@
-import { firstTag, normalizeItem } from "./utils.js";
+import { fetchText, firstTag, normalizeItem } from "./utils.js";
 
 /** Reads URL sets and recursively follows sitemap indexes with a bounded depth. */
 export class SitemapSourceAdapter {
@@ -10,9 +10,13 @@ export class SitemapSourceAdapter {
     if (visited.has(url)) return [];
     if (depth > this.maxDepth) throw new Error(`Sitemap nesting exceeds maxDepth ${this.maxDepth}`);
     visited.add(url);
-    const response = await this.fetch(url, { headers });
-    if (!response.ok) throw new Error(`Sitemap request failed (${response.status})`);
-    const xml = await response.text();
+    const result = await fetchText(this.fetch, url, {
+      headers,
+      timeoutMs: 10_000,
+      maxBytes: 5_000_000,
+      accept: "application/xml, text/xml",
+    });
+    const xml = result.text;
     if (/<sitemapindex\b/i.test(xml)) {
       const children = [...xml.matchAll(/<sitemap\b[^>]*>([\s\S]*?)<\/sitemap>/gi)].map((m) => firstTag(m[1], "loc")).filter(Boolean);
       const pages = await Promise.all(children.map((child) => this.#load(new URL(child, url).href, headers, depth + 1, visited)));

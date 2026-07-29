@@ -40,3 +40,49 @@ export function normalizeItem(item, sourceUrl) {
     metadata: item.metadata || {}
   };
 }
+
+const DEFAULT_TIMEOUT_MS = 10_000;
+const DEFAULT_MAX_BYTES = 2_000_000;
+
+/**
+ * Fetches a source without allowing a slow server or an unexpectedly large
+ * response to consume an entire serverless invocation.
+ */
+export async function fetchText(fetchImpl, url, options = {}) {
+  const {
+    headers,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    maxBytes = DEFAULT_MAX_BYTES,
+    accept = "*/*",
+  } = options;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetchImpl(url, {
+      headers: {
+        "User-Agent": "GRWire/0.2 (+https://grwire.com)",
+        Accept: accept,
+        ...headers,
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`Request failed (${response.status})`);
+
+    const declared = Number(response.headers?.get?.("content-length"));
+    if (declared && declared > maxBytes) {
+      throw new Error(`Response exceeds ${maxBytes} bytes`);
+    }
+
+    const text = await response.text();
+    if (Buffer.byteLength(text, "utf8") > maxBytes) {
+      throw new Error(`Response exceeds ${maxBytes} bytes`);
+    }
+    return { text, url: response.url || url, contentType: response.headers?.get?.("content-type") };
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error(`Request timed out after ${timeoutMs}ms`);
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}

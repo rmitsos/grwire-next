@@ -1,3 +1,7 @@
 export * from "./sources/index.js";
 export * from "./relationships.js";
 export * from "./private-import.js";
+export * from "./watch-rules.js";
+export * from "./pipeline.js";
+export * from "./impact-map.js";
+export * from "./organizations.js";
