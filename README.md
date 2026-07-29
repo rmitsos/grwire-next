@@ -108,4 +108,9 @@ Version 0.2 is the ingestion and relationship-intelligence foundation. It has
 PostgreSQL/Neon persistence is defined in `db/schema.sql`, including private
 knowledge tables and restricted public views. The application store accepts a
 node-postgres-compatible client and automatically links articles to known
-organisations. The next step is the authenticated private review dashboard.
+organisations.
+
+The Next.js dashboard uses a single private password and a signed HTTP-only
+session cookie. Configure `DASHBOARD_PASSWORD`, `DASHBOARD_SESSION_SECRET` and
+`DATABASE_URL` in Vercel. Without a database it displays fictional preview data
+that is visibly marked as such.
