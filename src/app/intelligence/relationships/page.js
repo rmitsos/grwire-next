@@ -12,7 +12,7 @@ export default async function RelationshipsPage() {
     <main className="dashboard">
       <header className="topbar compact">
         <div>
-          <Link className="back-link" href="/">← Market map</Link>
+          <Link className="back-link" href="/intelligence">← Market map</Link>
           <h1>Relationship register</h1>
         </div>
         <div className="privacy-pill">Private by default</div>

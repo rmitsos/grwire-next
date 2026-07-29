@@ -1,9 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "GR Wire Intelligence",
-  description: "Private Greek market intelligence dashboard",
-  robots: { index: false, follow: false },
+  title: { default: "GR Wire", template: "%s | GR Wire" },
+  description: "Greek finance, telecom and energy infrastructure in one focused wire.",
 };
 
 export default function RootLayout({ children }) {

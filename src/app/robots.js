@@ -1,3 +1,9 @@
 export default function robots() {
-  return { rules: { userAgent: "*", disallow: "/" } };
+  return {
+    rules: {
+      userAgent: "*",
+      allow: "/",
+      disallow: ["/intelligence", "/api"],
+    },
+  };
 }
