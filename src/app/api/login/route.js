@@ -8,7 +8,7 @@ import {
 export async function POST(request) {
   const form = await request.formData();
   const password = String(form.get("password") || "");
-  const url = new URL("/", request.url);
+  const url = new URL("/intelligence", request.url);
 
   if (!process.env.DASHBOARD_PASSWORD || !process.env.DASHBOARD_SESSION_SECRET) {
     return NextResponse.redirect(new URL("/login?error=config", request.url), 303);

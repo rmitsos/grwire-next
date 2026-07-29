@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS articles (
   source_id TEXT,
   source_url TEXT,
   score NUMERIC(5,2) NOT NULL DEFAULT 0,
+  categories TEXT[] NOT NULL DEFAULT '{}',
+  relevance JSONB NOT NULL DEFAULT '[]',
   metadata JSONB NOT NULL DEFAULT '{}',
   first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -71,6 +73,9 @@ CREATE TABLE IF NOT EXISTS relationship_evidence (
 );
 
 CREATE INDEX IF NOT EXISTS articles_published_idx ON articles (published_at DESC);
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS categories TEXT[] NOT NULL DEFAULT '{}';
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS relevance JSONB NOT NULL DEFAULT '[]';
+CREATE INDEX IF NOT EXISTS articles_categories_idx ON articles USING GIN (categories);
 CREATE INDEX IF NOT EXISTS articles_source_idx ON articles (source_id);
 CREATE INDEX IF NOT EXISTS article_organizations_org_idx
   ON article_organizations (organization_id, article_id);

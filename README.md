@@ -114,3 +114,8 @@ The Next.js dashboard uses a single private password and a signed HTTP-only
 session cookie. Configure `DASHBOARD_PASSWORD`, `DASHBOARD_SESSION_SECRET` and
 `DATABASE_URL` in Vercel. Without a database it displays fictional preview data
 that is visibly marked as such.
+
+The public site lives at `/`, with `/finance`, `/telco`, `/energy` and `/search`.
+Private intelligence lives at `/intelligence`. `vercel.json` schedules the
+multi-source scanner daily; configure `CRON_SECRET` so Vercel can authenticate
+the ingestion route. A signed-in user can also run a scan manually.

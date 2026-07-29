@@ -7,7 +7,10 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   await requirePrivateSession();
   const data = await getDashboardData();
-  const statusCounts = Object.groupBy(data.relationships, (relationship) => relationship.status);
+  const statusCounts = data.relationships.reduce((counts, relationship) => {
+    counts[relationship.status] = (counts[relationship.status] || 0) + 1;
+    return counts;
+  }, {});
 
   return (
     <main className="dashboard">
@@ -17,7 +20,8 @@ export default async function DashboardPage() {
           <h1>Market map</h1>
         </div>
         <div className="top-actions">
-          <Link href="/relationships">Relationship register</Link>
+          <Link href="/intelligence/relationships">Relationship register</Link>
+          <form action="/api/ingest?return=intelligence" method="post"><button className="quiet" type="submit">Scan now</button></form>
           <form action="/api/logout" method="post"><button className="quiet" type="submit">Sign out</button></form>
         </div>
       </header>
@@ -33,7 +37,7 @@ export default async function DashboardPage() {
         <Metric label="Relevant articles" value={data.articles.length} note="Latest review set" />
         <Metric label="Organisations" value={data.organizations.length} note="Mapped entities" />
         <Metric label="Active claims" value={data.relationships.length} note="Facts + assessments" />
-        <Metric label="Rumours" value={(statusCounts.rumour || []).length} note="Always private" />
+        <Metric label="Rumours" value={statusCounts.rumour || 0} note="Always private" />
       </section>
 
       <section className="dashboard-grid">
@@ -65,7 +69,7 @@ export default async function DashboardPage() {
             {["confirmed", "reported", "assessment", "rumour", "disputed"].map((status) => (
               <div className="status-row" key={status}>
                 <span className={`badge ${status}`}>{status}</span>
-                <strong>{(statusCounts[status] || []).length}</strong>
+                <strong>{statusCounts[status] || 0}</strong>
               </div>
             ))}
           </div>
