@@ -115,6 +115,7 @@ function validateEvidence(record) {
     note: record.note?.trim() || undefined,
     sourceId: record.sourceId || undefined,
     author: record.author?.trim() || undefined,
+    visibility: record.visibility || "private",
   };
 }
 

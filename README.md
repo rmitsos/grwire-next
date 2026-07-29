@@ -105,5 +105,7 @@ const paths = tracePossibleImpacts({
 ## Current scope
 
 Version 0.2 is the ingestion and relationship-intelligence foundation. It has
-no database or public UI yet. The next step is persistence for articles,
-organisations, claims and source health, followed by a private review dashboard.
+PostgreSQL/Neon persistence is defined in `db/schema.sql`, including private
+knowledge tables and restricted public views. The application store accepts a
+node-postgres-compatible client and automatically links articles to known
+organisations. The next step is the authenticated private review dashboard.
