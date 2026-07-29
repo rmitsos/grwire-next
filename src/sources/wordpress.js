@@ -14,7 +14,10 @@ export class WordPressSourceAdapter {
     const url = new URL(endpoint);
     url.searchParams.set("per_page", String(Math.min(source.limit || 25, 100)));
     url.searchParams.set("_fields", "id,link,date_gmt,modified_gmt,title,excerpt");
-    if (source.after) url.searchParams.set("after", new Date(source.after).toISOString());
+    const after = source.after || (source.lookbackDays
+      ? new Date(Date.now() - source.lookbackDays * 86_400_000).toISOString()
+      : null);
+    if (after) url.searchParams.set("after", new Date(after).toISOString());
     if (source.search) url.searchParams.set("search", source.search);
     if (source.categories?.length) url.searchParams.set("categories", source.categories.join(","));
 

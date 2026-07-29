@@ -13,6 +13,10 @@ export const PUBLIC_CATEGORIES = {
     name: "Energy Infrastructure",
     deck: "Power grids, storage, interconnections and energy investment.",
   },
+  infrastructure: {
+    name: "Infrastructure",
+    deck: "Construction, concessions, transport, data centres and strategic projects.",
+  },
 };
 
 export async function getLatestArticles({ category, query, limit = 80 } = {}) {

@@ -45,5 +45,11 @@ export async function ingestMarket() {
     stored += 1;
   }
 
+  await sql`
+    INSERT INTO scan_runs (scanned_at, fetched, relevant, stored, sources)
+    VALUES (${report.scannedAt}, ${report.fetched}, ${report.relevant}, ${stored},
+            ${JSON.stringify(report.sources)}::jsonb)
+  `;
+
   return { ...report, stored };
 }

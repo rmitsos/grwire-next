@@ -95,10 +95,22 @@ async function createSchema(sql) {
       visibility TEXT NOT NULL DEFAULT 'private'
     )
   `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS scan_runs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      scanned_at TIMESTAMPTZ NOT NULL,
+      fetched INTEGER NOT NULL DEFAULT 0,
+      relevant INTEGER NOT NULL DEFAULT 0,
+      stored INTEGER NOT NULL DEFAULT 0,
+      sources JSONB NOT NULL DEFAULT '[]',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
   await sql`CREATE INDEX IF NOT EXISTS articles_published_idx ON articles (published_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS articles_categories_idx ON articles USING GIN (categories)`;
   await sql`CREATE INDEX IF NOT EXISTS relationship_claims_source_idx ON relationship_claims (source_organization_id)`;
   await sql`CREATE INDEX IF NOT EXISTS relationship_claims_target_idx ON relationship_claims (target_organization_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS scan_runs_scanned_idx ON scan_runs (scanned_at DESC)`;
 
   for (const organization of ORGANIZATIONS) {
     await sql`

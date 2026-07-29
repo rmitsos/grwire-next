@@ -72,6 +72,16 @@ CREATE TABLE IF NOT EXISTS relationship_evidence (
   CHECK (visibility = 'private' OR kind <> 'professional_note')
 );
 
+CREATE TABLE IF NOT EXISTS scan_runs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  scanned_at TIMESTAMPTZ NOT NULL,
+  fetched INTEGER NOT NULL DEFAULT 0,
+  relevant INTEGER NOT NULL DEFAULT 0,
+  stored INTEGER NOT NULL DEFAULT 0,
+  sources JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS articles_published_idx ON articles (published_at DESC);
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS categories TEXT[] NOT NULL DEFAULT '{}';
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS relevance JSONB NOT NULL DEFAULT '[]';
@@ -85,6 +95,7 @@ CREATE INDEX IF NOT EXISTS relationship_claims_target_idx
   ON relationship_claims (target_organization_id);
 CREATE INDEX IF NOT EXISTS relationship_claims_visibility_idx
   ON relationship_claims (visibility, claim_status);
+CREATE INDEX IF NOT EXISTS scan_runs_scanned_idx ON scan_runs (scanned_at DESC);
 
 -- Public consumers query views, never the underlying knowledge tables.
 CREATE OR REPLACE VIEW public_relationship_claims AS

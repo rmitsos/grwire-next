@@ -11,7 +11,7 @@ function includesAny(text, terms = []) {
 
 export function validateWatchRule(rule) {
   if (!rule?.id || !rule?.label) throw new TypeError("Watch rules require id and label");
-  if (!rule.entities?.length && !rule.topics?.length) {
+  if (!rule.entities?.length && !rule.topics?.length && !rule.strongTopics?.length) {
     throw new TypeError(`Watch rule ${rule.id} requires entities or topics`);
   }
   return {
@@ -19,6 +19,7 @@ export function validateWatchRule(rule) {
     category: "market",
     entities: [],
     topics: [],
+    strongTopics: [],
     geography: [],
     exclusions: [],
     preferredDomains: [],
@@ -49,6 +50,14 @@ export function scoreItem(item, rawRule) {
   } else if (includesAny(summary, rule.topics)) {
     score += 2;
     reasons.push("watched topic in summary");
+  }
+
+  if (includesAny(title, rule.strongTopics)) {
+    score += 5;
+    reasons.push("high-signal topic in title");
+  } else if (includesAny(summary, rule.strongTopics)) {
+    score += 3;
+    reasons.push("high-signal topic in summary");
   }
 
   if (rule.geography.length && includesAny(combined, rule.geography)) {
@@ -96,30 +105,44 @@ export const DEFAULT_WATCH_RULES = Object.freeze([
     label: "Greek telecom infrastructure",
     category: "telco",
     entities: ["ΟΤΕ", "Cosmote", "Vodafone", "Nova", "ΔΕΗ Fiber", "PPC Fiber", "ΕΕΤΤ", "EETT"],
-    topics: ["FTTH", "fiber", "fibre", "5G", "οπτική ίνα", "ευρυζων", "spectrum", "data center"],
+    topics: ["telecom", "network", "broadband", "κινητή", "τηλεπικοινων"],
+    strongTopics: ["FTTH", "fiber", "fibre", "5G", "οπτική ίνα", "ευρυζων", "spectrum", "data center", "subsea cable"],
     geography: ["Greece", "Greek", "Ελλάδα", "ελλην"],
     exclusions: ["smartphone review", "consumer offer"],
     preferredDomains: ["eett.gr", "cosmote.gr", "vodafone.gr", "nova.gr", "dei.gr"],
-    threshold: 5,
+    threshold: 4,
   },
   {
     id: "greek-energy-infrastructure",
     label: "Greek energy infrastructure",
     category: "energy",
     entities: ["ΑΔΜΗΕ", "ADMIE", "IPTO", "ΔΕΔΔΗΕ", "HEDNO", "ΔΕΣΦΑ", "DESFA", "ΡΑΑΕΥ", "RAAEY", "ΔΕΗ", "PPC"],
-    topics: ["substation", "interconnection", "grid", "storage", "BESS", "υποσταθ", "διασύνδεσ", "αποθήκευση"],
+    topics: ["energy", "electricity", "renewable", "gas", "ενέργεια", "ηλεκτρ", "ΑΠΕ"],
+    strongTopics: ["substation", "interconnection", "grid", "storage", "BESS", "υποσταθ", "διασύνδεσ", "αποθήκευση", "offshore wind"],
     geography: ["Greece", "Greek", "Ελλάδα", "ελλην"],
     preferredDomains: ["admie.gr", "deddie.gr", "desfa.gr", "raaey.gr", "dei.gr"],
-    threshold: 5,
+    threshold: 4,
   },
   {
     id: "greek-finance",
     label: "Greek finance and listed companies",
     category: "finance",
-    entities: ["Alpha Bank", "Eurobank", "Εθνική Τράπεζα", "Πειραιώς", "Bank of Greece", "ATHEX", "Χρηματιστήριο Αθηνών"],
-    topics: ["results", "earnings", "dividend", "acquisition", "bond", "κερδ", "μέρισμα", "εξαγορά", "ομόλογ"],
+    entities: ["Alpha Bank", "Eurobank", "Εθνική Τράπεζα", "National Bank of Greece", "Πειραιώς", "Piraeus Bank", "Bank of Greece", "Τράπεζα της Ελλάδος", "ATHEX", "Χρηματιστήριο Αθηνών"],
+    topics: ["bank", "market", "investment", "δάνει", "επένδυ", "χρηματιστηρ"],
+    strongTopics: ["results", "earnings", "dividend", "acquisition", "merger", "bond", "κερδ", "μέρισμα", "εξαγορά", "συγχώνευση", "ομόλογ"],
     geography: ["Greece", "Greek", "Ελλάδα", "ελλην"],
     preferredDomains: ["athexgroup.gr", "bankofgreece.gr"],
-    threshold: 5,
+    threshold: 4,
+  },
+  {
+    id: "greek-infrastructure",
+    label: "Greek infrastructure and construction",
+    category: "infrastructure",
+    entities: ["AKTOR", "Intrakat", "GEK TERNA", "ΓΕΚ ΤΕΡΝΑ", "AVAX", "ΑΒΑΞ", "Metlen", "Ellaktor", "Ελλάκτωρ", "Circet"],
+    topics: ["infrastructure", "construction", "project", "παραχώρηση", "κατασκευ", "έργο"],
+    strongTopics: ["data center", "subsea cable", "railway", "motorway", "concession", "σιδηρόδρομ", "αυτοκινητόδρομ"],
+    geography: ["Greece", "Greek", "Ελλάδα", "ελλην"],
+    preferredDomains: ["ypodomes.com", "ered.gr"],
+    threshold: 4,
   },
 ]);
