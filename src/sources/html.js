@@ -1,12 +1,16 @@
-import { absoluteUrl, normalizeItem, stripTags } from "./utils.js";
+import { absoluteUrl, fetchText, normalizeItem, stripTags } from "./utils.js";
 
 /** Extracts listing links using a configurable container and link class. */
 export class HtmlListingSourceAdapter {
   constructor(options = {}) { this.fetch = options.fetch || globalThis.fetch; }
   async load(source) {
-    const response = await this.fetch(source.url, { headers: source.headers });
-    if (!response.ok) throw new Error(`HTML request failed (${response.status})`);
-    return this.parse(await response.text(), response.url || source.url, source);
+    const result = await fetchText(this.fetch, source.url, {
+      headers: source.headers,
+      timeoutMs: source.timeoutMs,
+      maxBytes: source.maxBytes,
+      accept: "text/html, application/xhtml+xml",
+    });
+    return this.parse(result.text, result.url, source);
   }
   parse(html, sourceUrl, config = {}) {
     const className = config.linkClass;

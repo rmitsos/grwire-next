@@ -1,13 +1,17 @@
-import { absoluteUrl, firstTag, normalizeItem } from "./utils.js";
+import { absoluteUrl, fetchText, firstTag, normalizeItem } from "./utils.js";
 
 /** Parses RSS 2.0 and Atom feeds into the common source item shape. */
 export class RssSourceAdapter {
   constructor(options = {}) { this.fetch = options.fetch || globalThis.fetch; }
 
   async load(source) {
-    const response = await this.fetch(source.url, { headers: source.headers });
-    if (!response.ok) throw new Error(`Feed request failed (${response.status})`);
-    return this.parse(await response.text(), response.url || source.url);
+    const result = await fetchText(this.fetch, source.url, {
+      headers: source.headers,
+      timeoutMs: source.timeoutMs,
+      maxBytes: source.maxBytes,
+      accept: "application/rss+xml, application/atom+xml, application/xml, text/xml",
+    });
+    return this.parse(result.text, result.url);
   }
 
   parse(xml, sourceUrl) {

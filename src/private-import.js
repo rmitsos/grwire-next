@@ -27,8 +27,14 @@ function secureEqual(value, secret) {
 }
 function canonicalUrl(value) { const url = new URL(value); url.hash = ""; return url.href; }
 function sanitizeSource(source) {
-  if (!source || !["rss", "atom", "sitemap", "html"].includes(source.type)) throw new TypeError("A supported source type is required");
+    if (!source || !["rss", "atom", "sitemap", "html", "wordpress", "gdelt"].includes(source.type)) throw new TypeError("A supported source type is required");
   const url = new URL(source.url);
   if (!/^https?:$/.test(url.protocol)) throw new TypeError("Source URL must use HTTP(S)");
-  return { type: source.type, url: url.href, headers: source.headers, linkClass: source.linkClass };
+  return {
+    ...source,
+    type: source.type,
+    url: url.href,
+    headers: source.headers,
+    linkClass: source.linkClass,
+  };
 }
