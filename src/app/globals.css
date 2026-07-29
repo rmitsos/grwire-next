@@ -86,7 +86,7 @@ button { cursor: pointer; }
 }
 .warning-banner { border-color: #d69b86; background: #fbe6df; }
 
-.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px; }
 .metric, .panel, .relationship-card {
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -114,6 +114,11 @@ button { cursor: pointer; }
 .article-row p { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 
 .status-list { display: grid; gap: 10px; }
+.source-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.source-card { display: grid; gap: 5px; padding: 13px; border: 1px solid var(--line); background: #fff; }
+.source-card strong { font-size: 12px; overflow-wrap: anywhere; }
+.source-card span { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.source-card.failed { border-color: #d69b86; background: #fff8f5; }
 .status-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--line); }
 .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 6px 9px; font-size: 10px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; background: #e7e9e4; }
 .badge.confirmed { background: #dff0e5; color: var(--green); }

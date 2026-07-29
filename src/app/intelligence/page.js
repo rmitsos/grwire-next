@@ -34,13 +34,33 @@ export default async function DashboardPage() {
       {data.databaseError && <div className="warning-banner">The database could not be read; preview data is shown.</div>}
 
       <section className="metrics">
-        <Metric label="Relevant articles" value={data.articles.length} note="Latest review set" />
+        <Metric label="Stored articles" value={data.articles.length} note="Latest review set" />
+        <Metric label="Last scan accepted" value={data.latestScan?.relevant ?? "—"} note={data.latestScan ? `${data.latestScan.fetched} discovered` : "Run the first scan"} />
         <Metric label="Organisations" value={data.organizations.length} note="Mapped entities" />
         <Metric label="Active claims" value={data.relationships.length} note="Facts + assessments" />
         <Metric label="Rumours" value={statusCounts.rumour || 0} note="Always private" />
       </section>
 
       <section className="dashboard-grid">
+        {data.latestScan && (
+          <div className="panel full">
+            <div className="panel-heading">
+              <div><span className="kicker">SOURCE HEALTH</span><h2>Latest market scan</h2></div>
+              <span className="muted">{dateTimeLabel(data.latestScan.scannedAt)}</span>
+            </div>
+            <div className="source-grid">
+              {data.latestScan.sources.map((source) => (
+                <article className={`source-card ${source.ok ? "" : "failed"}`} key={source.id}>
+                  <strong>{source.id}</strong>
+                  {source.ok
+                    ? <span>{source.accepted || 0} accepted · {source.fetched || 0} fetched</span>
+                    : <span>Failed · {source.error}</span>}
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="panel wide">
           <div className="panel-heading">
             <div><span className="kicker">NEWS SIGNALS</span><h2>Items requiring attention</h2></div>
@@ -109,6 +129,15 @@ function Empty({ text }) {
 function dateLabel(value) {
   if (!value) return "Undated";
   return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "Europe/Athens" }).format(new Date(value));
+}
+
+function dateTimeLabel(value) {
+  if (!value) return "Not scanned";
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/Athens",
+  }).format(new Date(value));
 }
 
 function nameOf(organizations, id) {

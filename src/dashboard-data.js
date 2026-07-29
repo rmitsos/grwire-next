@@ -1,14 +1,14 @@
-import { neon } from "@neondatabase/serverless";
 import { tracePossibleImpacts } from "./impact-map";
 import { validateRelationship } from "./relationships";
+import { ensureDatabase } from "./database";
 
 export async function getDashboardData() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) return previewData();
 
-  const sql = neon(connectionString);
   try {
-    const [articleRows, organizationRows, claimRows, evidenceRows] = await Promise.all([
+    const sql = await ensureDatabase();
+    const [articleRows, organizationRows, claimRows, evidenceRows, scanRows] = await Promise.all([
       sql`SELECT id, canonical_url, title, summary, published_at, source_id, score
           FROM articles ORDER BY published_at DESC NULLS LAST LIMIT 30`,
       sql`SELECT id, name, aliases, sector FROM organizations ORDER BY name`,
@@ -16,6 +16,8 @@ export async function getDashboardData() {
           WHERE claim_status <> 'expired'
           ORDER BY confidence DESC, reviewed_at DESC NULLS LAST`,
       sql`SELECT * FROM relationship_evidence ORDER BY observed_at DESC`,
+      sql`SELECT scanned_at, fetched, relevant, stored, sources
+          FROM scan_runs ORDER BY scanned_at DESC LIMIT 1`,
     ]);
 
     const evidenceByClaim = groupEvidence(evidenceRows);
@@ -60,6 +62,13 @@ export async function getDashboardData() {
       organizations: organizationRows,
       relationships,
       impacts: buildImpactSummary(organizationRows, relationships),
+      latestScan: scanRows[0] ? {
+        scannedAt: iso(scanRows[0].scanned_at),
+        fetched: scanRows[0].fetched,
+        relevant: scanRows[0].relevant,
+        stored: scanRows[0].stored,
+        sources: scanRows[0].sources || [],
+      } : null,
     };
   } catch (error) {
     console.error("[dashboard] database read failed:", error?.message || error);
@@ -132,6 +141,7 @@ function previewData() {
     organizations,
     relationships,
     impacts: buildImpactSummary(organizations, relationships),
+    latestScan: null,
   };
 }
 

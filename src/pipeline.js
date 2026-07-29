@@ -28,7 +28,14 @@ export async function scanMarket({
       status.push({ id: source.id || source.url, ok: false, error: result.reason?.message || String(result.reason) });
       continue;
     }
-    status.push({ id: source.id || source.url, ok: true, fetched: result.value.items.length });
+    const sourceRanked = rankItems(result.value.items, rules);
+    status.push({
+      id: source.id || source.url,
+      ok: true,
+      fetched: result.value.items.length,
+      accepted: sourceRanked.length,
+      rejected: result.value.items.length - sourceRanked.length,
+    });
     for (const item of result.value.items) {
       const url = canonicalUrl(item.url);
       if (!byUrl.has(url)) byUrl.set(url, { ...item, sourceId: source.id || source.url });

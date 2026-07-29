@@ -66,6 +66,21 @@ test("watch rules rank specific market stories and reject weak matches", () => {
   assert.equal(ranked[0].score, 10);
 });
 
+test("high-signal topics can qualify an article without a named company", () => {
+  const ranked = rankItems([{
+    url: "https://x.test/grid",
+    title: "New electricity interconnection enters construction",
+    summary: "",
+  }], [{
+    id: "grid",
+    label: "Grid projects",
+    strongTopics: ["interconnection"],
+    threshold: 4,
+  }]);
+  assert.equal(ranked.length, 1);
+  assert.equal(ranked[0].score, 5);
+});
+
 test("market scan isolates source failures and deduplicates tracking URLs", async () => {
   const fetch = async (url) => {
     if (String(url).includes("broken")) throw new Error("offline");
@@ -86,4 +101,6 @@ test("market scan isolates source failures and deduplicates tracking URLs", asyn
   });
   assert.equal(result.items.length, 1);
   assert.equal(result.sources.filter((source) => !source.ok).length, 1);
+  assert.equal(result.sources.find((source) => source.id === "one").accepted, 1);
+  assert.equal(result.sources.find((source) => source.id === "one").rejected, 0);
 });
