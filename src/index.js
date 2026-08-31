@@ -5,6 +5,7 @@ export * from "./watch-rules.js";
 export * from "./pipeline.js";
 export * from "./impact-map.js";
 export * from "./agents/source-guardian.js";
+export * from "./agents/article-reader.js";
 export * from "./agents/market-analyst.js";
 export * from "./agents/correlation-trends.js";
 export * from "./organizations.js";

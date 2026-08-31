@@ -1,6 +1,7 @@
 import { createSourceAdapter } from "./sources/index.js";
 import { DEFAULT_WATCH_RULES, rankItems } from "./watch-rules.js";
 import { inspectArticle, validateArticleLink } from "./agents/source-guardian.js";
+import { readArticles } from "./agents/article-reader.js";
 
 export async function scanMarket({
   sources,
@@ -9,12 +10,14 @@ export async function scanMarket({
   concurrency = 4,
   validateLinks = false,
   validationLimit = 40,
+  readArticlePages = false,
+  articleReadLimit = 60,
 }) {
   if (!Array.isArray(sources) || !sources.length) throw new TypeError("At least one source is required");
   const outcomes = [];
 
   for (let index = 0; index < sources.length; index += concurrency) {
-    const batch = sources.slice(index, index + concurrency);
+    const batch = sources.filter((source) => source.enabled !== false).slice(index, index + concurrency);
     const settled = await Promise.allSettled(
       batch.map(async (source) => {
         const adapter = createSourceAdapter(source.type, { fetch });
@@ -45,7 +48,15 @@ export async function scanMarket({
     }
   }
 
-  const candidates = [...byUrl.values()]
+  let discoveredItems = [...byUrl.values()];
+  if (readArticlePages && discoveredItems.length) {
+    discoveredItems = await readArticles(discoveredItems, {
+      fetch: fetch || globalThis.fetch,
+      limit: articleReadLimit,
+    });
+  }
+
+  const candidates = discoveredItems
     .map((item) => ({ ...item, validation: inspectArticle(item, { rules }) }))
     .filter((item) => item.validation.accepted);
 

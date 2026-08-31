@@ -4,6 +4,7 @@ import {
   buildDailyIntelligence,
   discoverSourceCandidates,
   inspectArticle,
+  parseArticleHtml,
   validateArticleLink,
 } from "../src/index.js";
 
@@ -41,6 +42,22 @@ test("link validation reports reachability without throwing", async () => {
   });
   assert.equal(result.status, "reachable");
   assert.equal(result.httpStatus, 200);
+});
+
+test("article reader extracts first-party metadata and readable body", () => {
+  const parsed = parseArticleHtml(`
+    <html><head>
+      <meta property="og:title" content="OTE launches a Greek FTTH project">
+      <meta name="description" content="A new fibre programme was announced.">
+      <meta property="article:published_time" content="2026-08-30T10:00:00Z">
+      <link rel="canonical" href="https://publisher.test/original">
+    </head><body><article><h1>Headline</h1>
+      <p>This is a sufficiently long paragraph describing the infrastructure programme in Greece.</p>
+    </article></body></html>`, "https://publisher.test/redirect");
+  assert.equal(parsed.canonicalUrl, "https://publisher.test/original");
+  assert.equal(parsed.title, "OTE launches a Greek FTTH project");
+  assert.match(parsed.body, /infrastructure programme/);
+  assert.equal(parsed.publishedAt, "2026-08-30T10:00:00.000Z");
 });
 
 test("source discovery surfaces repeated relevant domains", () => {

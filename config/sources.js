@@ -43,6 +43,34 @@ export const SOURCES = [
     limit: 100,
   },
   {
+    id: "eett-announcements",
+    type: "html",
+    url: "https://www.eett.gr/mme-ekdoseis/deltia-typou-anakoinoseis/",
+    linkPatterns: ["anakoin", "deltio", "decision"],
+    limit: 100,
+  },
+  {
+    id: "raaey-energy-announcements",
+    type: "html",
+    url: "https://www.raaey.gr/energeia/anakinoseis/",
+    linkPatterns: ["anakoin", "αδει", "storage", "energy"],
+    limit: 100,
+  },
+  {
+    id: "ypen-energy-announcements",
+    type: "html",
+    url: "https://ypen.gov.gr/category/anakoinoseis-typou/",
+    linkPatterns: ["energia", "ενεργ", "anakoin", "press"],
+    limit: 100,
+  },
+  {
+    id: "ggtt-telecom-announcements",
+    type: "html",
+    url: "https://ggtt.mindigital.gr/section/telecom",
+    linkPatterns: ["telecom", "post", "news", "announcement", "τηλεπικ"],
+    limit: 100,
+  },
+  {
     id: "energypress-wordpress",
     type: "wordpress",
     url: "https://energypress.gr",
@@ -67,10 +95,12 @@ export const SOURCES = [
     id: "naftemporiki",
     type: "rss",
     url: "https://www.naftemporiki.gr/feed/",
+    enabled: false,
   },
   {
     id: "ot-gr",
     type: "rss",
     url: "https://www.ot.gr/feed/",
+    enabled: false,
   },
-];
+]; 

@@ -17,9 +17,10 @@ export function inspectArticle(item, { rules = [] } = {}) {
   const urlCheck = inspectUrl(item?.url);
   const title = cleanText(item?.title);
   const summary = cleanText(item?.summary);
-  const text = `${title} ${summary}`.trim();
+  const body = cleanText(item?.metadata?.articleBody);
+  const text = `${title} ${summary} ${body}`.trim();
   const quality = contentQuality({ title, summary, text });
-  const subject = subjectSimilarity({ title, summary, rules });
+  const subject = subjectSimilarity({ title, summary: `${summary} ${body}`, rules });
   const sourceDomain = urlCheck.domain;
   const accepted = Boolean(
     urlCheck.valid &&

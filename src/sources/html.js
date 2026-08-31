@@ -22,6 +22,10 @@ export class HtmlListingSourceAdapter {
       const url = absoluteUrl(href, sourceUrl);
       if (!url || !/^https?:/.test(url)) return [];
       const title = stripTags(contents) || attrs.match(/title=["']([^"']+)["']/i)?.[1];
+      if (config.linkPatterns?.length) {
+        const haystack = `${url} ${title || ""}`.toLocaleLowerCase("el");
+        if (!config.linkPatterns.some((pattern) => haystack.includes(String(pattern).toLocaleLowerCase("el")))) return [];
+      }
       return [normalizeItem({ url, title }, sourceUrl)];
     });
   }

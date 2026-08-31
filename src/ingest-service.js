@@ -11,6 +11,7 @@ export async function ingestMarket() {
     sources: SOURCES,
     concurrency: 4,
     validateLinks: process.env.SOURCE_LINK_VALIDATION !== "false",
+    readArticlePages: process.env.SOURCE_ARTICLE_READING !== "false",
   });
   let stored = 0;
 
