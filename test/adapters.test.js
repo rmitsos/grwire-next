@@ -14,6 +14,25 @@ test("HTML adapter filters by link class and resolves relative URLs", () => {
   assert.deepEqual(items.map(({ url, title }) => ({ url, title })), [{ url: "https://x.test/one", title: "First" }]);
 });
 
+test("HTML adapter removes repeated listing links and respects source limits", async () => {
+  const adapter = new HtmlListingSourceAdapter({ fetch: async () => ({
+    ok: true,
+    status: 200,
+    url: "https://publisher.test/category",
+    headers: { get: () => "text/html" },
+    text: async () => `<a href="/story">First</a><a href="/story">First again</a><a href="/story-2">Second</a>`,
+  }) });
+  const items = await adapter.load({ url: "https://publisher.test/category", limit: 1 });
+  assert.equal(items.length, 1);
+  assert.equal(items[0].url, "https://publisher.test/story");
+});
+
+test("HTML adapter drops navigation/hash links when a title threshold is configured", () => {
+  const html = `<a href="#menu">Menu</a><a href="/story"><img src="hero.jpg"></a><a href="/story">A useful market article headline</a>`;
+  const items = new HtmlListingSourceAdapter().parse(html, "https://x.test/list", { minimumTitleLength: 16 });
+  assert.deepEqual(items.map(({ url, title }) => ({ url, title })), [{ url: "https://x.test/story", title: "A useful market article headline" }]);
+});
+
 test("sitemap adapter follows indexes", async () => {
   const pages = new Map([
     ["https://x.test/root.xml", `<sitemapindex><sitemap><loc>https://x.test/a.xml</loc></sitemap></sitemapindex>`],

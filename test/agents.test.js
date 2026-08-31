@@ -10,6 +10,7 @@ import {
   rankItems,
   DEFAULT_WATCH_RULES,
 } from "../src/index.js";
+import { SOURCES } from "../config/sources.js";
 
 const rules = [{
   id: "telco",
@@ -117,4 +118,25 @@ test("known non-telco examples do not enter the telco rule", () => {
     summary: "",
   })), DEFAULT_WATCH_RULES);
   assert.equal(ranked.some((item) => item.relevance.some((match) => match.category === "telco")), false);
+});
+
+test("telecom regulation and mobile-billing stories enter telco", () => {
+  const [item] = rankItems([{
+    url: "https://www.dnews.gr/eidhseis/news-in-english/604487/example",
+    title: "Greece tightens rules on mobile-billed digital services",
+    summary: "",
+    metadata: {
+      articleBody: "The EETT revised its Code of Conduct for telecommunications bills and requires explicit consent for mobile-billed digital services.",
+    },
+  }], DEFAULT_WATCH_RULES);
+  assert.equal(item.relevance[0].category, "telco");
+  assert.ok(item.relevance[0].reasons.some((reason) => reason.includes("article")));
+});
+
+test("user-provided telecom indexes are registered as HTML sources", () => {
+  assert.equal(SOURCES.find((source) => source.id === "netweek-telecoms")?.url, "https://netweek.gr/category/telecoms/");
+  assert.equal(SOURCES.find((source) => source.id === "naftemporiki-telecoms")?.url, "https://www.naftemporiki.gr/tag/tilepikoinonies/");
+  assert.equal(SOURCES.find((source) => source.id === "dnews-eett")?.type, "html");
+  assert.equal(SOURCES.find((source) => source.id === "ot-telecoms")?.url, "https://www.ot.gr/category/epixeiriseis/tilepikoinonies/");
+  assert.equal(SOURCES.find((source) => source.id === "intracom-telecom-press")?.url, "https://www.intracom-telecom.com/en/news/press.htm");
 });

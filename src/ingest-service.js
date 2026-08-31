@@ -4,6 +4,7 @@ import { detectArticleOrganizations } from "./article-organizations";
 import { ensureDatabase } from "./database";
 import { buildDailyIntelligence } from "./agents/correlation-trends.js";
 import { discoverSourceCandidates } from "./agents/source-guardian.js";
+import { DEFAULT_WATCH_RULES, rankItems } from "./watch-rules.js";
 
 export async function ingestMarket() {
   const sql = await ensureDatabase();
@@ -52,6 +53,10 @@ export async function ingestMarket() {
     stored += 1;
   }
 
+  // Re-score recent stored rows with the current rules. This removes stale
+  // categories created by older, more permissive versions of the scanner.
+  await refreshArticleClassification(sql);
+
   await sql`
     INSERT INTO scan_runs (scanned_at, fetched, relevant, stored, sources)
     VALUES (${report.scannedAt}, ${report.fetched}, ${report.relevant}, ${stored},
@@ -82,4 +87,30 @@ export async function ingestMarket() {
     sourceCandidates,
     intelligence: buildDailyIntelligence({ articles: report.items }),
   };
+}
+
+async function refreshArticleClassification(sql) {
+  const rows = await sql`
+    SELECT id, canonical_url, title, summary, published_at, source_id, score, categories, relevance, metadata
+    FROM articles ORDER BY updated_at DESC LIMIT 250
+  `;
+  for (const row of rows) {
+    const [ranked] = rankItems([{
+      url: row.canonical_url,
+      title: row.title,
+      summary: row.summary,
+      publishedAt: row.published_at,
+      sourceId: row.source_id,
+      score: row.score,
+      metadata: row.metadata || {},
+    }], DEFAULT_WATCH_RULES);
+    const categories = ranked?.relevance?.map((match) => match.category) || [];
+    const relevance = ranked?.relevance || [];
+    const score = ranked?.score || 0;
+    await sql`
+      UPDATE articles SET categories = ${categories}, relevance = ${JSON.stringify(relevance)}::jsonb,
+        score = ${score}, updated_at = now()
+      WHERE id = ${row.id}
+    `;
+  }
 }
