@@ -41,6 +41,10 @@ test("Source Guardian rejects a clean but off-topic article", () => {
   assert.equal(result.accepted, false);
 });
 
+test("null article fields do not abort relevance scoring", () => {
+  assert.doesNotThrow(() => rankItems([{ url: "https://news.test/empty", title: null, summary: null, metadata: { articleBody: null } }], DEFAULT_WATCH_RULES));
+});
+
 test("link validation reports reachability without throwing", async () => {
   const result = await validateArticleLink({ url: "https://source.test/story" }, {
     fetch: async () => ({ ok: true, status: 200, url: "https://source.test/story", headers: { get: () => "text/html" } }),
