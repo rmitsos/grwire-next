@@ -8,6 +8,7 @@ import {
   validateArticleLink,
   collapseDuplicateArticles,
   rankItems,
+  DEFAULT_WATCH_RULES,
 } from "../src/index.js";
 
 const rules = [{
@@ -102,4 +103,18 @@ test("near-duplicate syndicated headlines collapse to the strongest item", () =>
   assert.equal(result.length, 1);
   assert.equal(result[0].id, "b");
   assert.deepEqual(result[0].metadata.duplicateSources, ["media-a"]);
+});
+
+test("known non-telco examples do not enter the telco rule", () => {
+  const examples = [
+    "Motor Oil: Η μεγάλη επιστροφή στον MSCI",
+    "Θερινές εκπτώσεις: Πότε πέφτει η αυλαία",
+    "Axios: Τριμερής συνάντηση Πούτιν-Ζελένσκι-Τραμπ",
+  ];
+  const ranked = rankItems(examples.map((title, index) => ({
+    url: `https://example.test/${index}`,
+    title,
+    summary: "",
+  })), DEFAULT_WATCH_RULES);
+  assert.equal(ranked.some((item) => item.relevance.some((match) => match.category === "telco")), false);
 });

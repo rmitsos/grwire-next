@@ -1,5 +1,6 @@
 import { getSql } from "./database";
 import { collapseDuplicateArticles } from "./article-quality.js";
+import { DEFAULT_WATCH_RULES, rankItems } from "./watch-rules.js";
 
 export const PUBLIC_CATEGORIES = {
   finance: {
@@ -30,14 +31,12 @@ export async function getLatestArticles({ category, query, limit = 80 } = {}) {
       const pattern = `%${query}%`;
       rows = await sql`
         SELECT * FROM articles
-        WHERE ${category} = ANY(categories)
-          AND (title ILIKE ${pattern} OR summary ILIKE ${pattern})
+        WHERE title ILIKE ${pattern} OR summary ILIKE ${pattern}
         ORDER BY published_at DESC NULLS LAST LIMIT ${queryLimit}
       `;
     } else if (category) {
       rows = await sql`
         SELECT * FROM articles
-        WHERE ${category} = ANY(categories)
         ORDER BY published_at DESC NULLS LAST LIMIT ${queryLimit}
       `;
     } else if (query) {
@@ -53,7 +52,9 @@ export async function getLatestArticles({ category, query, limit = 80 } = {}) {
         ORDER BY published_at DESC NULLS LAST LIMIT ${queryLimit}
       `;
     }
-    return collapseDuplicateArticles(rows).slice(0, limit).map(toArticle);
+    let cleaned = collapseDuplicateArticles(rows).map(reclassifyRow);
+    if (category) cleaned = cleaned.filter((row) => row.categories.includes(category));
+    return cleaned.slice(0, limit).map(toArticle);
   } catch (error) {
     console.error("[public] article read failed:", error?.message || error);
     return [];
@@ -86,5 +87,22 @@ function toArticle(row) {
     score: Number(row.score),
     categories: row.categories || [],
     relevance: row.relevance || [],
+  };
+}
+
+function reclassifyRow(row) {
+  const [ranked] = rankItems([{
+    url: row.canonical_url,
+    title: row.title,
+    summary: row.summary,
+    publishedAt: row.published_at,
+    sourceId: row.source_id,
+    metadata: row.metadata || {},
+  }], DEFAULT_WATCH_RULES);
+  return {
+    ...row,
+    categories: ranked?.relevance?.map((match) => match.category) || [],
+    relevance: ranked?.relevance || [],
+    score: ranked?.score || 0,
   };
 }
