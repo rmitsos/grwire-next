@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/auth-core";
 import { ingestMarket } from "@/ingest-service";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function GET(request) {
   if (!cronAuthorised(request)) {

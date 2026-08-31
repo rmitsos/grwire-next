@@ -104,3 +104,71 @@ test("market scan isolates source failures and deduplicates tracking URLs", asyn
   assert.equal(result.sources.find((source) => source.id === "one").accepted, 1);
   assert.equal(result.sources.find((source) => source.id === "one").rejected, 0);
 });
+
+test("article reading preselects relevant leads before opening pages", async () => {
+  const requests = [];
+  const fetch = async (url) => {
+    requests.push(String(url));
+    if (String(url).includes("feed")) {
+      return {
+        ok: true,
+        url: String(url),
+        headers: { get: () => "application/rss+xml" },
+        text: async () => `<rss><channel>
+          <item><title>OTE expands FTTH in Greece</title><link>https://x.test/relevant</link></item>
+          <item><title>Greek football club announces new coach</title><link>https://x.test/irrelevant</link></item>
+        </channel></rss>`,
+      };
+    }
+    return {
+      ok: true,
+      url: String(url),
+      headers: { get: () => "text/html" },
+      text: async () => `<html><head><meta name="description" content="A sufficiently detailed fibre infrastructure article for Greece."></head><body><article><p>OTE is expanding its FTTH network infrastructure across Greece with a major deployment programme.</p></article></body></html>`,
+    };
+  };
+  const result = await scanMarket({
+    fetch,
+    readArticlePages: true,
+    validateLinks: false,
+    articleReadLimit: 1,
+    sources: [{ id: "one", type: "rss", url: "https://working.test/feed" }],
+    rules: [{ id: "ote", label: "OTE", entities: ["OTE"], topics: ["FTTH"], geography: ["Greece"], threshold: 5 }],
+  });
+  assert.equal(requests.filter((url) => url.includes("x.test/")).length, 1);
+  assert.equal(result.items.length, 1);
+  assert.match(result.items[0].url, /relevant/);
+});
+
+test("article reading keeps Greek telco leads with inflected subject terms", async () => {
+  const requests = [];
+  const fetch = async (url) => {
+    requests.push(String(url));
+    if (String(url).includes("feed")) {
+      return {
+        ok: true,
+        url: String(url),
+        headers: { get: () => "application/rss+xml" },
+        text: async () => `<rss><channel>
+          <item><title>Πάροχοι κινητής: νέες επενδύσεις στην Ελλάδα</title><link>https://x.test/mobile</link></item>
+        </channel></rss>`,
+      };
+    }
+    return {
+      ok: true,
+      url: String(url),
+      headers: { get: () => "text/html" },
+      text: async () => `<html><head><meta name="description" content="Νέα εξέλιξη στην αγορά τηλεπικοινωνιών και στα δίκτυα κινητής στην Ελλάδα."></head><body><article><p>Οι πάροχοι κινητής επενδύουν σε δίκτυα 5G και υποδομές τηλεπικοινωνιών σε όλη την Ελλάδα.</p></article></body></html>`,
+    };
+  };
+  const result = await scanMarket({
+    fetch,
+    readArticlePages: true,
+    validateLinks: false,
+    articleReadLimit: 1,
+    sources: [{ id: "one", type: "rss", url: "https://working.test/feed" }],
+  });
+  assert.equal(requests.filter((url) => url.includes("x.test/")).length, 1);
+  assert.equal(result.items.length, 1);
+  assert.match(result.items[0].url, /mobile/);
+});

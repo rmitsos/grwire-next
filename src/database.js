@@ -106,11 +106,41 @@ async function createSchema(sql) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS source_candidates (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      domain TEXT UNIQUE NOT NULL,
+      example_url TEXT NOT NULL,
+      occurrences INTEGER NOT NULL DEFAULT 1,
+      subjects TEXT[] NOT NULL DEFAULT '{}',
+      score NUMERIC(5,2) NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'probationary',
+      first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      notes TEXT
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS daily_stories (
+      story_date DATE PRIMARY KEY,
+      generated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      headline TEXT NOT NULL,
+      standfirst TEXT,
+      body TEXT[] NOT NULL DEFAULT '{}',
+      category TEXT,
+      confidence NUMERIC(4,3) NOT NULL DEFAULT 0,
+      article_ids UUID[] NOT NULL DEFAULT '{}',
+      evidence JSONB NOT NULL DEFAULT '[]',
+      metadata JSONB NOT NULL DEFAULT '{}'
+    )
+  `;
   await sql`CREATE INDEX IF NOT EXISTS articles_published_idx ON articles (published_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS articles_categories_idx ON articles USING GIN (categories)`;
   await sql`CREATE INDEX IF NOT EXISTS relationship_claims_source_idx ON relationship_claims (source_organization_id)`;
   await sql`CREATE INDEX IF NOT EXISTS relationship_claims_target_idx ON relationship_claims (target_organization_id)`;
   await sql`CREATE INDEX IF NOT EXISTS scan_runs_scanned_idx ON scan_runs (scanned_at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS source_candidates_status_idx ON source_candidates (status, score DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS daily_stories_generated_idx ON daily_stories (generated_at DESC)`;
 
   for (const organization of ORGANIZATIONS) {
     await sql`

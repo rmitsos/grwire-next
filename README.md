@@ -119,3 +119,21 @@ The public site lives at `/`, with `/finance`, `/telco`, `/energy` and `/search`
 Private intelligence lives at `/intelligence`. `vercel.json` schedules the
 multi-source scanner daily; configure `CRON_SECRET` so Vercel can authenticate
 the ingestion route. A signed-in user can also run a scan manually.
+
+## Agent pipeline
+
+The scanner now runs three explicit intelligence agents:
+
+- **Source Guardian** validates URL syntax/reachability for the highest-ranked
+  items, cleans content metadata, checks subject/geography fit and stores the
+  validation result with each article.
+- **Market Analyst** turns accepted articles into structured entities,
+  categories, topics and source-reliability signals.
+- **Correlation & Trend Agent** compares the rolling evidence set, detects
+  repeated activity and cross-source relationships, and publishes the daily
+  `Market Foresight` board at the top of `/intelligence`.
+
+The Source Scout also records repeated, relevant domains as probationary
+`source_candidates`. They are evidence leads, not trusted sources, until
+reviewed. Set `SOURCE_LINK_VALIDATION=false` to skip live article-link checks
+when a scan must remain within a tight serverless execution window.

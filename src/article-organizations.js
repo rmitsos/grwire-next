@@ -1,7 +1,7 @@
 import { ORGANIZATIONS } from "./organizations.js";
 
 function normalise(value = "") {
-  return value
+  return String(value ?? "")
     .toLocaleLowerCase("el")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");

@@ -1,5 +1,5 @@
 function normalise(value = "") {
-  return value
+  return String(value ?? "")
     .toLocaleLowerCase("el")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
@@ -22,6 +22,8 @@ export function validateWatchRule(rule) {
     strongTopics: [],
     geography: [],
     exclusions: [],
+    requiredTopics: [],
+    minimumStrongTopics: 0,
     preferredDomains: [],
     ...rule,
   };
@@ -31,7 +33,8 @@ export function scoreItem(item, rawRule) {
   const rule = validateWatchRule(rawRule);
   const title = normalise(item.title);
   const summary = normalise(item.summary);
-  const combined = `${title} ${summary}`;
+  const body = normalise(item.metadata?.articleBody);
+  const combined = `${title} ${summary} ${body}`;
   const domain = new URL(item.url).hostname.replace(/^www\./, "");
   const reasons = [];
   let score = 0;
@@ -42,6 +45,9 @@ export function scoreItem(item, rawRule) {
   } else if (includesAny(summary, rule.entities)) {
     score += 3;
     reasons.push("monitored entity in summary");
+  } else if (includesAny(body, rule.entities)) {
+    score += 2;
+    reasons.push("monitored entity in article");
   }
 
   if (includesAny(title, rule.topics)) {
@@ -50,6 +56,9 @@ export function scoreItem(item, rawRule) {
   } else if (includesAny(summary, rule.topics)) {
     score += 2;
     reasons.push("watched topic in summary");
+  } else if (includesAny(body, rule.topics)) {
+    score += 1;
+    reasons.push("watched topic in article");
   }
 
   if (includesAny(title, rule.strongTopics)) {
@@ -58,6 +67,9 @@ export function scoreItem(item, rawRule) {
   } else if (includesAny(summary, rule.strongTopics)) {
     score += 3;
     reasons.push("high-signal topic in summary");
+  } else if (includesAny(body, rule.strongTopics)) {
+    score += 2;
+    reasons.push("high-signal topic in article");
   }
 
   if (rule.geography.length && includesAny(combined, rule.geography)) {
@@ -73,6 +85,17 @@ export function scoreItem(item, rawRule) {
   if (includesAny(combined, rule.exclusions)) {
     score -= 6;
     reasons.push("excluded context");
+  }
+
+  const requiredMatches = rule.requiredTopics.filter((term) => includesAny(combined, [term]));
+  const strongMatches = rule.strongTopics.filter((term) => includesAny(combined, [term]));
+  if (rule.requiredTopics.length && !requiredMatches.length) {
+    score = 0;
+    reasons.push("required infrastructure subject missing");
+  }
+  if (strongMatches.length < rule.minimumStrongTopics) {
+    score = 0;
+    reasons.push("insufficient high-signal subject detail");
   }
 
   return {
@@ -102,14 +125,16 @@ export function rankItems(items, rules) {
 export const DEFAULT_WATCH_RULES = Object.freeze([
   {
     id: "greek-telco-infrastructure",
-    label: "Greek telecom infrastructure",
+    label: "Greek telecom market",
     category: "telco",
-    entities: ["ΟΤΕ", "Cosmote", "Vodafone", "Nova", "ΔΕΗ Fiber", "PPC Fiber", "ΕΕΤΤ", "EETT"],
-    topics: ["telecom", "network", "broadband", "κινητή", "τηλεπικοινων"],
-    strongTopics: ["FTTH", "fiber", "fibre", "5G", "οπτική ίνα", "ευρυζων", "spectrum", "data center", "subsea cable"],
+    entities: ["ΟΤΕ", "OTE", "Cosmote", "COSMOTE", "Vodafone", "Nova", "United Group", "Intracom Telecom", "Intracom", "ΔΕΗ Fiber", "PPC Fiber", "ΕΕΤΤ", "EETT"],
+    topics: ["telecom", "telecommunications", "electronic communications", "network", "broadband", "κινητή", "τηλεπικοινων", "ηλεκτρονικες επικοινωνιες", "roaming", "περιαγωγ", "numbering", "αριθμοδοτ", "interconnection", "διασυνδεσ", "carrier billing", "mobile billing", "mobile-billed", "telecom bill", "χρεωσ", "συνδρομητ"],
+    strongTopics: ["FTTH", "fiber", "fibre", "5G", "οπτική ίνα", "ευρυζων", "telecom", "τηλεπικοινων", "spectrum", "data center", "subsea cable", "network deployment", "carrier billing", "mobile billing", "mobile-billed", "electronic communications", "telecommunications bill", "Code of Conduct", "κώδικας δεοντολογίας", "υπηρεσίες αυξημένης χρέωσης", "χρεώσεις κινητής", "ΕΕΤΤ", "EETT", "Intracom Telecom", "roaming", "περιαγωγ", "numbering", "αριθμοδοτ", "interconnection", "διασυνδεσ"],
     geography: ["Greece", "Greek", "Ελλάδα", "ελλην"],
     exclusions: ["smartphone review", "consumer offer"],
-    preferredDomains: ["eett.gr", "cosmote.gr", "vodafone.gr", "nova.gr", "dei.gr"],
+    requiredTopics: ["FTTH", "fiber", "fibre", "οπτική ίνα", "5G", "spectrum", "data center", "subsea cable", "network deployment", "δικτυακή ανάπτυξη", "telecom", "telecommunications", "τηλεπικοινων", "electronic communications", "carrier billing", "mobile billing", "mobile-billed", "telecommunications bill", "Code of Conduct", "κώδικας δεοντολογίας", "υπηρεσίες αυξημένης χρέωσης", "χρεώσεις κινητής", "Intracom Telecom", "roaming", "περιαγωγ", "numbering", "αριθμοδοτ", "interconnection", "διασυνδεσ"],
+    minimumStrongTopics: 1,
+    preferredDomains: ["eett.gr", "cosmote.gr", "vodafone.gr", "nova.gr", "ot.gr", "intracom-telecom.com", "dei.gr"],
     threshold: 4,
   },
   {
@@ -121,6 +146,8 @@ export const DEFAULT_WATCH_RULES = Object.freeze([
     strongTopics: ["substation", "interconnection", "grid", "storage", "BESS", "υποσταθ", "διασύνδεσ", "αποθήκευση", "offshore wind"],
     geography: ["Greece", "Greek", "Ελλάδα", "ελλην"],
     preferredDomains: ["admie.gr", "deddie.gr", "desfa.gr", "raaey.gr", "dei.gr"],
+    requiredTopics: ["grid", "substation", "interconnection", "storage", "BESS", "υποσταθ", "διασύνδεσ", "αποθήκευση", "offshore wind", "renewable", "ΑΠΕ"],
+    minimumStrongTopics: 1,
     threshold: 4,
   },
   {
