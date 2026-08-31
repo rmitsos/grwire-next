@@ -1,4 +1,5 @@
 import { analyseArticle } from "./market-analyst.js";
+import { collapseDuplicateArticles } from "../article-quality.js";
 
 const SIGNALS = [
   { label: "FTTH and fibre", terms: ["ftth", "fiber", "fibre", "οπτικη ινα", "οπτικες ινες"] },
@@ -15,7 +16,8 @@ const ORGANISATIONS = ["OTE", "Cosmote", "Vodafone", "Nova", "Intracom Telecom",
 
 /** Builds one public, evidence-linked narrative from the validated rolling scan. */
 export function buildDailyStory({ articles = [], intelligence = {}, now = new Date(), windowDays = 30 } = {}) {
-  const signals = articles.map((article) => ({
+  const uniqueArticles = collapseDuplicateArticles(articles, { crossLanguage: true, days: 3 });
+  const signals = uniqueArticles.map((article) => ({
     ...analyseArticle(article, article.validation),
     summary: article.summary || "",
   })).filter((article) => article.title);

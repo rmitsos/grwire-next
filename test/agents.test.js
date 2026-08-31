@@ -159,3 +159,16 @@ test("daily story builder produces an evidence-linked narrative", () => {
   assert.equal(story.evidence.length, 2);
   assert.ok(story.body.some((paragraph) => paragraph.startsWith("Interpretation:")));
 });
+
+test("daily story collapses Greek and English copies of one event", () => {
+  const story = buildDailyStory({
+    now: new Date("2026-08-31T10:00:00Z"),
+    articles: [
+      { id: "en", url: "https://english.test/ote-ftth", title: "OTE invests in FTTH network in Greece", summary: "Investment in fibre infrastructure.", sourceId: "english", categories: ["telco"], score: 12, publishedAt: "2026-08-31T08:00:00Z" },
+      { id: "el", url: "https://greek.test/ote-ftth", title: "ΟΤΕ επενδύει σε δίκτυο οπτικών ινών στην Ελλάδα", summary: "Επένδυση σε υποδομές δικτύου.", sourceId: "greek", categories: ["telco"], score: 10, publishedAt: "2026-08-31T09:00:00Z" },
+      { id: "other", url: "https://other.test/5g", title: "Vodafone expands 5G coverage", summary: "New mobile network investment.", sourceId: "other", categories: ["telco"], score: 9, publishedAt: "2026-08-31T07:00:00Z" },
+    ],
+  });
+  assert.equal(story.evidence.length, 2);
+  assert.equal(story.evidence[0].id, "en");
+});

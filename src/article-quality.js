@@ -5,11 +5,11 @@ const STOP_WORDS = new Set([
   "στη", "στην", "στο", "και", "για", "των", "της", "του", "με", "απο", "από", "νέα", "νεο",
 ]);
 
-export function collapseDuplicateArticles(items = [], { titleThreshold = 0.78, days = 7 } = {}) {
+export function collapseDuplicateArticles(items = [], { titleThreshold = 0.78, days = 7, crossLanguage = false } = {}) {
   const kept = [];
   const ordered = [...items].sort((a, b) => Number(b.score || 0) - Number(a.score || 0) || dateValue(b) - dateValue(a));
   for (const item of ordered) {
-    const duplicate = kept.find((candidate) => areNearDuplicates(candidate, item, { titleThreshold, days }));
+    const duplicate = kept.find((candidate) => areNearDuplicates(candidate, item, { titleThreshold, days, crossLanguage }));
     if (duplicate) {
       duplicate.metadata = {
         ...(duplicate.metadata || {}),
@@ -22,15 +22,44 @@ export function collapseDuplicateArticles(items = [], { titleThreshold = 0.78, d
   return kept.sort((a, b) => dateValue(b) - dateValue(a));
 }
 
-export function areNearDuplicates(a, b, { titleThreshold = 0.78, days = 7 } = {}) {
+export function areNearDuplicates(a, b, { titleThreshold = 0.78, days = 7, crossLanguage = false } = {}) {
   const left = tokenSet(a?.title);
   const right = tokenSet(b?.title);
   if (!left.size || !right.size) return false;
   const overlap = jaccard(left, right);
-  if (overlap < titleThreshold) return false;
   const leftDate = dateValue(a);
   const rightDate = dateValue(b);
-  return !leftDate || !rightDate || Math.abs(leftDate - rightDate) <= days * 86_400_000;
+  const closeInTime = !leftDate || !rightDate || Math.abs(leftDate - rightDate) <= days * 86_400_000;
+  if (!closeInTime) return false;
+  if (overlap >= titleThreshold) return true;
+  return crossLanguage && hasSharedStoryMarkers(a, b);
+}
+
+// Language-neutral markers catch the common case where the same wire story
+// is published in Greek and English with completely different headlines.
+const STORY_MARKER_GROUPS = [
+  ["ote", "οτε"], ["cosmote", "κοσμοτε"], ["vodafone"], ["nova"], ["intracom"],
+  ["eett", "εεττ"], ["admie", "ipto", "αδμηε"], ["desfa", "δεσφα"],
+  ["ftth", "fiber", "fibre", "οπτικη ιν"], ["5g"], ["spectrum", "φασμα"],
+  ["mobile-billing", "mobile billed", "carrier billing", "χρεωσ", "κινητ"],
+  ["network", "δικτυ"], ["investment", "επενδ"], ["regulation", "κανον", "ρυθμ"],
+  ["roaming", "περιαγωγ"], ["interconnection", "διασυνδεσ"], ["broadband", "ευρυζων"],
+];
+const STORY_ENTITY_MARKERS = new Set(["ote", "cosmote", "vodafone", "nova", "intracom", "eett", "admie", "desfa"]);
+
+function hasSharedStoryMarkers(a, b) {
+  const left = storyMarkers(a);
+  const right = storyMarkers(b);
+  const shared = [...left].filter((marker) => right.has(marker));
+  return shared.some((marker) => STORY_ENTITY_MARKERS.has(marker))
+    && shared.some((marker) => !STORY_ENTITY_MARKERS.has(marker));
+}
+
+function storyMarkers(item) {
+  const text = normalise(`${item?.title || ""} ${item?.summary || ""}`);
+  return new Set(STORY_MARKER_GROUPS
+    .filter((group) => group.some((term) => text.includes(normalise(term))))
+    .map((group) => group[0]));
 }
 
 function tokenSet(value) {
