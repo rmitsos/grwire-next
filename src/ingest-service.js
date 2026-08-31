@@ -3,6 +3,7 @@ import { scanMarket } from "./pipeline";
 import { detectArticleOrganizations } from "./article-organizations";
 import { ensureDatabase } from "./database";
 import { buildDailyIntelligence } from "./agents/correlation-trends.js";
+import { buildDailyStory } from "./agents/story-builder.js";
 import { discoverSourceCandidates } from "./agents/source-guardian.js";
 import { DEFAULT_WATCH_RULES, rankItems } from "./watch-rules.js";
 
@@ -40,6 +41,7 @@ export async function ingestMarket() {
       RETURNING id
     `;
     const articleId = rows[0].id;
+    item.id = articleId;
     for (const match of detectArticleOrganizations(item)) {
       await sql`
         INSERT INTO article_organizations
@@ -81,12 +83,54 @@ export async function ingestMarket() {
     `;
   }
 
+  const storyRows = await sql`
+    SELECT id, canonical_url, title, summary, published_at, source_id, score, categories, relevance, metadata
+    FROM articles ORDER BY published_at DESC NULLS LAST LIMIT 100
+  `;
+  const storyArticles = storyRows.map((row) => ({
+    id: row.id,
+    url: row.canonical_url,
+    title: row.title,
+    summary: row.summary,
+    publishedAt: row.published_at,
+    sourceId: row.source_id,
+    score: Number(row.score || 0),
+    categories: row.categories || [],
+    relevance: row.relevance || [],
+    metadata: row.metadata || {},
+  }));
+  const intelligence = buildDailyIntelligence({ articles: storyArticles });
+  const story = buildDailyStory({ articles: storyArticles, intelligence, now: report.scannedAt });
+  if (story) await persistDailyStory(sql, story);
+
   return {
     ...report,
     stored,
     sourceCandidates,
-    intelligence: buildDailyIntelligence({ articles: report.items }),
+    intelligence,
+    story,
   };
+}
+
+async function persistDailyStory(sql, story) {
+  await sql`
+    INSERT INTO daily_stories
+      (story_date, generated_at, headline, standfirst, body, category, confidence, article_ids, evidence, metadata)
+    VALUES
+      (${story.storyDate}, ${story.generatedAt}, ${story.headline}, ${story.standfirst}, ${story.body},
+       ${story.category}, ${story.confidence}, ${story.articleIds}, ${JSON.stringify(story.evidence)}::jsonb,
+       ${JSON.stringify(story.metadata)}::jsonb)
+    ON CONFLICT (story_date) DO UPDATE SET
+      generated_at = EXCLUDED.generated_at,
+      headline = EXCLUDED.headline,
+      standfirst = EXCLUDED.standfirst,
+      body = EXCLUDED.body,
+      category = EXCLUDED.category,
+      confidence = EXCLUDED.confidence,
+      article_ids = EXCLUDED.article_ids,
+      evidence = EXCLUDED.evidence,
+      metadata = EXCLUDED.metadata
+  `;
 }
 
 async function refreshArticleClassification(sql) {

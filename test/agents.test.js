@@ -9,6 +9,7 @@ import {
   collapseDuplicateArticles,
   rankItems,
   DEFAULT_WATCH_RULES,
+  buildDailyStory,
 } from "../src/index.js";
 import { SOURCES } from "../config/sources.js";
 
@@ -139,4 +140,18 @@ test("user-provided telecom indexes are registered as HTML sources", () => {
   assert.equal(SOURCES.find((source) => source.id === "dnews-eett")?.type, "html");
   assert.equal(SOURCES.find((source) => source.id === "ot-telecoms")?.url, "https://www.ot.gr/category/epixeiriseis/tilepikoinonies/");
   assert.equal(SOURCES.find((source) => source.id === "intracom-telecom-press")?.url, "https://www.intracom-telecom.com/en/news/press.htm");
+});
+
+test("daily story builder produces an evidence-linked narrative", () => {
+  const story = buildDailyStory({
+    now: new Date("2026-08-31T10:00:00Z"),
+    articles: [
+      { id: "a", url: "https://one.test/a", title: "OTE expands FTTH and 5G investment in Greece", summary: "The operator plans new fibre network capacity.", sourceId: "ot", categories: ["telco"], score: 12 },
+      { id: "b", url: "https://two.test/b", title: "Intracom Telecom launches AI-enabled FWA for operators", summary: "The platform automates network operations.", sourceId: "intracom", categories: ["telco"], score: 11 },
+    ],
+  });
+  assert.match(story.headline, /telecoms/i);
+  assert.equal(story.articleIds.length, 2);
+  assert.equal(story.evidence.length, 2);
+  assert.ok(story.body.some((paragraph) => paragraph.startsWith("Interpretation:")));
 });

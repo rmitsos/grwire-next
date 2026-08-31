@@ -8,6 +8,7 @@ export * from "./agents/source-guardian.js";
 export * from "./agents/article-reader.js";
 export * from "./agents/market-analyst.js";
 export * from "./agents/correlation-trends.js";
+export * from "./agents/story-builder.js";
 export * from "./article-quality.js";
 export * from "./organizations.js";
 export * from "./article-organizations.js";

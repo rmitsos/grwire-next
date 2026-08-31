@@ -62,9 +62,10 @@ export async function getLatestArticles({ category, query, limit = 80 } = {}) {
 }
 
 export async function getHomepageData() {
-  const articles = await getLatestArticles({ limit: 100 });
+  const [articles, story] = await Promise.all([getLatestArticles({ limit: 100 }), getLatestStory()]);
   return {
     articles,
+    story,
     lead: articles[0] || null,
     recent: articles.slice(1, 13),
     categories: Object.fromEntries(
@@ -74,6 +75,39 @@ export async function getHomepageData() {
       ]),
     ),
   };
+}
+
+export async function getLatestStory() {
+  const sql = getSql();
+  if (!sql) return null;
+  try {
+    const rows = await sql`
+      SELECT story_date, generated_at, headline, standfirst, body, category, confidence, article_ids, evidence, metadata
+      FROM daily_stories ORDER BY story_date DESC, generated_at DESC LIMIT 1
+    `;
+    return rows[0] ? toStory(rows[0]) : null;
+  } catch (error) {
+    console.error("[public] story read failed:", error?.message || error);
+    return null;
+  }
+}
+
+export async function searchStories({ query, limit = 50 } = {}) {
+  const sql = getSql();
+  if (!sql || !query) return [];
+  try {
+    const pattern = `%${String(query).slice(0, 100)}%`;
+    const rows = await sql`
+      SELECT story_date, generated_at, headline, standfirst, body, category, confidence, article_ids, evidence, metadata
+      FROM daily_stories
+      WHERE headline ILIKE ${pattern} OR standfirst ILIKE ${pattern} OR array_to_string(body, ' ') ILIKE ${pattern}
+      ORDER BY story_date DESC, generated_at DESC LIMIT ${Math.min(Math.max(limit, 1), 100)}
+    `;
+    return rows.map(toStory);
+  } catch (error) {
+    console.error("[public] story search failed:", error?.message || error);
+    return [];
+  }
 }
 
 function toArticle(row) {
@@ -87,6 +121,21 @@ function toArticle(row) {
     score: Number(row.score),
     categories: row.categories || [],
     relevance: row.relevance || [],
+  };
+}
+
+function toStory(row) {
+  return {
+    storyDate: row.story_date ? new Date(`${row.story_date}T00:00:00Z`).toISOString() : null,
+    generatedAt: row.generated_at ? new Date(row.generated_at).toISOString() : null,
+    headline: row.headline,
+    standfirst: row.standfirst,
+    body: row.body || [],
+    category: row.category,
+    confidence: Number(row.confidence || 0),
+    articleIds: row.article_ids || [],
+    evidence: row.evidence || [],
+    metadata: row.metadata || {},
   };
 }
 
