@@ -123,6 +123,9 @@ button { cursor: pointer; }
 .article-row:first-child { border-top: 0; padding-top: 0; }
 .score { display: grid; place-items: center; align-self: start; width: 38px; height: 38px; border-radius: 50%; background: var(--lime); font-size: 13px; font-weight: 900; }
 .article-meta { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.validation-badge { display: inline-block; margin-left: 6px; padding: 3px 6px; border-radius: 999px; font-size: 9px; letter-spacing: .03em; }
+.validation-badge.valid { background: #dff0e5; color: var(--green); }
+.validation-badge.invalid { background: #f7dfd9; color: var(--red); }
 .article-row h3 { margin: 5px 0; font-size: 17px; line-height: 1.25; }
 .article-row h3 a { text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .article-row p { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }

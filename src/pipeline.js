@@ -43,6 +43,9 @@ export async function scanMarket({
       accepted: 0,
       rejected: result.value.items.length,
       readFailed: 0,
+      validated: 0,
+      validLinks: 0,
+      invalidLinks: 0,
     });
     for (const item of result.value.items) {
       const url = canonicalUrl(item.url);
@@ -58,9 +61,9 @@ export async function scanMarket({
     });
   }
 
-  const candidates = collapseDuplicateArticles(discoveredItems)
+  const inspected = collapseDuplicateArticles(discoveredItems)
     .map((item) => ({ ...item, validation: inspectArticle(item, { rules }) }))
-    .filter((item) => item.validation.accepted);
+  const candidates = inspected.filter((item) => item.validation.accepted);
 
   if (validateLinks && candidates.length) {
     const candidatesToCheck = candidates
@@ -77,7 +80,11 @@ export async function scanMarket({
     }
   }
 
-  const ranked = rankItems(candidates, rules).map((item) => ({
+  const finalCandidates = candidates.filter((item) => {
+    if (!validateLinks) return true;
+    return ["reachable", "syntax-valid", "not-checked"].includes(item.validation.url.status);
+  });
+  const ranked = rankItems(finalCandidates, rules).map((item) => ({
     ...item,
     metadata: {
       ...(item.metadata || {}),
@@ -86,17 +93,26 @@ export async function scanMarket({
   }));
   const acceptedBySource = new Map();
   const readFailedBySource = new Map();
+  const validationBySource = new Map();
   for (const item of ranked) acceptedBySource.set(item.sourceId, (acceptedBySource.get(item.sourceId) || 0) + 1);
   for (const item of discoveredItems) {
     if (item.metadata?.articleReader?.status === "failed") {
       readFailedBySource.set(item.sourceId, (readFailedBySource.get(item.sourceId) || 0) + 1);
     }
   }
+  for (const item of candidates) {
+    const source = validationBySource.get(item.sourceId) || { validated: 0, validLinks: 0, invalidLinks: 0 };
+    source.validated += 1;
+    if (["reachable", "syntax-valid", "not-checked"].includes(item.validation.url.status)) source.validLinks += 1;
+    else source.invalidLinks += 1;
+    validationBySource.set(item.sourceId, source);
+  }
   for (const source of status) {
     if (!source.ok) continue;
     source.accepted = acceptedBySource.get(source.id) || 0;
     source.rejected = Math.max(0, source.fetched - source.accepted);
     source.readFailed = readFailedBySource.get(source.id) || 0;
+    Object.assign(source, validationBySource.get(source.id) || {});
   }
   return {
     scannedAt: new Date().toISOString(),

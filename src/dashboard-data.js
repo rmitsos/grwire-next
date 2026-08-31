@@ -67,6 +67,7 @@ export async function getDashboardData() {
         publishedAt: iso(row.published_at),
         sourceId: row.source_id,
         score: Number(row.score),
+        validation: row.metadata?.validation || null,
       })),
       organizations: organizationRows,
       relationships,

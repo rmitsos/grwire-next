@@ -73,7 +73,7 @@ export default async function DashboardPage() {
                 <article className={`source-card ${source.ok ? "" : "failed"}`} key={source.id}>
                   <strong>{source.id}</strong>
                   {source.ok
-                    ? <span>{source.accepted || 0} accepted · {source.fetched || 0} fetched{source.readFailed ? ` · ${source.readFailed} unreadable` : ""}</span>
+                    ? <span>{source.accepted || 0} accepted · {source.fetched || 0} fetched · {source.validLinks || 0}/{source.validated || 0} links valid{source.invalidLinks ? ` · ${source.invalidLinks} invalid` : ""}{source.readFailed ? ` · ${source.readFailed} unreadable` : ""}</span>
                     : <span>Failed · {source.error}</span>}
                 </article>
               ))}
@@ -107,7 +107,7 @@ export default async function DashboardPage() {
               <article className="article-row" key={article.id}>
                 <div className="score">{Math.round(article.score)}</div>
                 <div>
-                  <div className="article-meta">{article.sourceId || "Unknown source"} · {dateLabel(article.publishedAt)}</div>
+                  <div className="article-meta">{article.sourceId || "Unknown source"} · {dateLabel(article.publishedAt)} {validationBadge(article.validation)}</div>
                   <h3>{article.url === "#" ? article.title : <a href={article.url} target="_blank" rel="noreferrer">{article.title}</a>}</h3>
                   {article.summary && <p>{article.summary}</p>}
                 </div>
@@ -186,4 +186,11 @@ function labelType(value) {
 
 function labelInsightType(value) {
   return value === "watch" ? "Situation to watch" : value === "correlation" ? "Correlation" : "Emerging trend";
+}
+
+function validationBadge(validation) {
+  if (!validation) return null;
+  const linkStatus = validation.url?.status || "unverified";
+  const label = linkStatus === "reachable" ? "source verified" : linkStatus === "syntax-valid" ? "URL checked" : linkStatus;
+  return <span className={`validation-badge ${linkStatus === "reachable" || linkStatus === "syntax-valid" ? "valid" : "invalid"}`}>{label} · subject {Math.round(validation.subject?.score || 0)}%</span>;
 }
