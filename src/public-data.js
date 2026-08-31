@@ -1,6 +1,7 @@
 import { getSql } from "./database";
 import { collapseDuplicateArticles } from "./article-quality.js";
 import { DEFAULT_WATCH_RULES, rankItems } from "./watch-rules.js";
+import { storyDateToIso } from "./story-date.js";
 
 export const PUBLIC_CATEGORIES = {
   finance: {
@@ -126,7 +127,7 @@ function toArticle(row) {
 
 function toStory(row) {
   return {
-    storyDate: row.story_date ? new Date(`${row.story_date}T00:00:00Z`).toISOString() : null,
+    storyDate: storyDateToIso(row.story_date),
     generatedAt: row.generated_at ? new Date(row.generated_at).toISOString() : null,
     headline: row.headline,
     standfirst: row.standfirst,
@@ -138,6 +139,7 @@ function toStory(row) {
     metadata: row.metadata || {},
   };
 }
+
 
 function reclassifyRow(row) {
   const [ranked] = rankItems([{
