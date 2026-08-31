@@ -12,7 +12,8 @@ export async function scanMarket({
   validateLinks = false,
   validationLimit = 40,
   readArticlePages = false,
-  articleReadLimit = 60,
+  articleReadLimit = 30,
+  maxRelevantItems = 60,
 }) {
   if (!Array.isArray(sources) || !sources.length) throw new TypeError("At least one source is required");
   const outcomes = [];
@@ -55,10 +56,21 @@ export async function scanMarket({
 
   let discoveredItems = [...byUrl.values()];
   if (readArticlePages && discoveredItems.length) {
-    discoveredItems = await readArticles(discoveredItems, {
+    // Use the lead metadata as a cheap first pass. Category pages can expose
+    // hundreds of links; only read pages whose headline already resembles a
+    // configured market subject.
+    const preselected = discoveredItems
+      .map((item) => ({ item, validation: inspectArticle(item, { rules }) }))
+      .filter(({ validation }) => validation.subject.score >= 20)
+      .sort((a, b) => b.validation.subject.score - a.validation.subject.score)
+      .slice(0, articleReadLimit)
+      .map(({ item }) => item);
+    const readItems = await readArticles(preselected, {
       fetch: fetch || globalThis.fetch,
       limit: articleReadLimit,
     });
+    const readByUrl = new Map(readItems.map((item, index) => [preselected[index].url, item]));
+    discoveredItems = discoveredItems.map((item) => readByUrl.get(item.url) || item);
   }
 
   const inspected = collapseDuplicateArticles(discoveredItems)
@@ -84,7 +96,7 @@ export async function scanMarket({
     if (!validateLinks) return true;
     return ["reachable", "syntax-valid", "not-checked"].includes(item.validation.url.status);
   });
-  const ranked = rankItems(finalCandidates, rules).map((item) => ({
+  const ranked = rankItems(finalCandidates, rules).slice(0, maxRelevantItems).map((item) => ({
     ...item,
     metadata: {
       ...(item.metadata || {}),

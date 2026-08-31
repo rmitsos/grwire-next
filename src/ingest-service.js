@@ -9,12 +9,18 @@ import { DEFAULT_WATCH_RULES, rankItems } from "./watch-rules.js";
 
 export async function ingestMarket() {
   const sql = await ensureDatabase();
+  const startedAt = Date.now();
+  console.log("[ingest] started");
   const report = await scanMarket({
     sources: SOURCES,
-    concurrency: 4,
+    concurrency: Number(process.env.SOURCE_SCAN_CONCURRENCY || 5),
     validateLinks: process.env.SOURCE_LINK_VALIDATION !== "false",
     readArticlePages: process.env.SOURCE_ARTICLE_READING !== "false",
+    articleReadLimit: Number(process.env.SOURCE_ARTICLE_READ_LIMIT || 30),
+    validationLimit: Number(process.env.SOURCE_VALIDATION_LIMIT || 20),
+    maxRelevantItems: Number(process.env.SOURCE_MAX_RELEVANT || 60),
   });
+  console.log("[ingest] scan complete", { ms: Date.now() - startedAt, fetched: report.fetched, relevant: report.relevant });
   let stored = 0;
 
   for (const item of report.items) {
@@ -102,6 +108,7 @@ export async function ingestMarket() {
   const intelligence = buildDailyIntelligence({ articles: storyArticles });
   const story = buildDailyStory({ articles: storyArticles, intelligence, now: report.scannedAt });
   if (story) await persistDailyStory(sql, story);
+  console.log("[ingest] completed", { ms: Date.now() - startedAt, stored, story: Boolean(story) });
 
   return {
     ...report,
@@ -136,25 +143,27 @@ async function persistDailyStory(sql, story) {
 async function refreshArticleClassification(sql) {
   const rows = await sql`
     SELECT id, canonical_url, title, summary, published_at, source_id, score, categories, relevance, metadata
-    FROM articles ORDER BY updated_at DESC LIMIT 250
+    FROM articles ORDER BY updated_at DESC LIMIT 60
   `;
-  for (const row of rows) {
-    const [ranked] = rankItems([{
-      url: row.canonical_url,
-      title: row.title,
-      summary: row.summary,
-      publishedAt: row.published_at,
-      sourceId: row.source_id,
-      score: row.score,
-      metadata: row.metadata || {},
-    }], DEFAULT_WATCH_RULES);
-    const categories = ranked?.relevance?.map((match) => match.category) || [];
-    const relevance = ranked?.relevance || [];
-    const score = ranked?.score || 0;
-    await sql`
-      UPDATE articles SET categories = ${categories}, relevance = ${JSON.stringify(relevance)}::jsonb,
-        score = ${score}, updated_at = now()
-      WHERE id = ${row.id}
-    `;
+  for (let index = 0; index < rows.length; index += 10) {
+    await Promise.all(rows.slice(index, index + 10).map(async (row) => {
+      const [ranked] = rankItems([{
+        url: row.canonical_url,
+        title: row.title,
+        summary: row.summary,
+        publishedAt: row.published_at,
+        sourceId: row.source_id,
+        score: row.score,
+        metadata: row.metadata || {},
+      }], DEFAULT_WATCH_RULES);
+      const categories = ranked?.relevance?.map((match) => match.category) || [];
+      const relevance = ranked?.relevance || [];
+      const score = ranked?.score || 0;
+      await sql`
+        UPDATE articles SET categories = ${categories}, relevance = ${JSON.stringify(relevance)}::jsonb,
+          score = ${score}, updated_at = now()
+        WHERE id = ${row.id}
+      `;
+    }));
   }
 }
