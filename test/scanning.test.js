@@ -139,3 +139,36 @@ test("article reading preselects relevant leads before opening pages", async () 
   assert.equal(result.items.length, 1);
   assert.match(result.items[0].url, /relevant/);
 });
+
+test("article reading keeps Greek telco leads with inflected subject terms", async () => {
+  const requests = [];
+  const fetch = async (url) => {
+    requests.push(String(url));
+    if (String(url).includes("feed")) {
+      return {
+        ok: true,
+        url: String(url),
+        headers: { get: () => "application/rss+xml" },
+        text: async () => `<rss><channel>
+          <item><title>Πάροχοι κινητής: νέες επενδύσεις στην Ελλάδα</title><link>https://x.test/mobile</link></item>
+        </channel></rss>`,
+      };
+    }
+    return {
+      ok: true,
+      url: String(url),
+      headers: { get: () => "text/html" },
+      text: async () => `<html><head><meta name="description" content="Νέα εξέλιξη στην αγορά τηλεπικοινωνιών και στα δίκτυα κινητής στην Ελλάδα."></head><body><article><p>Οι πάροχοι κινητής επενδύουν σε δίκτυα 5G και υποδομές τηλεπικοινωνιών σε όλη την Ελλάδα.</p></article></body></html>`,
+    };
+  };
+  const result = await scanMarket({
+    fetch,
+    readArticlePages: true,
+    validateLinks: false,
+    articleReadLimit: 1,
+    sources: [{ id: "one", type: "rss", url: "https://working.test/feed" }],
+  });
+  assert.equal(requests.filter((url) => url.includes("x.test/")).length, 1);
+  assert.equal(result.items.length, 1);
+  assert.match(result.items[0].url, /mobile/);
+});

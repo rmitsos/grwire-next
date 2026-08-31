@@ -61,7 +61,10 @@ export async function scanMarket({
     // configured market subject.
     const preselected = discoveredItems
       .map((item) => ({ item, validation: inspectArticle(item, { rules }) }))
-      .filter(({ validation }) => validation.subject.score >= 20)
+      // Keep a deliberately permissive lead gate. Greek headlines often use
+      // an inflected single subject term (for example "κινητής") that scores
+      // below the final evidence threshold until the article body is read.
+      .filter(({ validation }) => validation.subject.score >= 12)
       .sort((a, b) => b.validation.subject.score - a.validation.subject.score)
       .slice(0, articleReadLimit)
       .map(({ item }) => item);
