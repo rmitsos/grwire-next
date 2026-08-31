@@ -81,6 +81,7 @@ export const SOURCES = [
     url: "https://www.ot.gr/category/epixeiriseis/tilepikoinonies/",
     linkPatterns: ["tilepikoin", "ote", "cosmote", "vodafone", "nova", "ftth", "fiber", "fibre", "5g", "network", "telekom"],
     minimumTitleLength: 16,
+    timeoutMs: 20000,
     limit: 100,
   },
   {
