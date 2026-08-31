@@ -82,6 +82,19 @@ CREATE TABLE IF NOT EXISTS scan_runs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS source_candidates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  domain TEXT UNIQUE NOT NULL,
+  example_url TEXT NOT NULL,
+  occurrences INTEGER NOT NULL DEFAULT 1,
+  subjects TEXT[] NOT NULL DEFAULT '{}',
+  score NUMERIC(5,2) NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'probationary' CHECK (status IN ('probationary', 'trusted', 'blocked')),
+  first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  notes TEXT
+);
+
 CREATE INDEX IF NOT EXISTS articles_published_idx ON articles (published_at DESC);
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS categories TEXT[] NOT NULL DEFAULT '{}';
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS relevance JSONB NOT NULL DEFAULT '[]';
@@ -96,6 +109,7 @@ CREATE INDEX IF NOT EXISTS relationship_claims_target_idx
 CREATE INDEX IF NOT EXISTS relationship_claims_visibility_idx
   ON relationship_claims (visibility, claim_status);
 CREATE INDEX IF NOT EXISTS scan_runs_scanned_idx ON scan_runs (scanned_at DESC);
+CREATE INDEX IF NOT EXISTS source_candidates_status_idx ON source_candidates (status, score DESC);
 
 -- Public consumers query views, never the underlying knowledge tables.
 CREATE OR REPLACE VIEW public_relationship_claims AS

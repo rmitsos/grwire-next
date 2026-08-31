@@ -1,11 +1,14 @@
 import { createSourceAdapter } from "./sources/index.js";
 import { DEFAULT_WATCH_RULES, rankItems } from "./watch-rules.js";
+import { inspectArticle, validateArticleLink } from "./agents/source-guardian.js";
 
 export async function scanMarket({
   sources,
   rules = DEFAULT_WATCH_RULES,
   fetch,
   concurrency = 4,
+  validateLinks = false,
+  validationLimit = 40,
 }) {
   if (!Array.isArray(sources) || !sources.length) throw new TypeError("At least one source is required");
   const outcomes = [];
@@ -42,7 +45,32 @@ export async function scanMarket({
     }
   }
 
-  const ranked = rankItems([...byUrl.values()], rules);
+  const candidates = [...byUrl.values()]
+    .map((item) => ({ ...item, validation: inspectArticle(item, { rules }) }))
+    .filter((item) => item.validation.accepted);
+
+  if (validateLinks && candidates.length) {
+    const candidatesToCheck = candidates
+      .sort((a, b) => b.validation.subject.score - a.validation.subject.score)
+      .slice(0, validationLimit);
+    const checked = await Promise.all(candidatesToCheck.map(async (item) => ({
+      item,
+      link: await validateArticleLink(item, { fetch: fetch || globalThis.fetch }),
+    })));
+    const checksByUrl = new Map(checked.map(({ item, link }) => [item.url, link]));
+    for (const item of candidates) {
+      const link = checksByUrl.get(item.url);
+      if (link) item.validation = { ...item.validation, url: { ...item.validation.url, ...link } };
+    }
+  }
+
+  const ranked = rankItems(candidates, rules).map((item) => ({
+    ...item,
+    metadata: {
+      ...(item.metadata || {}),
+      validation: item.validation,
+    },
+  }));
   return {
     scannedAt: new Date().toISOString(),
     sources: status,

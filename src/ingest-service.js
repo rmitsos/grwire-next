@@ -2,10 +2,16 @@ import { SOURCES } from "../config/sources";
 import { scanMarket } from "./pipeline";
 import { detectArticleOrganizations } from "./article-organizations";
 import { ensureDatabase } from "./database";
+import { buildDailyIntelligence } from "./agents/correlation-trends.js";
+import { discoverSourceCandidates } from "./agents/source-guardian.js";
 
 export async function ingestMarket() {
   const sql = await ensureDatabase();
-  const report = await scanMarket({ sources: SOURCES, concurrency: 4 });
+  const report = await scanMarket({
+    sources: SOURCES,
+    concurrency: 4,
+    validateLinks: process.env.SOURCE_LINK_VALIDATION !== "false",
+  });
   let stored = 0;
 
   for (const item of report.items) {
@@ -51,5 +57,28 @@ export async function ingestMarket() {
             ${JSON.stringify(report.sources)}::jsonb)
   `;
 
-  return { ...report, stored };
+  const sourceCandidates = discoverSourceCandidates(report.items, {
+    knownDomains: SOURCES.map((source) => {
+      try { return new URL(source.url).hostname; } catch { return ""; }
+    }),
+  });
+  for (const candidate of sourceCandidates) {
+    await sql`
+      INSERT INTO source_candidates (domain, example_url, occurrences, subjects, score)
+      VALUES (${candidate.domain}, ${candidate.exampleUrl}, ${candidate.occurrences}, ${candidate.subjects}, ${candidate.score})
+      ON CONFLICT (domain) DO UPDATE SET
+        example_url = EXCLUDED.example_url,
+        occurrences = source_candidates.occurrences + EXCLUDED.occurrences,
+        subjects = EXCLUDED.subjects,
+        score = GREATEST(source_candidates.score, EXCLUDED.score),
+        last_seen_at = now()
+    `;
+  }
+
+  return {
+    ...report,
+    stored,
+    sourceCandidates,
+    intelligence: buildDailyIntelligence({ articles: report.items }),
+  };
 }

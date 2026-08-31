@@ -33,12 +33,32 @@ export default async function DashboardPage() {
       )}
       {data.databaseError && <div className="warning-banner">The database could not be read; preview data is shown.</div>}
 
+      <section className="panel intelligence-board">
+        <div className="panel-heading">
+          <div><span className="kicker">MARKET FORESIGHT</span><h2>Today’s intelligence</h2></div>
+          <span className="muted">{data.intelligence.articleCount} signals · {data.intelligence.sourceCount} sources</span>
+        </div>
+        <div className="foresight-grid">
+          {[...data.intelligence.trends, ...data.intelligence.correlations, ...data.intelligence.watch].slice(0, 8).map((item, index) => (
+            <article className={`foresight-card ${item.type}`} key={`${item.type}-${item.title}-${index}`}>
+              <div className="foresight-topline"><span>{labelInsightType(item.type)}</span><strong>{Math.round(item.confidence * 100)}%</strong></div>
+              <h3>{item.title}</h3>
+              <p>{item.summary}</p>
+              {item.horizon && <small>Horizon: {item.horizon}</small>}
+            </article>
+          ))}
+          {!data.intelligence.trends.length && !data.intelligence.correlations.length && <div className="empty">More validated signals are needed before trends can be identified.</div>}
+        </div>
+        <p className="panel-note">Predictions are evidence-based situations to monitor, not confirmed facts. Confidence reflects source diversity, repeated signals and relationship evidence.</p>
+      </section>
+
       <section className="metrics">
         <Metric label="Stored articles" value={data.articles.length} note="Latest review set" />
         <Metric label="Last scan accepted" value={data.latestScan?.relevant ?? "—"} note={data.latestScan ? `${data.latestScan.fetched} discovered` : "Run the first scan"} />
         <Metric label="Organisations" value={data.organizations.length} note="Mapped entities" />
         <Metric label="Active claims" value={data.relationships.length} note="Facts + assessments" />
         <Metric label="Rumours" value={statusCounts.rumour || 0} note="Always private" />
+        <Metric label="Source candidates" value={data.sourceCandidates.length} note="Awaiting review" />
       </section>
 
       <section className="dashboard-grid">
@@ -60,6 +80,22 @@ export default async function DashboardPage() {
             </div>
           </div>
         )}
+
+        <div className="panel">
+          <div className="panel-heading">
+            <div><span className="kicker">SOURCE SCOUT</span><h2>New possible sources</h2></div>
+            <span className="muted">Probationary</span>
+          </div>
+          <div className="status-list">
+            {data.sourceCandidates.map((candidate) => (
+              <div className="source-candidate" key={candidate.domain}>
+                <a href={candidate.exampleUrl} target="_blank" rel="noreferrer"><strong>{candidate.domain}</strong></a>
+                <span>{candidate.occurrences} sightings · {Math.round(candidate.score)} score</span>
+              </div>
+            ))}
+            {!data.sourceCandidates.length && <div className="empty">No new source candidates yet.</div>}
+          </div>
+        </div>
 
         <div className="panel wide">
           <div className="panel-heading">
@@ -146,4 +182,8 @@ function nameOf(organizations, id) {
 
 function labelType(value) {
   return value.replaceAll("_", " ");
+}
+
+function labelInsightType(value) {
+  return value === "watch" ? "Situation to watch" : value === "correlation" ? "Correlation" : "Emerging trend";
 }

@@ -1,6 +1,7 @@
 import { tracePossibleImpacts } from "./impact-map";
 import { validateRelationship } from "./relationships";
 import { ensureDatabase } from "./database";
+import { buildDailyIntelligence } from "./agents/correlation-trends.js";
 
 export async function getDashboardData() {
   const connectionString = process.env.DATABASE_URL;
@@ -8,8 +9,8 @@ export async function getDashboardData() {
 
   try {
     const sql = await ensureDatabase();
-    const [articleRows, organizationRows, claimRows, evidenceRows, scanRows] = await Promise.all([
-      sql`SELECT id, canonical_url, title, summary, published_at, source_id, score
+    const [articleRows, organizationRows, claimRows, evidenceRows, scanRows, articleOrganizationRows, sourceCandidateRows] = await Promise.all([
+      sql`SELECT id, canonical_url, title, summary, published_at, source_id, score, categories, relevance, metadata
           FROM articles ORDER BY published_at DESC NULLS LAST LIMIT 30`,
       sql`SELECT id, name, aliases, sector FROM organizations ORDER BY name`,
       sql`SELECT * FROM relationship_claims
@@ -18,7 +19,13 @@ export async function getDashboardData() {
       sql`SELECT * FROM relationship_evidence ORDER BY observed_at DESC`,
       sql`SELECT scanned_at, fetched, relevant, stored, sources
           FROM scan_runs ORDER BY scanned_at DESC LIMIT 1`,
+      sql`SELECT article_id, organization_id, confidence
+          FROM article_organizations ORDER BY confidence DESC`,
+      sql`SELECT domain, example_url, occurrences, subjects, score, status, last_seen_at
+          FROM source_candidates ORDER BY score DESC, last_seen_at DESC LIMIT 12`,
     ]);
+
+    const articleOrganizations = groupArticleOrganizations(articleOrganizationRows);
 
     const evidenceByClaim = groupEvidence(evidenceRows);
     const relationships = claimRows.map((row) => ({
@@ -62,6 +69,19 @@ export async function getDashboardData() {
       organizations: organizationRows,
       relationships,
       impacts: buildImpactSummary(organizationRows, relationships),
+      intelligence: buildDailyIntelligence({
+        articles: articleRows.map((row) => toSignalArticle(row, articleOrganizations.get(row.id))),
+        relationships: relationships.map(toSignalRelationship),
+      }),
+      sourceCandidates: sourceCandidateRows.map((row) => ({
+        domain: row.domain,
+        exampleUrl: row.example_url,
+        occurrences: row.occurrences,
+        subjects: row.subjects || [],
+        score: Number(row.score || 0),
+        status: row.status,
+        lastSeenAt: iso(row.last_seen_at),
+      })),
       latestScan: scanRows[0] ? {
         scannedAt: iso(scanRows[0].scanned_at),
         fetched: scanRows[0].fetched,
@@ -141,7 +161,45 @@ function previewData() {
     organizations,
     relationships,
     impacts: buildImpactSummary(organizations, relationships),
+    intelligence: buildDailyIntelligence({
+      articles: [{
+        id: "preview-article",
+        title: "Fictional preview: regulator announces infrastructure programme",
+        summary: "Demonstrates how relevant news will connect to the private organisation map.",
+        url: "#",
+        sourceId: "Preview",
+        publishedAt: "2026-07-29T12:00:00.000Z",
+        score: 10,
+        categories: ["infrastructure"],
+        relevance: [{ category: "infrastructure", reasons: ["high-signal topic"] }],
+      }],
+      relationships: relationships.map(toSignalRelationship),
+    }),
+    sourceCandidates: [],
     latestScan: null,
+  };
+}
+
+function toSignalArticle(row, organizations = []) {
+  return {
+    id: row.id,
+    url: row.canonical_url,
+    title: row.title,
+    summary: row.summary,
+    publishedAt: iso(row.published_at),
+    sourceId: row.source_id,
+    score: Number(row.score || 0),
+    categories: row.categories || [],
+    relevance: row.relevance || [],
+    metadata: row.metadata || {},
+    organizations,
+  };
+}
+
+function toSignalRelationship(row) {
+  return {
+    sourceOrganizationId: row.sourceOrganizationId,
+    targetOrganizationId: row.targetOrganizationId,
   };
 }
 
@@ -155,6 +213,16 @@ function groupEvidence(rows) {
     const items = grouped.get(row.relationship_id) || [];
     items.push(row);
     grouped.set(row.relationship_id, items);
+  }
+  return grouped;
+}
+
+function groupArticleOrganizations(rows) {
+  const grouped = new Map();
+  for (const row of rows) {
+    const values = grouped.get(row.article_id) || [];
+    values.push(row.organization_id);
+    grouped.set(row.article_id, values);
   }
   return grouped;
 }
