@@ -1,4 +1,5 @@
 import { getSql } from "./database";
+import { collapseDuplicateArticles } from "./article-quality.js";
 
 export const PUBLIC_CATEGORIES = {
   finance: {
@@ -24,34 +25,35 @@ export async function getLatestArticles({ category, query, limit = 80 } = {}) {
   if (!sql) return [];
   try {
     let rows;
+    const queryLimit = Math.min(Math.max(limit * 3, limit), 300);
     if (category && query) {
       const pattern = `%${query}%`;
       rows = await sql`
         SELECT * FROM articles
         WHERE ${category} = ANY(categories)
           AND (title ILIKE ${pattern} OR summary ILIKE ${pattern})
-        ORDER BY published_at DESC NULLS LAST LIMIT ${limit}
+        ORDER BY published_at DESC NULLS LAST LIMIT ${queryLimit}
       `;
     } else if (category) {
       rows = await sql`
         SELECT * FROM articles
         WHERE ${category} = ANY(categories)
-        ORDER BY published_at DESC NULLS LAST LIMIT ${limit}
+        ORDER BY published_at DESC NULLS LAST LIMIT ${queryLimit}
       `;
     } else if (query) {
       const pattern = `%${query}%`;
       rows = await sql`
         SELECT * FROM articles
         WHERE title ILIKE ${pattern} OR summary ILIKE ${pattern}
-        ORDER BY published_at DESC NULLS LAST LIMIT ${limit}
+        ORDER BY published_at DESC NULLS LAST LIMIT ${queryLimit}
       `;
     } else {
       rows = await sql`
         SELECT * FROM articles
-        ORDER BY published_at DESC NULLS LAST LIMIT ${limit}
+        ORDER BY published_at DESC NULLS LAST LIMIT ${queryLimit}
       `;
     }
-    return rows.map(toArticle);
+    return collapseDuplicateArticles(rows).slice(0, limit).map(toArticle);
   } catch (error) {
     console.error("[public] article read failed:", error?.message || error);
     return [];

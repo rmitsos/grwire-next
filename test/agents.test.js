@@ -6,6 +6,8 @@ import {
   inspectArticle,
   parseArticleHtml,
   validateArticleLink,
+  collapseDuplicateArticles,
+  rankItems,
 } from "../src/index.js";
 
 const rules = [{
@@ -77,4 +79,27 @@ test("correlation agent produces a trend and independent-source correlation", ()
   const intelligence = buildDailyIntelligence({ articles, now: new Date("2026-08-31T10:00:00Z") });
   assert.ok(intelligence.trends.length >= 1);
   assert.ok(intelligence.correlations.some((item) => item.interpretation === "independent corroboration"));
+});
+
+test("telco rule requires an infrastructure subject, not just a telecom company", () => {
+  const ranked = rankItems([
+    { url: "https://news.test/consumer", title: "Vodafone announces new customer offer in Greece", summary: "A new mobile package for consumers." },
+    { url: "https://news.test/fibre", title: "Vodafone expands FTTH fibre network in Greece", summary: "The infrastructure rollout covers new regions." },
+  ], [{
+    id: "telco", label: "Telco infrastructure", category: "telco", entities: ["Vodafone"], topics: ["network"],
+    strongTopics: ["FTTH", "fibre"], requiredTopics: ["FTTH", "fibre"], minimumStrongTopics: 1,
+    geography: ["Greece"], threshold: 4,
+  }]);
+  assert.equal(ranked.length, 1);
+  assert.match(ranked[0].title, /FTTH/);
+});
+
+test("near-duplicate syndicated headlines collapse to the strongest item", () => {
+  const result = collapseDuplicateArticles([
+    { id: "a", title: "OTE announces major FTTH investment in Greece", publishedAt: "2026-08-30T10:00:00Z", score: 6, sourceId: "media-a" },
+    { id: "b", title: "OTE announces major FTTH investment in Greece", publishedAt: "2026-08-30T11:00:00Z", score: 9, sourceId: "media-b" },
+  ]);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].id, "b");
+  assert.deepEqual(result[0].metadata.duplicateSources, ["media-a"]);
 });

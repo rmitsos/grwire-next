@@ -2,6 +2,7 @@ import { createSourceAdapter } from "./sources/index.js";
 import { DEFAULT_WATCH_RULES, rankItems } from "./watch-rules.js";
 import { inspectArticle, validateArticleLink } from "./agents/source-guardian.js";
 import { readArticles } from "./agents/article-reader.js";
+import { collapseDuplicateArticles } from "./article-quality.js";
 
 export async function scanMarket({
   sources,
@@ -56,7 +57,7 @@ export async function scanMarket({
     });
   }
 
-  const candidates = discoveredItems
+  const candidates = collapseDuplicateArticles(discoveredItems)
     .map((item) => ({ ...item, validation: inspectArticle(item, { rules }) }))
     .filter((item) => item.validation.accepted);
 

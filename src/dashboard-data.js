@@ -2,6 +2,7 @@ import { tracePossibleImpacts } from "./impact-map";
 import { validateRelationship } from "./relationships";
 import { ensureDatabase } from "./database";
 import { buildDailyIntelligence } from "./agents/correlation-trends.js";
+import { collapseDuplicateArticles } from "./article-quality.js";
 
 export async function getDashboardData() {
   const connectionString = process.env.DATABASE_URL;
@@ -26,6 +27,7 @@ export async function getDashboardData() {
     ]);
 
     const articleOrganizations = groupArticleOrganizations(articleOrganizationRows);
+    const displayArticleRows = collapseDuplicateArticles(articleRows);
 
     const evidenceByClaim = groupEvidence(evidenceRows);
     const relationships = claimRows.map((row) => ({
@@ -57,7 +59,7 @@ export async function getDashboardData() {
 
     return {
       preview: false,
-      articles: articleRows.map((row) => ({
+      articles: displayArticleRows.map((row) => ({
         id: row.id,
         url: row.canonical_url,
         title: row.title,
@@ -70,7 +72,7 @@ export async function getDashboardData() {
       relationships,
       impacts: buildImpactSummary(organizationRows, relationships),
       intelligence: buildDailyIntelligence({
-        articles: articleRows.map((row) => toSignalArticle(row, articleOrganizations.get(row.id))),
+        articles: displayArticleRows.map((row) => toSignalArticle(row, articleOrganizations.get(row.id))),
         relationships: relationships.map(toSignalRelationship),
       }),
       sourceCandidates: sourceCandidateRows.map((row) => ({

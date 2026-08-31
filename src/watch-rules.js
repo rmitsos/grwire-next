@@ -22,6 +22,8 @@ export function validateWatchRule(rule) {
     strongTopics: [],
     geography: [],
     exclusions: [],
+    requiredTopics: [],
+    minimumStrongTopics: 0,
     preferredDomains: [],
     ...rule,
   };
@@ -75,6 +77,17 @@ export function scoreItem(item, rawRule) {
     reasons.push("excluded context");
   }
 
+  const requiredMatches = rule.requiredTopics.filter((term) => includesAny(combined, [term]));
+  const strongMatches = rule.strongTopics.filter((term) => includesAny(combined, [term]));
+  if (rule.requiredTopics.length && !requiredMatches.length) {
+    score = 0;
+    reasons.push("required infrastructure subject missing");
+  }
+  if (strongMatches.length < rule.minimumStrongTopics) {
+    score = 0;
+    reasons.push("insufficient high-signal subject detail");
+  }
+
   return {
     ruleId: rule.id,
     label: rule.label,
@@ -109,6 +122,8 @@ export const DEFAULT_WATCH_RULES = Object.freeze([
     strongTopics: ["FTTH", "fiber", "fibre", "5G", "οπτική ίνα", "ευρυζων", "spectrum", "data center", "subsea cable"],
     geography: ["Greece", "Greek", "Ελλάδα", "ελλην"],
     exclusions: ["smartphone review", "consumer offer"],
+    requiredTopics: ["FTTH", "fiber", "fibre", "οπτική ίνα", "5G", "spectrum", "data center", "subsea cable", "network deployment", "δικτυακή ανάπτυξη"],
+    minimumStrongTopics: 1,
     preferredDomains: ["eett.gr", "cosmote.gr", "vodafone.gr", "nova.gr", "dei.gr"],
     threshold: 4,
   },
@@ -121,6 +136,8 @@ export const DEFAULT_WATCH_RULES = Object.freeze([
     strongTopics: ["substation", "interconnection", "grid", "storage", "BESS", "υποσταθ", "διασύνδεσ", "αποθήκευση", "offshore wind"],
     geography: ["Greece", "Greek", "Ελλάδα", "ελλην"],
     preferredDomains: ["admie.gr", "deddie.gr", "desfa.gr", "raaey.gr", "dei.gr"],
+    requiredTopics: ["grid", "substation", "interconnection", "storage", "BESS", "υποσταθ", "διασύνδεσ", "αποθήκευση", "offshore wind", "renewable", "ΑΠΕ"],
+    minimumStrongTopics: 1,
     threshold: 4,
   },
   {
