@@ -6,6 +6,7 @@ export const SOURCES = [
   {
     id: "gdelt-greek-telco",
     type: "gdelt",
+    enabled: false,
     url: "https://api.gdeltproject.org/api/v2/doc/doc",
     query: '(OTE OR Cosmote OR Vodafone OR Nova OR "PPC Fiber" OR "United Fiber" OR EETT) (FTTH OR fiber OR fibre OR 5G OR broadband OR spectrum OR network)',
     timespan: "7days",
@@ -14,6 +15,7 @@ export const SOURCES = [
   {
     id: "gdelt-greek-energy",
     type: "gdelt",
+    enabled: false,
     url: "https://api.gdeltproject.org/api/v2/doc/doc",
     query: '(ADMIE OR IPTO OR HEDNO OR DESFA OR RAAEY OR PPC OR DEPA) (grid OR substation OR interconnection OR storage OR renewable OR electricity OR gas)',
     timespan: "7days",
@@ -22,6 +24,7 @@ export const SOURCES = [
   {
     id: "gdelt-greek-finance",
     type: "gdelt",
+    enabled: false,
     url: "https://api.gdeltproject.org/api/v2/doc/doc",
     query: '("Alpha Bank" OR Eurobank OR "National Bank of Greece" OR "Piraeus Bank" OR ATHEX OR "Athens Stock Exchange") (results OR earnings OR dividend OR acquisition OR bond OR loan OR capital)',
     timespan: "7days",
@@ -30,6 +33,7 @@ export const SOURCES = [
   {
     id: "gdelt-greek-infrastructure",
     type: "gdelt",
+    enabled: false,
     url: "https://api.gdeltproject.org/api/v2/doc/doc",
     query: '(Greece OR Greek) (infrastructure OR construction OR concession OR railway OR motorway OR "data center" OR subsea cable)',
     timespan: "7days",
@@ -38,6 +42,7 @@ export const SOURCES = [
   {
     id: "ot-wordpress",
     type: "wordpress",
+    enabled: false,
     url: "https://www.ot.gr",
     lookbackDays: 7,
     limit: 100,
@@ -73,6 +78,7 @@ export const SOURCES = [
   {
     id: "energypress-wordpress",
     type: "wordpress",
+    enabled: false,
     url: "https://energypress.gr",
     lookbackDays: 7,
     limit: 100,
@@ -87,6 +93,7 @@ export const SOURCES = [
   {
     id: "insider-wordpress",
     type: "wordpress",
+    enabled: false,
     url: "https://www.insider.gr",
     lookbackDays: 7,
     limit: 100,
@@ -103,4 +110,16 @@ export const SOURCES = [
     url: "https://www.ot.gr/feed/",
     enabled: false,
   },
-]; 
+  {
+    id: "google-news-greek-telco",
+    type: "rss",
+    url: "https://news.google.com/rss/search?q=%28OTE%20OR%20Cosmote%20OR%20Vodafone%20OR%20Nova%20OR%20FTTH%20OR%205G%29%20Greece&hl=el&gl=GR&ceid=GR%3Ael",
+    limit: 60,
+  },
+  {
+    id: "google-news-greek-energy",
+    type: "rss",
+    url: "https://news.google.com/rss/search?q=%28ADMIE%20OR%20IPTO%20OR%20HEDNO%20OR%20DEDDIE%20OR%20RAAEY%20OR%20PPC%20OR%20renewable%20OR%20storage%29%20Greece&hl=el&gl=GR&ceid=GR%3Ael",
+    limit: 60,
+  },
+];

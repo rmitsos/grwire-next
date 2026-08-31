@@ -73,7 +73,7 @@ export default async function DashboardPage() {
                 <article className={`source-card ${source.ok ? "" : "failed"}`} key={source.id}>
                   <strong>{source.id}</strong>
                   {source.ok
-                    ? <span>{source.accepted || 0} accepted · {source.fetched || 0} fetched</span>
+                    ? <span>{source.accepted || 0} accepted · {source.fetched || 0} fetched{source.readFailed ? ` · ${source.readFailed} unreadable` : ""}</span>
                     : <span>Failed · {source.error}</span>}
                 </article>
               ))}

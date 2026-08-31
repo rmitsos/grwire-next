@@ -16,9 +16,10 @@ export async function scanMarket({
 }) {
   if (!Array.isArray(sources) || !sources.length) throw new TypeError("At least one source is required");
   const outcomes = [];
+  const activeSources = sources.filter((source) => source.enabled !== false);
 
-  for (let index = 0; index < sources.length; index += concurrency) {
-    const batch = sources.filter((source) => source.enabled !== false).slice(index, index + concurrency);
+  for (let index = 0; index < activeSources.length; index += concurrency) {
+    const batch = activeSources.slice(index, index + concurrency);
     const settled = await Promise.allSettled(
       batch.map(async (source) => {
         const adapter = createSourceAdapter(source.type, { fetch });
@@ -35,13 +36,13 @@ export async function scanMarket({
       status.push({ id: source.id || source.url, ok: false, error: result.reason?.message || String(result.reason) });
       continue;
     }
-    const sourceRanked = rankItems(result.value.items, rules);
     status.push({
       id: source.id || source.url,
       ok: true,
       fetched: result.value.items.length,
-      accepted: sourceRanked.length,
-      rejected: result.value.items.length - sourceRanked.length,
+      accepted: 0,
+      rejected: result.value.items.length,
+      readFailed: 0,
     });
     for (const item of result.value.items) {
       const url = canonicalUrl(item.url);
@@ -83,6 +84,20 @@ export async function scanMarket({
       validation: item.validation,
     },
   }));
+  const acceptedBySource = new Map();
+  const readFailedBySource = new Map();
+  for (const item of ranked) acceptedBySource.set(item.sourceId, (acceptedBySource.get(item.sourceId) || 0) + 1);
+  for (const item of discoveredItems) {
+    if (item.metadata?.articleReader?.status === "failed") {
+      readFailedBySource.set(item.sourceId, (readFailedBySource.get(item.sourceId) || 0) + 1);
+    }
+  }
+  for (const source of status) {
+    if (!source.ok) continue;
+    source.accepted = acceptedBySource.get(source.id) || 0;
+    source.rejected = Math.max(0, source.fetched - source.accepted);
+    source.readFailed = readFailedBySource.get(source.id) || 0;
+  }
   return {
     scannedAt: new Date().toISOString(),
     sources: status,

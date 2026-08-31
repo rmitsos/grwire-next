@@ -33,7 +33,8 @@ export function scoreItem(item, rawRule) {
   const rule = validateWatchRule(rawRule);
   const title = normalise(item.title);
   const summary = normalise(item.summary);
-  const combined = `${title} ${summary}`;
+  const body = normalise(item.metadata?.articleBody);
+  const combined = `${title} ${summary} ${body}`;
   const domain = new URL(item.url).hostname.replace(/^www\./, "");
   const reasons = [];
   let score = 0;
