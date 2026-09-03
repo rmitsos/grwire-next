@@ -3,7 +3,7 @@ import { scanMarket } from "./pipeline";
 import { detectArticleOrganizations } from "./article-organizations";
 import { ensureDatabase } from "./database";
 import { buildDailyIntelligence } from "./agents/correlation-trends.js";
-import { buildDailyStory } from "./agents/story-builder.js";
+import { buildDailyStory, buildFallbackDailyStory } from "./agents/story-builder.js";
 import { discoverSourceCandidates } from "./agents/source-guardian.js";
 import { DEFAULT_WATCH_RULES, rankItems } from "./watch-rules.js";
 
@@ -106,9 +106,11 @@ export async function ingestMarket() {
     metadata: row.metadata || {},
   }));
   const intelligence = buildDailyIntelligence({ articles: storyArticles });
-  const story = buildDailyStory({ articles: storyArticles, intelligence, now: report.scannedAt });
-  if (story) await persistDailyStory(sql, story);
-  console.log("[ingest] completed", { ms: Date.now() - startedAt, stored, story: Boolean(story) });
+  const story = buildDailyStory({ articles: storyArticles, intelligence, now: report.scannedAt })
+    || buildFallbackDailyStory({ articles: storyArticles.length ? storyArticles : report.items, now: report.scannedAt });
+  if (!story) throw new Error("Daily story was not generated: the scan returned no usable articles");
+  await persistDailyStory(sql, story);
+  console.log("[ingest] completed", { ms: Date.now() - startedAt, fetched: report.fetched, stored, story: true, fallbackStory: Boolean(story.metadata?.fallback) });
 
   return {
     ...report,

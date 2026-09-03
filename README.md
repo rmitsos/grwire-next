@@ -137,3 +137,9 @@ The Source Scout also records repeated, relevant domains as probationary
 `source_candidates`. They are evidence leads, not trusted sources, until
 reviewed. Set `SOURCE_LINK_VALIDATION=false` to skip live article-link checks
 when a scan must remain within a tight serverless execution window.
+
+Every successful scan must also persist that day's public daily story. If the
+richer narrative builder cannot assemble one from the collected rows, the
+ingest route writes a clearly marked evidence-linked fallback story; if there
+are no usable articles at all, the scan fails visibly instead of silently
+leaving an older story in place.

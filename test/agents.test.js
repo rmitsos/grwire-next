@@ -10,6 +10,7 @@ import {
   rankItems,
   DEFAULT_WATCH_RULES,
   buildDailyStory,
+  buildFallbackDailyStory,
 } from "../src/index.js";
 import { SOURCES } from "../config/sources.js";
 
@@ -171,4 +172,17 @@ test("daily story collapses Greek and English copies of one event", () => {
   });
   assert.equal(story.evidence.length, 2);
   assert.equal(story.evidence[0].id, "en");
+});
+
+test("fallback daily story is always evidence-linked", () => {
+  const story = buildFallbackDailyStory({
+    now: new Date("2026-09-03T10:00:00Z"),
+    articles: [
+      { id: "fresh", url: "https://source.test/fresh", title: "New Greek grid capacity tender announced", sourceId: "source", categories: ["energy"], score: 4, publishedAt: "2026-09-03T09:00:00Z" },
+    ],
+  });
+  assert.equal(story.metadata.fallback, true);
+  assert.deepEqual(story.articleIds, ["fresh"]);
+  assert.equal(story.evidence[0].id, "fresh");
+  assert.match(story.body[1], /New Greek grid capacity tender announced/);
 });

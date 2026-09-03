@@ -81,12 +81,16 @@ export async function getHomepageData() {
 export async function getLatestStory() {
   const sql = getSql();
   if (!sql) return null;
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Athens" }).format(new Date());
   try {
     const rows = await sql`
       SELECT story_date, generated_at, headline, standfirst, body, category, confidence, article_ids, evidence, metadata
       FROM daily_stories ORDER BY story_date DESC, generated_at DESC LIMIT 1
     `;
-    return rows[0] ? toStory(rows[0]) : null;
+    // The homepage's top slot is explicitly today's story. Older records stay
+    // searchable in the archive but must not look like current coverage.
+    if (!rows[0] || storyDateToIso(rows[0].story_date)?.slice(0, 10) !== today) return null;
+    return toStory(rows[0]);
   } catch (error) {
     console.error("[public] story read failed:", error?.message || error);
     return null;

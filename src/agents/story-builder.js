@@ -72,6 +72,53 @@ export function buildDailyStory({ articles = [], intelligence = {}, now = new Da
   };
 }
 
+/**
+ * Keeps a successful scan from silently leaving yesterday's story in place
+ * when the richer narrative builder cannot assemble a narrative.
+ */
+export function buildFallbackDailyStory({ articles = [], now = new Date(), windowDays = 30 } = {}) {
+  const signals = articles
+    .map((article) => ({
+      ...analyseArticle(article, article.validation),
+      summary: article.summary || "",
+    }))
+    .filter((article) => article.title && article.url)
+    .sort((a, b) => dateValue(b) - dateValue(a) || b.score - a.score)
+    .slice(0, 5);
+  if (!signals.length) return null;
+
+  const theme = chooseTheme(signals);
+  const sources = new Set(signals.map((article) => article.sourceId).filter(Boolean));
+  const evidence = signals.map((article) => ({
+    id: article.id,
+    url: article.url,
+    title: article.title,
+    sourceId: article.sourceId,
+    publishedAt: article.publishedAt,
+    score: article.score,
+  }));
+  const sourceText = sources.size || 1;
+  const titles = signals.slice(0, 3).map((article) => article.title).join("; ");
+
+  return {
+    storyDate: dateKey(now),
+    generatedAt: new Date(now).toISOString(),
+    headline: "Greek market wire: fresh infrastructure signals",
+    standfirst: `A daily market narrative built from ${signals.length} validated signal${signals.length === 1 ? "" : "s"} and ${sourceText} independent source${sourceText === 1 ? "" : "s"}.`,
+    body: [
+      `The latest validated scan produced ${signals.length} usable market signal${signals.length === 1 ? "" : "s"} across the last ${windowDays} days.`,
+      `Fresh evidence currently includes: ${titles}.`,
+      "Interpretation: these signals are published as an evidence-linked market brief while the richer narrative pattern is being assembled.",
+      "What to watch next: follow-up announcements, tenders, contracts and regulatory decisions that confirm the direction of travel.",
+    ],
+    category: theme.category,
+    confidence: Math.min(0.75, 0.30 + Math.min(4, sources.size) * 0.08 + Math.min(5, signals.length) * 0.04),
+    articleIds: evidence.map((article) => article.id).filter(Boolean),
+    evidence,
+    metadata: { fallback: true, theme: theme.label, sourceCount: sources.size, articleCount: signals.length },
+  };
+}
+
 function chooseTheme(signals) {
   const counts = new Map();
   for (const signal of signals) for (const category of signal.categories) counts.set(category, (counts.get(category) || 0) + 1);

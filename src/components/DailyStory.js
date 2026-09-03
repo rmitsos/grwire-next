@@ -4,7 +4,7 @@ export function DailyStory({ story, archive = false }) {
   if (!story) {
     return (
       <section className="daily-story empty-story">
-        <div><span className="section-label">DAILY MARKET STORY</span><h2>The first story will appear after a validated scan.</h2><p>Stories are generated from repeated signals, independent sources and linked evidence.</p></div>
+        <div><span className="section-label">DAILY MARKET STORY</span><h2>Today’s story will appear after a validated scan.</h2><p>Stories are generated from repeated signals, independent sources and linked evidence.</p></div>
         <Link className="story-search-button" href="/search">Search archive</Link>
       </section>
     );
