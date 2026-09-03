@@ -105,6 +105,28 @@ test("market scan isolates source failures and deduplicates tracking URLs", asyn
   assert.equal(result.sources.find((source) => source.id === "one").rejected, 0);
 });
 
+test("market scan keeps fresh lower-scoring coverage ahead of stale high-scoring items", async () => {
+  const fetch = async (url) => ({
+    ok: true,
+    url: String(url),
+    headers: { get: () => "application/rss+xml" },
+    text: async () => String(url).includes("fresh")
+      ? `<rss><channel><item><title>Fresh market signal in Greece</title><link>https://x.test/fresh</link><pubDate>2026-09-03T07:00:00Z</pubDate><description>A current market signal with enough context for quality checks and daily coverage.</description></item></channel></rss>`
+      : `<rss><channel><item><title>Target signal network project in Greece</title><link>https://x.test/stale</link><pubDate>2026-08-01T07:00:00Z</pubDate><description>An older market signal with enough context for quality checks and daily coverage.</description></item></channel></rss>`,
+  });
+  const result = await scanMarket({
+    fetch,
+    maxRelevantItems: 1,
+    sources: [
+      { id: "stale", type: "rss", url: "https://stale.test/feed" },
+      { id: "fresh", type: "rss", url: "https://fresh.test/feed" },
+    ],
+    rules: [{ id: "market", label: "Market", entities: ["Target"], topics: ["signal"], threshold: 1 }],
+  });
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0].sourceId, "fresh");
+});
+
 test("article reading preselects relevant leads before opening pages", async () => {
   const requests = [];
   const fetch = async (url) => {

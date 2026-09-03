@@ -99,7 +99,13 @@ export async function scanMarket({
     if (!validateLinks) return true;
     return ["reachable", "syntax-valid", "not-checked"].includes(item.validation.url.status);
   });
-  const ranked = rankItems(finalCandidates, rules).slice(0, maxRelevantItems).map((item) => ({
+  // Fresh market coverage must reach storage before older, higher-scoring
+  // evergreen items. Keep relevance as the tie-breaker within the same news
+  // cycle so the homepage and daily story do not stagnate on old coverage.
+  const ranked = rankItems(finalCandidates, rules)
+    .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0) || b.score - a.score)
+    .slice(0, maxRelevantItems)
+    .map((item) => ({
     ...item,
     metadata: {
       ...(item.metadata || {}),

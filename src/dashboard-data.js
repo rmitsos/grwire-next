@@ -12,7 +12,7 @@ export async function getDashboardData() {
     const sql = await ensureDatabase();
     const [articleRows, organizationRows, claimRows, evidenceRows, scanRows, articleOrganizationRows, sourceCandidateRows] = await Promise.all([
       sql`SELECT id, canonical_url, title, summary, published_at, source_id, score, categories, relevance, metadata
-          FROM articles ORDER BY published_at DESC NULLS LAST LIMIT 30`,
+          FROM articles ORDER BY COALESCE(published_at, updated_at) DESC NULLS LAST LIMIT 30`,
       sql`SELECT id, name, aliases, sector FROM organizations ORDER BY name`,
       sql`SELECT * FROM relationship_claims
           WHERE claim_status <> 'expired'

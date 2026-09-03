@@ -143,13 +143,11 @@ export const SOURCES = [
     id: "naftemporiki",
     type: "rss",
     url: "https://www.naftemporiki.gr/feed/",
-    enabled: false,
   },
   {
     id: "ot-gr",
     type: "rss",
     url: "https://www.ot.gr/feed/",
-    enabled: false,
   },
   {
     id: "google-news-greek-telco",

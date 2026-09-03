@@ -91,7 +91,7 @@ export async function ingestMarket() {
 
   const storyRows = await sql`
     SELECT id, canonical_url, title, summary, published_at, source_id, score, categories, relevance, metadata
-    FROM articles ORDER BY published_at DESC NULLS LAST LIMIT 100
+    FROM articles ORDER BY COALESCE(published_at, updated_at) DESC NULLS LAST LIMIT 100
   `;
   const storyArticles = storyRows.map((row) => ({
     id: row.id,

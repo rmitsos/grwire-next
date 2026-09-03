@@ -33,24 +33,24 @@ export async function getLatestArticles({ category, query, limit = 80 } = {}) {
       rows = await sql`
         SELECT * FROM articles
         WHERE title ILIKE ${pattern} OR summary ILIKE ${pattern}
-        ORDER BY published_at DESC NULLS LAST LIMIT ${queryLimit}
+        ORDER BY COALESCE(published_at, updated_at) DESC NULLS LAST LIMIT ${queryLimit}
       `;
     } else if (category) {
       rows = await sql`
         SELECT * FROM articles
-        ORDER BY published_at DESC NULLS LAST LIMIT ${queryLimit}
+        ORDER BY COALESCE(published_at, updated_at) DESC NULLS LAST LIMIT ${queryLimit}
       `;
     } else if (query) {
       const pattern = `%${query}%`;
       rows = await sql`
         SELECT * FROM articles
         WHERE title ILIKE ${pattern} OR summary ILIKE ${pattern}
-        ORDER BY published_at DESC NULLS LAST LIMIT ${queryLimit}
+        ORDER BY COALESCE(published_at, updated_at) DESC NULLS LAST LIMIT ${queryLimit}
       `;
     } else {
       rows = await sql`
         SELECT * FROM articles
-        ORDER BY published_at DESC NULLS LAST LIMIT ${queryLimit}
+        ORDER BY COALESCE(published_at, updated_at) DESC NULLS LAST LIMIT ${queryLimit}
       `;
     }
     let cleaned = collapseDuplicateArticles(rows).map(reclassifyRow);
