@@ -10,7 +10,11 @@ export default async function SearchPage({ searchParams }) {
   const query = String(params?.q || "").trim().slice(0, 100);
   const category = PUBLIC_CATEGORIES[params?.category] ? params.category : undefined;
   const [articles, stories] = query
-    ? await Promise.all([getLatestArticles({ query, category, limit: 100 }), searchStories({ query, limit: 50 })])
+    ? await Promise.all([
+      // Search is rendered per request, so a failed read shows no results rather than an error page.
+      getLatestArticles({ query, category, limit: 100 }).catch(() => []),
+      searchStories({ query, limit: 50 }),
+    ])
     : [[], []];
 
   return (

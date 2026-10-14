@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { SESSION_COOKIE, verifySessionToken } from "@/auth-core";
 import { ingestMarket } from "@/ingest-service";
 
@@ -27,6 +28,8 @@ export async function POST(request) {
 async function run() {
   try {
     const result = await ingestMarket();
+    // Rebuild the cached public pages with the new articles and daily story.
+    revalidatePath("/", "layout");
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     console.error("[ingest] failed:", error?.message || error);
