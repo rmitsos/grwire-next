@@ -2,7 +2,13 @@ import { notFound } from "next/navigation";
 import { ArticleList } from "@/components/ArticleList";
 import { getLatestArticles, PUBLIC_CATEGORIES } from "@/public-data";
 
-export const dynamic = "force-dynamic";
+// Same caching as the homepage; only the four known sections are built.
+export const revalidate = 3600;
+export const dynamicParams = false;
+
+export function generateStaticParams() {
+  return Object.keys(PUBLIC_CATEGORIES).map((category) => ({ category }));
+}
 
 export async function generateMetadata({ params }) {
   const { category } = await params;

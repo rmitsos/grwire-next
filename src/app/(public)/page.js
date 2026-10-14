@@ -3,7 +3,9 @@ import { ArticleList, dateLabel } from "@/components/ArticleList";
 import { DailyStory } from "@/components/DailyStory";
 import { getHomepageData, PUBLIC_CATEGORIES } from "@/public-data";
 
-export const dynamic = "force-dynamic";
+// Served from the cache and rebuilt at most once an hour, or straight after an
+// ingest (see /api/ingest). Rendering per request kept Neon awake around the clock.
+export const revalidate = 3600;
 
 export default async function PublicHomepage() {
   const data = await getHomepageData();

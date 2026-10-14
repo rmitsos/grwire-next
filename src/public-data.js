@@ -57,8 +57,9 @@ export async function getLatestArticles({ category, query, limit = 80 } = {}) {
     if (category) cleaned = cleaned.filter((row) => row.categories.includes(category));
     return cleaned.slice(0, limit).map(toArticle);
   } catch (error) {
+    // Rethrow so a cached page keeps its last good copy instead of caching an empty one.
     console.error("[public] article read failed:", error?.message || error);
-    return [];
+    throw error;
   }
 }
 
@@ -93,7 +94,7 @@ export async function getLatestStory() {
     return toStory(rows[0]);
   } catch (error) {
     console.error("[public] story read failed:", error?.message || error);
-    return null;
+    throw error;
   }
 }
 
