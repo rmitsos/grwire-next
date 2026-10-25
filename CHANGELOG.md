@@ -16,6 +16,12 @@
 - The telecom rule no longer treats bare "interconnection"/"διασύνδεση" wording as a telecom
   signal, and now excludes electricity-grid context (ΑΔΜΗΕ, "ηλεκτρικ*", etc.). Electrical
   interconnection stories (e.g. the Greece–Italy cable) now classify as energy only, not telecom.
+- Watch-rule keyword matching is now word-start aware, so short terms only match whole words (e.g.
+  "ΟΤΕ"/"Nova"/"port" no longer fire inside "ποτέ"/"innovation"/"report"/"sports").
+- The electricity-grid exclusions above now only apply when no fibre/telecom signal is also
+  present, so "Grid Telecom" and "ΔΕΗ Fiber" stories riding ΑΔΜΗΕ/ΔΕΔΔΗΕ infrastructure still
+  classify as telecom; the global rental/residential exclusion is narrower too, so FTTH/fibre
+  coverage that mentions "κατοικίες" (households, not homes for rent/sale) no longer gets rejected.
 - The finance rule now requires a mention of a specific monitored company (banks and large-cap
   listed companies) instead of accepting any story that mentions "χρηματιστήριο" or "μέρισμα";
   small-cap dividend news and generic market commentary no longer qualify.
