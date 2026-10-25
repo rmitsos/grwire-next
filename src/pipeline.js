@@ -1,6 +1,6 @@
 import { createSourceAdapter } from "./sources/index.js";
 import { canonicalizeUrl, cleanUrl } from "./sources/utils.js";
-import { DEFAULT_WATCH_RULES, rankItems } from "./watch-rules.js";
+import { DEFAULT_WATCH_RULES, rankItems, sourceForcedCategories } from "./watch-rules.js";
 import { inspectArticle, validateArticleLink } from "./agents/source-guardian.js";
 import { readArticles } from "./agents/article-reader.js";
 import { collapseDuplicateArticles, cleanTitleForSource } from "./article-quality.js";
@@ -106,7 +106,10 @@ export async function scanMarket({
 
   const inspected = collapseDuplicateArticles(noiseFiltered)
     .map((item) => ({ ...item, validation: inspectArticle(item, { rules }) }))
-  const candidates = inspected.filter((item) => item.validation.accepted);
+  // sources-spec.md §2.2 ppc-press source-level routing (watch-rules.js
+  // sourceForcedCategories) guarantees a category regardless of the generic
+  // relevance gate, so those items must not be dropped here either.
+  const candidates = inspected.filter((item) => item.validation.accepted || sourceForcedCategories(item).length > 0);
 
   if (validateLinks && candidates.length) {
     const candidatesToCheck = candidates

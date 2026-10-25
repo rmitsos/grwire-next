@@ -8,8 +8,11 @@ import { SOURCES } from "../config/sources.js";
 import {
   DEFAULT_DAY_CAP_PER_SOURCE,
   DEFAULT_HOME_CAP_PER_SOURCE,
+  HOMEPAGE_MAX_ITEMS,
+  SECTION_HOMEPAGE_CAPS,
   SECTION_SHARE_CAP,
   athensDayKey,
+  homepageSectionOf,
   isFresh,
   noiseRejectReason,
   splitByFreshness,
@@ -35,12 +38,9 @@ export function applyDayCap(rows, { now = Date.now() } = {}) {
 }
 
 export const PUBLIC_CATEGORIES = {
-  finance: {
-    name: "Finance",
-    deck: "Banks, listed companies, capital markets and the Greek economy.",
-    // Closest match for sources-spec.md §1's deals-companies id. The spec
-    // section is narrower (operator/utility/infrastructure companies only);
-    // this slug covers all Greek finance news.
+  "deals-companies": {
+    name: "Deals & companies",
+    deck: "Operators, utilities, tower, fibre, grid and infrastructure companies: deals, results, M&A and investment.",
     specId: "deals-companies",
   },
   telco: {
@@ -126,36 +126,44 @@ export async function getHomepageData() {
  *  - sources-spec.md §3 max_age_hours.news: only items published within the
  *    last 72h are homepage-eligible (items with no publishedAt never are).
  *  - §2 home_cap per source (default DEFAULT_HOME_CAP_PER_SOURCE).
- *  - §5 homepage.section_share_max (35%), applied after the per-source cap,
- *    over the primary category (categories[0]).
+ *  - §1 homepage_cap per spec section (SECTION_HOMEPAGE_CAPS, keyed by
+ *    homepageSectionOf(article) — the article's primary *spec* section,
+ *    which can differ from its public-category column), capped a second
+ *    time by §5 section_share_max (35%) — never binds given the §1 caps,
+ *    but kept per spec.
+ *  - §5 homepage.max_items (20) total, across lead + recent + columns.
  *  - Google News items flagged metadata.sectionOnly (§2 "Google News
  *    handling") are excluded; section pages still list them.
  * Skipped items are never replaced with padding: a slot that runs out of
  * eligible articles is just left shorter than its usual capacity.
- * Out of scope this round: spec homepage.max_items (20) and per-section
- * homepage_caps / min_score — see sources-spec.md §5 and §1.
  */
 export function buildHomepageSections(articles = [], { now = Date.now() } = {}) {
   const { fresh } = splitByFreshness(articles, { now });
 
   const shown = new Set();
   const perSourceCount = new Map();
-  const perSectionCount = new Map();
+  const perSpecSectionCount = new Map();
+  let totalCount = 0;
 
   const eligible = (article) => {
+    if (totalCount >= HOMEPAGE_MAX_ITEMS) return false;
     if (article.metadata?.sectionOnly) return false;
     if (shown.has(canonicalizeUrl(article.url))) return false;
     const homeCap = SOURCE_BY_ID.get(article.sourceId)?.homeCap ?? DEFAULT_HOME_CAP_PER_SOURCE;
     if ((perSourceCount.get(article.sourceId) || 0) >= homeCap) return false;
-    const section = article.categories?.[0];
-    if (section && (perSectionCount.get(section) || 0) >= SECTION_SHARE_CAP) return false;
+    const specSection = homepageSectionOf(article);
+    if (specSection) {
+      const sectionCap = Math.min(SECTION_HOMEPAGE_CAPS[specSection] ?? Infinity, SECTION_SHARE_CAP);
+      if ((perSpecSectionCount.get(specSection) || 0) >= sectionCap) return false;
+    }
     return true;
   };
   const take = (article) => {
     shown.add(canonicalizeUrl(article.url));
     perSourceCount.set(article.sourceId, (perSourceCount.get(article.sourceId) || 0) + 1);
-    const section = article.categories?.[0];
-    if (section) perSectionCount.set(section, (perSectionCount.get(section) || 0) + 1);
+    const specSection = homepageSectionOf(article);
+    if (specSection) perSpecSectionCount.set(specSection, (perSpecSectionCount.get(specSection) || 0) + 1);
+    totalCount += 1;
     return article;
   };
 

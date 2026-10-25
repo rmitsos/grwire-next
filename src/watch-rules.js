@@ -1,5 +1,5 @@
 import { stripTrailingSiteSuffix } from "./article-quality.js";
-import { ORGANIZATIONS } from "./organizations.js";
+import { matchesAnyTerm, SECTOR_ORGANIZATIONS } from "./feed-rules.js";
 
 function normalise(value = "") {
   return String(value ?? "")
@@ -80,7 +80,7 @@ const TELECOM_SIGNALS_OVER_ELECTRICITY = [...TELCO_ENTITIES, ...TELCO_STRONG_TOP
 const STRONG_INFRASTRUCTURE_SIGNALS = [...TELCO_STRONG_TOPICS, ...ENERGY_STRONG_TOPICS, ...INFRA_STRONG_TOPICS];
 
 // Checked against every rule, regardless of topic/entity matches: rental and
-// residential-real-estate stories keep clearing the infrastructure/finance
+// residential-real-estate stories keep clearing the infrastructure/deals
 // thresholds on geography + preferred-source bonuses alone, so they are
 // rejected before any rule-specific scoring runs. Narrow and specific so that
 // fibre/FTTH coverage stories that happen to mention "κατοικίες" (households
@@ -101,14 +101,21 @@ const GLOBAL_EXCLUSIONS = [
   { term: "ξενοδοχ", unless: STRONG_INFRASTRUCTURE_SIGNALS },
 ];
 
-// Large-cap/systemic Greek listed companies and regulated utilities. Finance
-// stories must mention one of these to qualify; generic market words
-// ("χρηματιστήριο", "μέρισμα") or a small-cap name alone are not enough.
-const MONITORED_COMPANIES = [
-  ...ORGANIZATIONS.flatMap((organization) => [organization.name, ...(organization.aliases || [])]),
-  "GEK TERNA", "ΓΕΚ ΤΕΡΝΑ", "Mytilineos", "Metlen", "AKTOR", "Intrakat", "AVAX", "ΑΒΑΞ",
-  "Ellaktor", "Ελλάκτωρ", "Jumbo", "ΟΠΑΠ", "OPAP", "Motor Oil", "Titan Cement", "ΤΙΤΑΝ",
-  "Aegean Airlines", "Coca-Cola HBC", "Cenergy", "Intralot", "Autohellas", "Lamda Development",
+// sources-spec.md §1 deals-companies keywords_el/keywords_en (trailing "*"
+// dropped: termPresent below already stems any word longer than 4 letters).
+const DEALS_TOPICS = [
+  "εξαγορ", "συγχωνευσ", "κοινοπραξι", "μετοχ", "μεριδι", "αποτελεσματ", "επενδυσ",
+  "capex", "χρηματοδοτησ", "ομολογ",
+  "m&a", "merger", "acquisition", "jv", "joint venture", "stake", "results", "funding", "ipo",
+];
+// §1 deals-companies negative: bank-centric/market-wrap items never classify
+// as deals-companies, even when a sector org is also mentioned in passing.
+const DEALS_EXCLUSIONS = ["χρηματιστηρι κλεισιμο", "μερισμα", "τραπεζ"];
+// Greek systemic banks: bank-centric items never classify as deals-companies,
+// regardless of any other signal present (decisions.md, 25 Oct 2026).
+const BANK_ORGANIZATIONS = [
+  "Εθνική Τράπεζα", "Eurobank", "Πειραιώς", "Piraeus Bank", "Alpha Bank",
+  "Τράπεζα Κύπρου", "Optima", "Attica Bank", "CrediaBank",
 ];
 
 export function validateWatchRule(rule) {
@@ -126,6 +133,7 @@ export function validateWatchRule(rule) {
     exclusions: [],
     requiredTopics: [],
     requiredEntities: [],
+    bannedEntities: [],
     minimumStrongTopics: 0,
     preferredDomains: [],
     ...rule,
@@ -208,6 +216,10 @@ export function scoreItem(item, rawRule) {
     score = 0;
     reasons.push("no monitored company match");
   }
+  if (rule.bannedEntities.length && includesAny(combined, rule.bannedEntities)) {
+    score = 0;
+    reasons.push("banned entity present");
+  }
 
   return {
     ruleId: rule.id,
@@ -219,10 +231,38 @@ export function scoreItem(item, rawRule) {
   };
 }
 
+// sources-spec.md §2.2 ppc-press: ΔΕΗ press releases are source-routed to
+// energy (spec id energy-grids) unconditionally, and additionally to telco
+// (spec id telecom-fibre) when they mention ΔΕΗ Fiber/FTTH/fibre terms. This
+// bypasses the generic entity/topic keyword-relevance gate above, so a ΔΕΗ
+// sponsorship or CSR release isn't dropped as irrelevant just for lacking
+// energy keywords — feed-rules.js noiseRejectReason (noise_hard_reject)
+// still runs upstream of this, in pipeline.js and public-data.js.
+const PPC_FIBRE_TERMS = ["ΔΕΗ Fiber", "DEI Fiber", "PPC Fiber", "FTTH", "οπτικ* ιν*"];
+
+export function sourceForcedCategories(item = {}) {
+  if (item.sourceId !== "ppc-press") return [];
+  const forced = [{
+    ruleId: "ppc-press-source-routing", label: "ΔΕΗ press releases", category: "energy",
+    score: 20, accepted: true, reasons: ["source-level routing: ΔΕΗ press release"],
+  }];
+  const text = `${item.title || ""} ${item.summary || ""}`;
+  if (matchesAnyTerm(text, PPC_FIBRE_TERMS)) {
+    forced.push({
+      ruleId: "ppc-press-source-routing-fibre", label: "ΔΕΗ Fiber", category: "telco",
+      score: 15, accepted: true, reasons: ["source-level routing: ΔΕΗ Fiber/FTTH mention"],
+    });
+  }
+  return forced;
+}
+
 export function rankItems(items, rules) {
   return items
     .map((item) => {
-      const matches = rules.map((rule) => scoreItem(item, rule)).filter((match) => match.accepted);
+      const ruleMatches = rules.map((rule) => scoreItem(item, rule)).filter((match) => match.accepted);
+      const forcedMatches = sourceForcedCategories(item)
+        .filter((forced) => !ruleMatches.some((match) => match.category === forced.category));
+      const matches = [...ruleMatches, ...forcedMatches];
       return {
         ...item,
         relevance: matches.sort((a, b) => b.score - a.score),
@@ -235,7 +275,7 @@ export function rankItems(items, rules) {
 
 // Fixed order used only to break ties when two rules score an item equally;
 // keeps the homepage's single-column placement deterministic.
-const CATEGORY_ORDER = ["energy", "telco", "infrastructure", "finance"];
+const CATEGORY_ORDER = ["energy", "telco", "infrastructure", "deals-companies"];
 
 export function primarySector(item, rules = DEFAULT_WATCH_RULES) {
   const [ranked] = rankItems([item], rules);
@@ -286,15 +326,22 @@ export const DEFAULT_WATCH_RULES = Object.freeze([
     threshold: 4,
   },
   {
-    id: "greek-finance",
-    label: "Greek finance and listed companies",
-    category: "finance",
-    entities: ["Alpha Bank", "Eurobank", "Εθνική Τράπεζα", "National Bank of Greece", "Πειραιώς", "Piraeus Bank", "Bank of Greece", "Τράπεζα της Ελλάδος", "ATHEX", "Χρηματιστήριο Αθηνών"],
-    topics: ["bank", "market", "investment", "δάνει", "επένδυ", "χρηματιστηρ"],
-    strongTopics: ["results", "earnings", "dividend", "acquisition", "merger", "bond", "κερδ", "μέρισμα", "εξαγορά", "συγχώνευση", "ομόλογ"],
+    // sources-spec.md §1 deals-companies: "Only items involving an operator,
+    // utility, tower, fibre, grid or infrastructure company. A sector
+    // co-term from another section is required." Generic banking/markets
+    // news has no other section, so it is no longer shown anywhere.
+    id: "deals-companies",
+    label: "Greek sector deals and companies",
+    category: "deals-companies",
+    entities: SECTOR_ORGANIZATIONS,
+    topics: DEALS_TOPICS,
+    strongTopics: DEALS_TOPICS,
     geography: ["Greece", "Greek", "Ελλάδα", "ελλην"],
-    preferredDomains: ["athexgroup.gr", "bankofgreece.gr"],
-    requiredEntities: MONITORED_COMPANIES,
+    exclusions: DEALS_EXCLUSIONS,
+    requiredTopics: DEALS_TOPICS,
+    requiredEntities: SECTOR_ORGANIZATIONS,
+    bannedEntities: BANK_ORGANIZATIONS,
+    minimumStrongTopics: 1,
     threshold: 4,
   },
   {

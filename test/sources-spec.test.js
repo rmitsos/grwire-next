@@ -15,6 +15,11 @@ import {
   isFresh,
   splitByFreshness,
   resolveGoogleNewsItems,
+  sourceForcedCategories,
+  homepageSectionOf,
+  SECTION_HOMEPAGE_CAPS,
+  HOMEPAGE_MAX_ITEMS,
+  SECTION_SHARE_CAP,
 } from "../src/index.js";
 import { canonicalizeUrl, cleanUrl } from "../src/sources/utils.js";
 import { SOURCES } from "../config/sources.js";
@@ -58,7 +63,11 @@ test("config/sources.js has the spec's §2.1/§2.2/§2.3 entries with name/secti
   const ppc = byId["ppc-press"];
   assert.equal(ppc?.type, "html-scrape");
   assert.equal(ppc?.urlTemplate, "https://www.ppcgroup.com/el/omilos-dei/grafeio-typou/deltia-typou/prosfata/deltia-tipou-{yyyy}/{month_el_latin}-{yyyy}/");
-  assert.deepEqual(ppc?.monthElLatin, { 10: "oktovrios" });
+  assert.deepEqual(ppc?.monthElLatin, {
+    1: "ianouarios", 2: "fevrouarios", 3: "martios", 4: "aprilios",
+    5: "maios", 6: "iounios", 7: "ioulios", 8: "avgoustos",
+    9: "septemvrios", 10: "oktovrios", 11: "noemvrios", 12: "dekemvrios",
+  });
   assert.deepEqual(ppc?.sections, ["energy-grids", "telecom-fibre", "deals-companies"]);
   assert.equal(ppc?.weight, 0.9);
   assert.equal(ppc?.dayCap, 4);
@@ -111,29 +120,64 @@ test("ppc-press html-scrape adapter extracts the 5 October releases with the rig
   assert.ok(!/\d{2}\.\d{2}\.\d{4}/.test(fiberItem.title));
 });
 
-test("buildMonthUrls fetches only the current month when known and not in the day 1-3 window", () => {
-  const source = { urlTemplate: "https://x.test/{yyyy}/{month_el_latin}-{yyyy}/", monthElLatin: { 10: "oktovrios" } };
-  const urls = buildMonthUrls(source, new Date("2026-10-15T10:00:00Z").getTime());
-  assert.deepEqual(urls, ["https://x.test/2026/oktovrios-2026/"]);
+// --- 1b. ΔΕΗ source-level routing -----------------------------------------
+
+test("sourceForcedCategories routes every ppc-press item to energy, regardless of generic keyword relevance", () => {
+  const sponsorship = { sourceId: "ppc-press", url: "https://ppcgroup.com/sponsorship", title: "Η ΔΕΗ χορηγός στο φεστιβάλ πολιτισμού", summary: "Ανακοίνωση χορηγίας." };
+  assert.deepEqual(sourceForcedCategories(sponsorship).map((m) => m.category), ["energy"]);
+  const [ranked] = rankItems([sponsorship], DEFAULT_WATCH_RULES);
+  assert.ok(ranked, "a ΔΕΗ release with no energy keywords must not be dropped as irrelevant");
+  assert.ok(ranked.relevance.map((m) => m.category).includes("energy"));
 });
 
-test("buildMonthUrls also fetches the previous month on days 1-3, when its slug is known", () => {
-  const source = { urlTemplate: "https://x.test/{yyyy}/{month_el_latin}-{yyyy}/", monthElLatin: { 9: "septemvrios", 10: "oktovrios" } };
-  const urls = buildMonthUrls(source, new Date("2026-10-02T06:00:00Z").getTime());
+test("sourceForcedCategories additionally routes to telco when fibre terms are present", () => {
+  const fibreRelease = { sourceId: "ppc-press", title: "Η ΔΕΗ Fiber έφτασε 1,5 εκατ. σπίτια", summary: "Επέκταση δικτύου FTTH." };
+  const categories = sourceForcedCategories(fibreRelease).map((m) => m.category);
+  assert.deepEqual(categories, ["energy", "telco"]);
+});
+
+test("sourceForcedCategories does not add telco without a fibre term", () => {
+  const nonFibre = { sourceId: "ppc-press", title: "Η ΔΕΗ ανακοίνωσε τα αποτελέσματα εννεαμήνου", summary: "Οικονομικά αποτελέσματα ομίλου." };
+  assert.deepEqual(sourceForcedCategories(nonFibre).map((m) => m.category), ["energy"]);
+});
+
+test("sourceForcedCategories is a no-op for other sources", () => {
+  assert.deepEqual(sourceForcedCategories({ sourceId: "admie-press", title: "ΔΕΗ Fiber FTTH" }), []);
+});
+
+const PPC_MONTH_EL_LATIN = {
+  1: "ianouarios", 2: "fevrouarios", 3: "martios", 4: "aprilios",
+  5: "maios", 6: "iounios", 7: "ioulios", 8: "avgoustos",
+  9: "septemvrios", 10: "oktovrios", 11: "noemvrios", 12: "dekemvrios",
+};
+
+test("buildMonthUrls always fetches the current and the previous month, not only on days 1-3: Nov 2026 -> noemvrios-2026 + oktovrios-2026", () => {
+  const source = { urlTemplate: "https://x.test/{yyyy}/{month_el_latin}-{yyyy}/", monthElLatin: PPC_MONTH_EL_LATIN };
+  const urls = buildMonthUrls(source, new Date("2026-11-15T10:00:00Z").getTime());
   assert.equal(urls.length, 2);
-  assert.ok(urls.includes("https://x.test/2026/septemvrios-2026/"));
+  assert.ok(urls.includes("https://x.test/2026/noemvrios-2026/"));
   assert.ok(urls.includes("https://x.test/2026/oktovrios-2026/"));
+});
+
+test("buildMonthUrls crosses a year boundary: Jan 2027 -> dekemvrios-2026 + ianouarios-2027", () => {
+  const source = { urlTemplate: "https://x.test/{yyyy}/{month_el_latin}-{yyyy}/", monthElLatin: PPC_MONTH_EL_LATIN };
+  const urls = buildMonthUrls(source, new Date("2027-01-10T10:00:00Z").getTime());
+  assert.equal(urls.length, 2);
+  assert.ok(urls.includes("https://x.test/2026/dekemvrios-2026/"));
+  assert.ok(urls.includes("https://x.test/2027/ianouarios-2027/"));
 });
 
 test("buildMonthUrls skips a month with no known Latin slug instead of guessing", () => {
   const source = { urlTemplate: "https://x.test/{yyyy}/{month_el_latin}-{yyyy}/", monthElLatin: { 10: "oktovrios" } };
-  // November has no known slug; December 1st also triggers the day<=3 rule for November, still unknown.
-  assert.deepEqual(buildMonthUrls(source, new Date("2026-11-15T10:00:00Z").getTime()), []);
-  assert.deepEqual(buildMonthUrls(source, new Date("2026-12-02T10:00:00Z").getTime()), []);
+  // November has no known slug and neither does its previous month (October IS known here,
+  // so only the current, unknown month is dropped).
+  assert.deepEqual(buildMonthUrls(source, new Date("2026-11-15T10:00:00Z").getTime()), ["https://x.test/2026/oktovrios-2026/"]);
+  // Both December (current) and November (previous) are unknown.
+  assert.deepEqual(buildMonthUrls(source, new Date("2026-12-15T10:00:00Z").getTime()), []);
 });
 
 test("HtmlScrapeSourceAdapter.load never throws for an unknown month; it warns and returns []", async () => {
-  const source = { id: "ppc-press", urlTemplate: "https://x.test/{yyyy}/{month_el_latin}-{yyyy}/", monthElLatin: { 10: "oktovrios" }, linkPattern: "x", dateRegex: "x" };
+  const source = { id: "ppc-press", urlTemplate: "https://x.test/{yyyy}/{month_el_latin}-{yyyy}/", monthElLatin: {}, linkPattern: "x", dateRegex: "x" };
   const originalWarn = console.warn;
   let warned = false;
   console.warn = () => { warned = true; };
@@ -145,6 +189,52 @@ test("HtmlScrapeSourceAdapter.load never throws for an unknown month; it warns a
   } finally {
     console.warn = originalWarn;
   }
+});
+
+test("HtmlScrapeSourceAdapter.load fetches with redirect: manual, and silently skips a month whose response is a redirect/error, keeping the other month's items", async () => {
+  const html = `<a href="/deltia-tipou-2026/noemvrios-2026/item-1/">05.11.2026 Item one</a>`;
+  const redirectOptions = [];
+  const source = {
+    id: "ppc-press",
+    urlTemplate: "https://x.test/{yyyy}/{month_el_latin}-{yyyy}/",
+    monthElLatin: PPC_MONTH_EL_LATIN,
+    linkPattern: "/deltia-tipou-\\d{4}/[a-z]+-\\d{4}/[a-z0-9-]+/$",
+    dateRegex: "(\\d{2})\\.(\\d{2})\\.(20\\d\\d)",
+  };
+  const fetch = async (url, init = {}) => {
+    redirectOptions.push(init.redirect);
+    if (String(url).includes("oktovrios")) return { ok: false, status: 302, url: String(url), headers: { get: () => null }, text: async () => "" };
+    return { ok: true, status: 200, url: String(url), headers: { get: () => "text/html" }, text: async () => html };
+  };
+  const originalWarn = console.warn;
+  let warned = false;
+  console.warn = () => { warned = true; };
+  try {
+    const items = await new HtmlScrapeSourceAdapter({ fetch })
+      .load(source, { now: new Date("2026-11-15T10:00:00Z").getTime() });
+    assert.equal(items.length, 1, "expected the November item despite the October 302");
+    assert.ok(!warned, "a per-month fetch failure must not warn");
+    assert.ok(redirectOptions.every((value) => value === "manual"), "expected every month fetch to use redirect: manual");
+  } finally {
+    console.warn = originalWarn;
+  }
+});
+
+test("HtmlScrapeSourceAdapter.load skips a month silently on a 500 and a network error, without throwing", async () => {
+  const source = {
+    id: "ppc-press",
+    urlTemplate: "https://x.test/{yyyy}/{month_el_latin}-{yyyy}/",
+    monthElLatin: PPC_MONTH_EL_LATIN,
+    linkPattern: "x",
+    dateRegex: "x",
+  };
+  const fetch500 = async () => ({ ok: false, status: 500, url: "https://x.test/", headers: { get: () => null }, text: async () => "" });
+  const items500 = await new HtmlScrapeSourceAdapter({ fetch: fetch500 }).load(source, { now: new Date("2026-11-15T10:00:00Z").getTime() });
+  assert.deepEqual(items500, []);
+
+  const fetchNetworkError = async () => { throw new Error("network error"); };
+  const itemsError = await new HtmlScrapeSourceAdapter({ fetch: fetchNetworkError }).load(source, { now: new Date("2026-11-15T10:00:00Z").getTime() });
+  assert.deepEqual(itemsError, []);
 });
 
 // --- 2. Caps ---------------------------------------------------------------
@@ -192,20 +282,82 @@ test("buildHomepageSections enforces the per-source home cap across lead+recent+
   assert.ok(allUrls.length <= 2, `ypodomes-wordpress has no homeCap override so DEFAULT_HOME_CAP_PER_SOURCE=2 applies, got ${allUrls.length}`);
 });
 
-test("buildHomepageSections enforces the 35% section-share cap across lead+recent+columns together", () => {
+test("SECTION_SHARE_CAP is floor(0.35 * homepage.max_items), derived from max_items not the old 33-item layout", () => {
+  assert.equal(HOMEPAGE_MAX_ITEMS, 20);
+  assert.equal(SECTION_SHARE_CAP, 7);
+});
+
+test("SECTION_HOMEPAGE_CAPS (§1 homepage_cap) sums to homepage.max_items (20)", () => {
+  const total = Object.values(SECTION_HOMEPAGE_CAPS).reduce((sum, cap) => sum + cap, 0);
+  assert.equal(total, HOMEPAGE_MAX_ITEMS);
+});
+
+test("buildHomepageSections caps deals-companies at SECTION_HOMEPAGE_CAPS['deals-companies']=2: 6 fresh items -> 2 on homepage", () => {
   const now = new Date("2026-10-25T12:00:00Z").getTime();
-  // many distinct sources so the per-source home cap never binds first
-  const articles = Array.from({ length: 20 }, (_, i) => ({
-    url: `https://x.test/energy-${i}`,
-    title: `Έργο δικτύου ενέργειας αρ. ${i} στην Ελλάδα`,
-    categories: ["energy"],
-    sourceId: `energy-source-${i}`,
+  const articles = Array.from({ length: 6 }, (_, i) => ({
+    url: `https://x.test/deal-${i}`,
+    title: `Εξαγορά εταιρείας αρ. ${i} στην Ελλάδα`,
+    categories: ["deals-companies"],
+    sourceId: `deal-source-${i}`,
     publishedAt: new Date(now - i * 3_600_000).toISOString(),
   }));
   const sections = buildHomepageSections(articles, { now });
-  const total = (sections.lead ? 1 : 0) + sections.recent.filter((a) => a.categories[0] === "energy").length
-    + sections.columns.energy.length;
-  assert.ok(total <= 11, `expected at most floor(0.35*33)=11 energy slots on the homepage, got ${total}`);
+  const total = (sections.lead ? 1 : 0) + sections.recent.length + sections.columns["deals-companies"].length;
+  assert.equal(total, 2, `expected exactly 2 deals-companies items on the homepage, got ${total}`);
+});
+
+test("buildHomepageSections total converges to exactly homepage.max_items (20) when every §1 section is oversupplied", () => {
+  const now = new Date("2026-10-25T12:00:00Z").getTime();
+  let n = 0;
+  const unique = () => `https://x.test/cap-${n++}`;
+  const mk = (category, title) => ({
+    url: unique(), title, categories: [category], sourceId: unique(),
+    publishedAt: new Date(now - n * 60_000).toISOString(),
+  });
+
+  const articles = [
+    ...Array.from({ length: 10 }, (_, i) => mk("telco", `Η Cosmote επεκτείνει δίκτυο FTTH οπτικών ινών gigabit αρ. ${i}`)),
+    ...Array.from({ length: 10 }, (_, i) => mk("energy", `Υποσταθμός υψηλής τάσης και διασύνδεση ΑΔΜΗΕ αρ. ${i}`)),
+    ...Array.from({ length: 10 }, (_, i) => mk("infrastructure", `Έργο σήραγγας και γέφυρας αυτοκινητόδρομου αρ. ${i}`)),
+    ...Array.from({ length: 10 }, (_, i) => mk("deals-companies", `Εξαγορά και συγχώνευση εταιρείας αρ. ${i}`)),
+    // mapped=infrastructure-works (0 hits), overridden to tenders-contracts (5 hits)
+    ...Array.from({ length: 10 }, (_, i) => mk("infrastructure", `Διαγωνισμός κατακύρωση ανάθεση σύμβασης προκήρυξης αρ. ${i}`)),
+    // mapped=telecom-fibre (0 hits), overridden to regulators-policy (5 hits)
+    ...Array.from({ length: 10 }, (_, i) => mk("telco", `Δημοσιεύτηκε απόφαση διαβούλευση κανονισμός ΦΕΚ πρόστιμο αρ. ${i}`)),
+  ];
+
+  const sections = buildHomepageSections(articles, { now });
+  const total = (sections.lead ? 1 : 0) + sections.recent.length
+    + Object.values(sections.columns).reduce((sum, column) => sum + column.length, 0);
+  assert.equal(total, HOMEPAGE_MAX_ITEMS, `expected exactly ${HOMEPAGE_MAX_ITEMS} total homepage items, got ${total}`);
+});
+
+// --- 2b. homepageSectionOf --------------------------------------------------
+
+test("homepageSectionOf maps a public category to its §1 spec section", () => {
+  assert.equal(homepageSectionOf({ categories: ["telco"], title: "x", summary: "" }), "telecom-fibre");
+  assert.equal(homepageSectionOf({ categories: ["energy"], title: "x", summary: "" }), "energy-grids");
+  assert.equal(homepageSectionOf({ categories: ["infrastructure"], title: "x", summary: "" }), "infrastructure-works");
+  assert.equal(homepageSectionOf({ categories: ["deals-companies"], title: "x", summary: "" }), "deals-companies");
+  assert.equal(homepageSectionOf({ categories: [], title: "x", summary: "" }), null);
+});
+
+test("homepageSectionOf overrides to tenders-contracts when it has more keyword hits than the mapped section", () => {
+  const article = {
+    categories: ["infrastructure"],
+    title: "Διαγωνισμός για σύμβαση κατασκευής: κατακύρωση προκήρυξης έργου",
+    summary: "Ο διαγωνισμός προβλέπει ανάθεση σύμβασης μετά την προκήρυξη.",
+  };
+  assert.equal(homepageSectionOf(article), "tenders-contracts");
+});
+
+test("homepageSectionOf keeps the mapped section when the override candidate has fewer hits", () => {
+  const article = {
+    categories: ["telco"],
+    title: "Η Cosmote επεκτείνει το δίκτυο FTTH οπτικών ινών σε νέους δήμους",
+    summary: "Επέκταση δικτύου gigabit broadband με χονδρική πρόσβαση.",
+  };
+  assert.equal(homepageSectionOf(article), "telecom-fibre");
 });
 
 // --- 3. Freshness -----------------------------------------------------------
@@ -366,13 +518,54 @@ test("resolveGoogleNewsItems resolves at most 20 Google items per scan, flagging
 
 // --- 6. Off-topic drops ------------------------------------------------------
 
-test("NOISE_HARD_REJECT matches the spec's three in-scope term groups", () => {
+test("NOISE_HARD_REJECT matches the spec's four in-scope term groups", () => {
   assert.deepEqual(NOISE_HARD_REJECT, {
     consumer_tech: ["review", "unboxing", "κινητο* τηλεφων*", "smartwatch", "gaming", "προσφορ* καταστηματ*"],
     market_wraps: ["χρηματιστηρι* κλεισιμο", "γενικοσ δεικτησ", "μερισμα", "περιθωρι* τραπεζ*"],
     off_topic: ["ακινητ*", "ενοικι*", "τουρισμ*", "ξενοδοχει*", "κρουαζιερ*", "αθλητ*", "γηπεδ*", "ποδοσφαιρ*", "τηλεοπτικ* προγραμμα"],
+    marketing: ["διαφημιστικ* καμπανια*", "βραβει*"],
   });
 });
+
+const MARKETING_CASES = [
+  { title: "Νέα διαφημιστική καμπάνια για την Vodafone", rejected: true },
+  { title: "Η Cosmote κέρδισε βραβείο καλύτερης εταιρείας", rejected: true },
+  { title: "Η Nova υπέγραψε σύμβαση ανάθεσης μετά το βραβείο καινοτομίας", rejected: false },
+  { title: "ΟΤΕ: κατακύρωση σύμβασης για βραβείο αριστείας στην εξυπηρέτηση πελατών", rejected: false },
+];
+
+for (const { title, rejected } of MARKETING_CASES) {
+  test(`noiseRejectReason marketing case ${JSON.stringify(title)} is ${rejected ? "rejected" : "kept (contract exception)"}`, () => {
+    const reason = noiseRejectReason({ title });
+    if (rejected) assert.equal(reason?.group, "marketing", `expected "${title}" to be marketing-rejected`);
+    else assert.notEqual(reason?.group, "marketing", `expected "${title}" to survive via the contract exception`);
+  });
+}
+
+const POLITICAL_QUOTE_CASES = [
+  { title: "Σε δηλώσεις του ο υπουργός σχολίασε την πορεία της αγοράς τηλεπικοινωνιών", rejected: true },
+  // ΕΕΤΤ's president is a regulator, not a political actor (minister/MP/party/
+  // government) — the tightened rule no longer treats this as a political quote.
+  { title: "Σε συνέντευξή του ο πρόεδρος της ΕΕΤΤ μίλησε για τις προκλήσεις του κλάδου", rejected: false },
+  { title: "Σε δηλώσεις του ο υπουργός ανακοίνωσε την απόφαση για το νέο κανονισμό φάσματος", rejected: false },
+  { title: "Η ΕΕΤΤ ανακοίνωσε διαβούλευση για τον κώδικα δεοντολογίας", rejected: false },
+  // tender "δηλώσεις ενδιαφέροντος" is the submission idiom, not a political statement
+  { title: "Υποβολή δηλώσεων ενδιαφέροντος για το έργο FTTH", rejected: false },
+  // a CEO interview has no political actor
+  { title: "Συνέντευξη CEO ΟΤΕ: επενδύσεις σε fiber", rejected: false },
+  { title: "Δηλώσεις του υπουργού για τις οπτικές ίνες", rejected: true },
+  { title: "Ο υπουργός ανακοίνωσε απόφαση για τις οπτικές ίνες", rejected: false },
+  // a political statement about a priced tender is hard news, not an opinion quote
+  { title: "Δηλώσεις υπουργού: διαγωνισμός €50 εκατ. για δίκτυο οπτικών ινών", rejected: false },
+];
+
+for (const { title, rejected } of POLITICAL_QUOTE_CASES) {
+  test(`noiseRejectReason political_quote_no_decision case ${JSON.stringify(title)} is ${rejected ? "rejected" : "kept"}`, () => {
+    const reason = noiseRejectReason({ title });
+    if (rejected) assert.equal(reason?.group, "political_quote_no_decision", `expected "${title}" to be rejected, got ${JSON.stringify(reason)}`);
+    else assert.notEqual(reason?.group, "political_quote_no_decision", `expected "${title}" to be kept, got ${JSON.stringify(reason)}`);
+  });
+}
 
 const NOISE_CASES = [
   { title: "Μέρισμα 0,50 ευρώ ανακοίνωσε η Alpha Bank", rejected: true },

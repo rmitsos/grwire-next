@@ -10,14 +10,101 @@
 export const DEFAULT_DAY_CAP_PER_SOURCE = 8;
 export const DEFAULT_HOME_CAP_PER_SOURCE = 2;
 
-// §1 homepage_cap values sum to 20 (4 columns); plus the single lead slot and
-// the 12-item "recent" list already used by buildHomepageSections. There is
-// no single spec number for total homepage capacity in this subset (spec
-// §5 homepage.max_items 20 covers a different, out-of-scope layout), so we
-// derive it from the layout actually rendered by the homepage today.
-export const HOMEPAGE_CAPACITY = 1 + 12 + 4 * 5; // lead + recent + 4 columns x 5
+// §5 homepage.max_items / §1 homepage_cap (the six caps sum to this total).
+export const HOMEPAGE_MAX_ITEMS = 20;
 export const SECTION_SHARE_MAX = 0.35;
-export const SECTION_SHARE_CAP = Math.floor(SECTION_SHARE_MAX * HOMEPAGE_CAPACITY);
+// §5: "applied after per-section caps". With the §1 caps below (max 4) this
+// never actually binds, but it stays in the eligibility check.
+export const SECTION_SHARE_CAP = Math.floor(SECTION_SHARE_MAX * HOMEPAGE_MAX_ITEMS);
+
+// §1 homepage_cap, keyed by spec section id (not the public category slug —
+// see CATEGORY_TO_SPEC_SECTION/homepageSectionOf below for the mapping).
+export const SECTION_HOMEPAGE_CAPS = Object.freeze({
+  "telecom-fibre": 4,
+  "energy-grids": 4,
+  "infrastructure-works": 3,
+  "regulators-policy": 3,
+  "tenders-contracts": 4,
+  "deals-companies": 2,
+});
+
+// Public category (src/public-data.js PUBLIC_CATEGORIES key) -> its mapped
+// §1 spec section id. regulators-policy and tenders-contracts have no public
+// category/page yet, so they are never the *mapped* section — only ever a
+// rules-based override (see homepageSectionOf).
+export const CATEGORY_TO_SPEC_SECTION = Object.freeze({
+  telco: "telecom-fibre",
+  energy: "energy-grids",
+  infrastructure: "infrastructure-works",
+  "deals-companies": "deals-companies",
+});
+
+// §1 keywords_el/keywords_en (+ negative), transcribed verbatim, for the two
+// spec sections that have no public category of their own (regulators-policy,
+// tenders-contracts) plus the four that do — used only to detect when an
+// article's *homepage-capping* section should be overridden to regulators-policy
+// or tenders-contracts instead of its mapped public category.
+export const SPEC_SECTION_KEYWORDS = Object.freeze({
+  "telecom-fibre": {
+    keywords: [
+      "οπτικ* ιν*", "ftth", "fttx", "fttb", "gigabit", "ευρυζωνικ*", "gigabit voucher",
+      "λευκ* περιοχ*", "5g", "φασμα", "κεραι*", "ιστο*", "σταθμ* βασησ", "υποθαλασσι* καλωδι*",
+      "κεντρ* δεδομενων", "data center*", "δικτυ* κορμου", "χονδρικ*", "οτε", "telekom",
+      "cosmote", "vodafone", "nova", "united fiber", "δεη fiber", "grid telecom", "εεττ",
+      "vdsl", "vectoring", "καμπιν*",
+      "fibre", "fiber", "gigabit", "broadband", "spectrum", "tower*", "subsea cable",
+      "submarine cable", "data centre*", "wholesale", "backhaul", "telecom*",
+    ],
+    negative: [],
+  },
+  "energy-grids": {
+    keywords: [
+      "αδμηε", "δεδδηε", "δεσφα", "διασυνδεσ*", "υποσταθμ*", "γραμμ* μεταφορασ",
+      "δικτυ* διανομησ", "υψηλησ τασησ", "μεσησ τασησ", "αποθηκευσ* ενεργειασ", "μπαταρι*",
+      "συνδεσ* απε", "ορ* συνδεσησ", "περικοπ*", "ραα*υ", "φυσικ* αερι*", "αγωγ*",
+      "μετασχηματιστ*", "φωτοβολταικ*", "απε",
+      "transmission", "distribution", "interconnector", "interconnection", "substation",
+      "storage", "bess", "grid connection", "curtailment", "transformer*", "high voltage",
+      "pipeline", "lng",
+    ],
+    negative: [],
+  },
+  "infrastructure-works": {
+    keywords: [
+      "εργ*", "εργολαβι*", "σδιτ", "παραχωρησ*", "σιδηροδρομ*", "μετρο αθην*",
+      "μετρο θεσσαλονικ*", "αττικο μετρο", "σηραγγ*", "γεφυρ*", "οδικ* αξον*",
+      "αυτοκινητοδρομ*", "εκσκαφ*", "αδει* εκσκαφησ", "χωροθετησ*", "υποδομ*",
+      "ppp", "concession", "rail*", "metro", "tunnel*", "bridge*", "motorway",
+      "civil works", "permit*",
+    ],
+    negative: [],
+  },
+  "regulators-policy": {
+    keywords: [
+      "εεττ", "ραα*υ", "γγττ", "υπεν", "υπουργει* ψηφιακ*", "αποφασ*", "διαβουλευσ*",
+      "κανονισμ*", "νομοσχεδι*", "τροπολογι*", "φεκ", "προστιμ*", "φασμα", "δημοπρασι* φασματοσ",
+      "regulator", "decision", "consultation", "regulation", "bill", "amendment", "fine",
+      "spectrum auction", "eett", "raaey",
+    ],
+    negative: ["συνεντευξ*", "δηλωσ* χωρισ αποφασ*"],
+  },
+  "tenders-contracts": {
+    keywords: [
+      "διαγωνισμ*", "διακηρυξ*", "προκηρυξ*", "αναθεσ*", "κατακυρωσ*", "συμβασ*", "προσφορ*",
+      "κημδησ", "ακηρυξ*",
+      "tender", "award", "contract", "bid deadline", "rfp", "procurement",
+    ],
+    negative: [],
+  },
+  "deals-companies": {
+    keywords: [
+      "εξαγορ*", "συγχωνευσ*", "κοινοπραξι*", "μετοχ*", "μεριδι*", "αποτελεσματ*",
+      "επενδυσ*", "capex", "χρηματοδοτησ*", "ομολογ*",
+      "m&a", "merger", "acquisition", "jv", "joint venture", "stake", "results", "funding", "ipo",
+    ],
+    negative: ["χρηματιστηρι* κλεισιμο", "μερισμα", "τραπεζ*"],
+  },
+});
 
 // §5 max_age_hours.news
 export const MAX_AGE_HOURS_NEWS = 72;
@@ -61,14 +148,44 @@ export function matchesAnyTerm(text, terms = []) {
   return terms.some((term) => termMatchesTokens(tokens, term));
 }
 
-// §5 noise_hard_reject, scoped to the three groups implemented this round.
-// Parenthetical notes in the spec ("(gadget)", "(unless sector org)",
-// "(unless contract)") are instructions for this code, not match text, so
-// they are not part of the term strings themselves.
+// Counts the distinct §1 keywords (keywords_el + keywords_en) matched in
+// `text` for `section`, honouring that section's negative list (any
+// negative-term match zeroes the count, same as a noise_hard_reject veto).
+function countKeywordHits(text, section) {
+  const config = SPEC_SECTION_KEYWORDS[section];
+  if (!config) return 0;
+  if (config.negative.some((term) => matchesAnyTerm(text, [term]))) return 0;
+  return config.keywords.filter((term) => matchesAnyTerm(text, [term])).length;
+}
+
+/**
+ * Pure helper: which §1 spec section an article counts against for
+ * *homepage capping* (SECTION_HOMEPAGE_CAPS) — not the same as its public
+ * category/column. Starts from the mapped section for article.categories[0]
+ * (CATEGORY_TO_SPEC_SECTION), then overrides to regulators-policy or
+ * tenders-contracts when that section has >=2 keyword hits *and* strictly
+ * more hits than the mapped section's own §1 keywords. Returns null when
+ * neither a mapped section nor a qualifying override exists.
+ */
+export function homepageSectionOf(article = {}) {
+  const mapped = CATEGORY_TO_SPEC_SECTION[article.categories?.[0]] || null;
+  const text = `${article.title || ""} ${article.summary || ""}`;
+  const mappedHits = mapped ? countKeywordHits(text, mapped) : 0;
+  const override = ["regulators-policy", "tenders-contracts"]
+    .map((section) => ({ section, hits: countKeywordHits(text, section) }))
+    .filter((candidate) => candidate.hits >= 2 && candidate.hits > mappedHits)
+    .sort((a, b) => b.hits - a.hits)[0];
+  return override?.section || mapped;
+}
+
+// §5 noise_hard_reject. Parenthetical notes in the spec ("(gadget)",
+// "(unless sector org)", "(unless contract)") are instructions for this
+// code, not match text, so they are not part of the term strings themselves.
 export const NOISE_HARD_REJECT = Object.freeze({
   consumer_tech: ["review", "unboxing", "κινητο* τηλεφων*", "smartwatch", "gaming", "προσφορ* καταστηματ*"],
   market_wraps: ["χρηματιστηρι* κλεισιμο", "γενικοσ δεικτησ", "μερισμα", "περιθωρι* τραπεζ*"],
   off_topic: ["ακινητ*", "ενοικι*", "τουρισμ*", "ξενοδοχει*", "κρουαζιερ*", "αθλητ*", "γηπεδ*", "ποδοσφαιρ*", "τηλεοπτικ* προγραμμα"],
+  marketing: ["διαφημιστικ* καμπανια*", "βραβει*"],
 });
 
 // organizations.js has no telecom/energy/infrastructure classification field,
@@ -80,13 +197,60 @@ export const SECTOR_ORGANIZATIONS = Object.freeze([
   "Grid Telecom", "Intracom", "ΓΕΚ ΤΕΡΝΑ", "GEK TERNA", "Aktor", "AKTOR", "Metlen",
 ]);
 
+// §5 noise_hard_reject.marketing: "βραβει* (unless contract)" — an award
+// claim only survives the reject when contract-award language is present.
+const CONTRACT_AWARD_TERMS = ["συμβασ*", "αναθεσ*", "κατακυρωσ*", "contract", "award"];
+
+// §5 noise_hard_reject.political_quote_no_decision: "AI type=opinion AND no
+// org decision -> max score 39" (hidden, hide_below 40). There is no AI in
+// this subset, so it is approximated rules-only, scoped tightly to avoid
+// catching non-political statements (CEO interviews) or hard-news items
+// phrased as a statement (tender "δηλώσεις ενδιαφέροντος", a minister
+// announcing a priced deal): a statement/interview term, that isn't the
+// "expression of interest" idiom, said by a political actor, with no
+// decision term and no tender/contract/deal or euro-amount language.
+const STATEMENT_ONLY_TERMS = ["συνεντευξ*", "δηλωσ*", "interview", "statement"];
+const EXPRESSION_OF_INTEREST_TERMS = ["δηλωσ* ενδιαφεροντος", "expression* of interest"];
+const POLITICAL_ACTOR_TERMS = [
+  "υπουργ*", "υφυπουργ*", "πρωθυπουργ*", "βουλευτ*", "κυβερνησ*", "κομμα*", "αντιπολιτευσ*",
+  "minister*", "government", "mp", "opposition",
+];
+const DECISION_TERMS = [
+  "αποφασ*", "φεκ", "διαβουλευσ*", "κανονισμ*", "νομοσχεδι*", "τροπολογι*", "προστιμ*",
+  "decision", "consultation", "regulation", "fine", "bill", "amendment",
+];
+// §1 tenders-contracts + deals-companies keywords: a political statement
+// about priced/contracted hard news is real news, not an opinion quote.
+const TENDER_DEAL_HARD_NEWS_TERMS = [
+  ...SPEC_SECTION_KEYWORDS["tenders-contracts"].keywords,
+  ...SPEC_SECTION_KEYWORDS["deals-companies"].keywords,
+];
+const EURO_AMOUNT_RE = /(€\s*\d|\d\s*€|\d[\d.,]*\s*(εκατ\.?\s*|δισ\.?\s*)?(ευρω|euro|eur\b))/;
+
 function mentionsSectorOrganization(text) {
   return matchesAnyTerm(text, SECTOR_ORGANIZATIONS);
 }
 
+function hasEuroAmount(text) {
+  return EURO_AMOUNT_RE.test(normaliseText(text));
+}
+
+function isPoliticalQuoteWithNoDecision(text) {
+  const isStatement = matchesAnyTerm(text, STATEMENT_ONLY_TERMS)
+    && !matchesAnyTerm(text, EXPRESSION_OF_INTEREST_TERMS);
+  if (!isStatement) return false;
+  if (!matchesAnyTerm(text, POLITICAL_ACTOR_TERMS)) return false;
+  if (matchesAnyTerm(text, DECISION_TERMS)) return false;
+  if (matchesAnyTerm(text, TENDER_DEAL_HARD_NEWS_TERMS)) return false;
+  if (hasEuroAmount(text)) return false;
+  return true;
+}
+
 /**
  * Returns `{ group, term }` for the first noise_hard_reject term matched in
- * `item.title` + `item.summary`, or `null` if the item should pass through.
+ * `item.title` + `item.summary`, or for the rules-based
+ * political_quote_no_decision case, or `null` if the item should pass
+ * through.
  */
 export function noiseRejectReason(item = {}) {
   const text = `${item.title || ""} ${item.summary || ""}`;
@@ -94,9 +258,11 @@ export function noiseRejectReason(item = {}) {
     for (const term of terms) {
       if (!matchesAnyTerm(text, [term])) continue;
       if (group === "market_wraps" && term === "μερισμα" && mentionsSectorOrganization(text)) continue;
+      if (group === "marketing" && term === "βραβει*" && matchesAnyTerm(text, CONTRACT_AWARD_TERMS)) continue;
       return { group, term };
     }
   }
+  if (isPoliticalQuoteWithNoDecision(text)) return { group: "political_quote_no_decision", term: null };
   return null;
 }
 

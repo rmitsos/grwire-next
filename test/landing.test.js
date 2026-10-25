@@ -88,7 +88,7 @@ test("LANDING_ROUTES: EL has no prefix, EN is prefixed with /en, routeKeys match
 
 test("NAV_SECTIONS only link to public routes that actually exist (no /regulators or /tenders)", () => {
   const paths = NAV_SECTIONS.map((section) => section.path);
-  assert.deepEqual(paths.sort(), ["/energy", "/finance", "/infrastructure", "/telco"]);
+  assert.deepEqual(paths.sort(), ["/deals-companies", "/energy", "/infrastructure", "/telco"]);
   assert.equal(NAV_SECTIONS.filter((section) => section.primary).length, 1);
 });
 

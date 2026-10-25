@@ -56,6 +56,13 @@ const nbgDividend = {
   publishedAt: "2026-10-24T09:00:00.000Z",
 };
 
+const sectorAcquisition = {
+  url: "https://example.test/gek-terna-fibre-acquisition",
+  title: "ΓΕΚ ΤΕΡΝΑ ανακοίνωσε εξαγορά εταιρείας οπτικών ινών στην Ελλάδα",
+  summary: "Η ΓΕΚ ΤΕΡΝΑ προχώρησε σε εξαγορά startup οπτικών ινών, ενισχύοντας το χαρτοφυλάκιο υποδομών της.",
+  publishedAt: "2026-10-24T09:00:00.000Z",
+};
+
 const realTelecomItem = {
   url: "https://example.test/cosmote-ftth",
   title: "Η Cosmote επεκτείνει το δίκτυο FTTH με νέες οπτικές ίνες σε όλη την Ελλάδα",
@@ -89,28 +96,34 @@ test("5-star hotel lifestyle story is rejected by every watch rule", () => {
   assert.equal(ranked.length, 0);
 });
 
-test("Decathlon retail dividend/store story does not qualify as finance", () => {
+test("Decathlon retail dividend/store story does not qualify as deals-companies", () => {
   const [ranked] = rankItems([byTitle(DECATHLON_TITLE)], DEFAULT_WATCH_RULES);
   const categories = ranked?.relevance.map((match) => match.category) || [];
-  assert.ok(!categories.includes("finance"), `expected no finance match, got ${categories}`);
+  assert.ok(!categories.includes("deals-companies"), `expected no deals-companies match, got ${categories}`);
 });
 
-test("ad-campaign story does not qualify as finance just because its source name contains 'market'", () => {
+test("ad-campaign story does not qualify as deals-companies just because its source name contains 'market'", () => {
   const [ranked] = rankItems([byTitle(AD_CAMPAIGN_TITLE)], DEFAULT_WATCH_RULES);
   const categories = ranked?.relevance.map((match) => match.category) || [];
-  assert.ok(!categories.includes("finance"), `expected no finance match, got ${categories}`);
+  assert.ok(!categories.includes("deals-companies"), `expected no deals-companies match, got ${categories}`);
 });
 
-test("synthetic Papoutsanis dividend story is rejected for finance (not a monitored company)", () => {
+test("synthetic Papoutsanis dividend story is rejected for deals-companies (not a sector organization)", () => {
   const [ranked] = rankItems([papoutsanisDividend], DEFAULT_WATCH_RULES);
   const categories = ranked?.relevance.map((match) => match.category) || [];
-  assert.ok(!categories.includes("finance"), `expected no finance match, got ${categories}`);
+  assert.ok(!categories.includes("deals-companies"), `expected no deals-companies match, got ${categories}`);
 });
 
-test("a monitored company with a strong finance topic is still accepted as finance", () => {
+test("a systemic bank's dividend story never qualifies as deals-companies, even with a strong deals topic", () => {
   const [ranked] = rankItems([nbgDividend], DEFAULT_WATCH_RULES);
   const categories = ranked?.relevance.map((match) => match.category) || [];
-  assert.ok(categories.includes("finance"), `expected a finance match, got ${categories}`);
+  assert.ok(!categories.includes("deals-companies"), `expected no deals-companies match for a bank dividend story, got ${categories}`);
+});
+
+test("a sector-company acquisition is accepted as deals-companies", () => {
+  const [ranked] = rankItems([sectorAcquisition], DEFAULT_WATCH_RULES);
+  const categories = ranked?.relevance.map((match) => match.category) || [];
+  assert.ok(categories.includes("deals-companies"), `expected a deals-companies match, got ${categories}`);
 });
 
 test("Greece-Italy electrical interconnection stories are energy, not telecom", () => {
@@ -465,15 +478,19 @@ test("spec section ids map onto existing PUBLIC_CATEGORIES slugs, and redirects 
   const { SECTION_REDIRECTS } = await import("../config/section-redirects.js");
 
   const existingSlugs = new Set(Object.keys(PUBLIC_CATEGORIES));
-  assert.deepEqual(existingSlugs, new Set(["finance", "telco", "energy", "infrastructure"]));
+  assert.deepEqual(existingSlugs, new Set(["deals-companies", "telco", "energy", "infrastructure"]));
 
   for (const [slug, config] of Object.entries(PUBLIC_CATEGORIES)) {
     assert.ok(config.specId, `expected a specId for '${slug}'`);
     assert.equal(SECTION_SLUG_BY_SPEC_ID[config.specId], slug);
   }
 
-  assert.equal(SECTION_REDIRECTS.length, Object.keys(PUBLIC_CATEGORIES).length);
-  for (const redirect of SECTION_REDIRECTS) {
+  // deals-companies' specId equals its slug, so it has no specId->slug
+  // redirect; the other three have a dedicated spec-id redirect each, plus
+  // one legacy-slug redirect for the retired /finance path.
+  const specIdRedirects = SECTION_REDIRECTS.filter((r) => r.source !== "/finance");
+  assert.equal(specIdRedirects.length, Object.keys(PUBLIC_CATEGORIES).length - 1);
+  for (const redirect of specIdRedirects) {
     assert.equal(redirect.permanent, true);
     assert.ok(redirect.source.startsWith("/"));
     const destinationSlug = redirect.destination.replace(/^\//, "");
@@ -482,6 +499,11 @@ test("spec section ids map onto existing PUBLIC_CATEGORIES slugs, and redirects 
     assert.equal(SECTION_SLUG_BY_SPEC_ID[specId], destinationSlug);
   }
 
+  const financeRedirect = SECTION_REDIRECTS.find((r) => r.source === "/finance");
+  assert.ok(financeRedirect, "expected a legacy /finance redirect");
+  assert.equal(financeRedirect.destination, "/deals-companies");
+  assert.equal(financeRedirect.permanent, true);
+
   assert.ok(!SECTION_REDIRECTS.some((r) => r.source === "/tenders" || r.source === "/regulators"),
     "no /tenders or /regulators redirect should exist yet (Phase 2)");
 });
@@ -489,8 +511,8 @@ test("spec section ids map onto existing PUBLIC_CATEGORIES slugs, and redirects 
 test("PublicHeader and sitemap only link to existing public section slugs", () => {
   const headerSrc = readFileSync(fileURLToPath(new URL("../src/components/PublicHeader.js", import.meta.url)), "utf8");
   const sitemapSrc = readFileSync(fileURLToPath(new URL("../src/app/sitemap.js", import.meta.url)), "utf8");
-  const existingSlugs = ["finance", "telco", "energy", "infrastructure"];
-  const forbidden = ["tenders", "regulators", "telecom-fibre", "energy-grids", "infrastructure-works", "deals-companies"];
+  const existingSlugs = ["deals-companies", "telco", "energy", "infrastructure"];
+  const forbidden = ["tenders", "regulators", "telecom-fibre", "energy-grids", "infrastructure-works", "finance"];
   for (const slug of forbidden) {
     assert.ok(!headerSrc.includes(`/${slug}`), `PublicHeader should not link to /${slug}`);
     assert.ok(!sitemapSrc.includes(`/${slug}`), `sitemap should not link to /${slug}`);

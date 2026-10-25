@@ -7,9 +7,12 @@ import { absoluteUrl, fetchText, stripTags } from "./utils.js";
  *   monthElLatin  - { 10: "oktovrios", ... } map of known month slugs
  *   linkPattern   - RegExp source tested against the resolved pathname
  *   dateRegex     - RegExp source with (dd, mm, yyyy) capture groups
- * At month change (days 1-3 Europe/Athens) both the previous and current
- * month URLs are fetched, each only if its slug is known; an unknown month
- * yields no URL for that month rather than throwing.
+ * Every run fetches both the current and the previous Europe/Athens month,
+ * each only if its slug is known; an unknown month yields no URL for that
+ * month rather than throwing. Each month is fetched with redirect: "manual",
+ * and any response that isn't a plain 200 (redirect, 4xx/5xx, or a network
+ * error) is skipped silently for that month only — the source still
+ * succeeds with whatever the other month returned.
  */
 export class HtmlScrapeSourceAdapter {
   constructor(options = {}) { this.fetch = options.fetch || globalThis.fetch; }
@@ -27,10 +30,12 @@ export class HtmlScrapeSourceAdapter {
           timeoutMs: source.timeoutMs,
           maxBytes: source.maxBytes,
           accept: "text/html, application/xhtml+xml",
+          redirect: "manual",
         });
         return this.parse(result.text, result.url, source);
-      } catch (error) {
-        console.warn(`[html-scrape] ${source.id || source.url}: ${error?.message || error}`);
+      } catch {
+        // A redirect, 4xx/5xx or network error for one month must not fail
+        // the whole source (sources-spec.md §2.2 ppc-press note).
         return [];
       }
     }));
@@ -79,16 +84,13 @@ export function athensDateParts(now = Date.now()) {
   return { year: get("year"), month: get("month"), day: get("day") };
 }
 
-// Builds the URL(s) to poll for the current Europe/Athens month, plus the
-// previous month's URL on days 1-3 (sources-spec.md §2.2 ppc-press note).
-// A month with no known slug in `source.monthElLatin` is silently skipped.
+// Builds the URL(s) to poll for the current Europe/Athens month and the
+// previous one, every run (sources-spec.md §2.2 ppc-press note). A month
+// with no known slug in `source.monthElLatin` is silently skipped.
 export function buildMonthUrls(source, now = Date.now()) {
-  const { year, month, day } = athensDateParts(now);
-  const months = [{ year, month }];
-  if (day <= 3) {
-    const previous = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
-    months.unshift(previous);
-  }
+  const { year, month } = athensDateParts(now);
+  const previous = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 };
+  const months = [previous, { year, month }];
   const urls = [];
   for (const { year: y, month: m } of months) {
     const slug = source.monthElLatin?.[m];

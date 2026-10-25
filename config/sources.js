@@ -106,14 +106,17 @@ export const SOURCES = [
     pollMin: 1440,
   },
   {
-    // sources-spec.md §2.2 ppc-press: only October's Latin month slug is
-    // confirmed; other months are deliberately left unmapped (do not guess)
-    // until confirmed against the site's month menu (spec §7 item 5).
+    // sources-spec.md §2.2 ppc-press: all 12 Latin month slugs, confirmed
+    // against the site's month menu.
     id: "ppc-press",
     name: "ΔΕΗ – Δελτία Τύπου (μηνιαία σελίδα)",
     type: "html-scrape",
     urlTemplate: "https://www.ppcgroup.com/el/omilos-dei/grafeio-typou/deltia-typou/prosfata/deltia-tipou-{yyyy}/{month_el_latin}-{yyyy}/",
-    monthElLatin: { 10: "oktovrios" },
+    monthElLatin: {
+      1: "ianouarios", 2: "fevrouarios", 3: "martios", 4: "aprilios",
+      5: "maios", 6: "iounios", 7: "ioulios", 8: "avgoustos",
+      9: "septemvrios", 10: "oktovrios", 11: "noemvrios", 12: "dekemvrios",
+    },
     sections: ["energy-grids", "telecom-fibre", "deals-companies"],
     weight: 0.9,
     dayCap: 4,

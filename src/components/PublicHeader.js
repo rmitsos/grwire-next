@@ -7,7 +7,7 @@ export function PublicHeader() {
         <strong>GR</strong><span>WIRE</span>
       </Link>
       <nav aria-label="Main navigation">
-        <Link href="/finance">Finance</Link>
+        <Link href="/deals-companies">Deals &amp; companies</Link>
         <Link href="/telco">Telecom</Link>
         <Link href="/energy">Energy</Link>
         <Link href="/infrastructure">Infrastructure</Link>

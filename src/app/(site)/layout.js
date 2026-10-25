@@ -2,7 +2,7 @@ import "../globals.css";
 
 export const metadata = {
   title: { default: "GR Wire", template: "%s | GR Wire" },
-  description: "Greek finance, telecom and energy infrastructure in one focused wire.",
+  description: "Greek telecom, energy and infrastructure news in one focused wire.",
 };
 
 export default function RootLayout({ children }) {

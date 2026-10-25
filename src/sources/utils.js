@@ -123,6 +123,7 @@ export async function fetchText(fetchImpl, url, options = {}) {
     timeoutMs = DEFAULT_TIMEOUT_MS,
     maxBytes = DEFAULT_MAX_BYTES,
     accept = "*/*",
+    redirect,
   } = options;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -135,7 +136,11 @@ export async function fetchText(fetchImpl, url, options = {}) {
         ...headers,
       },
       signal: controller.signal,
+      ...(redirect ? { redirect } : {}),
     });
+    // With redirect: "manual" a redirect response resolves instead of
+    // throwing, with response.ok false (status in the 3xx range) — covered
+    // by the same !response.ok check as a 4xx/5xx.
     if (!response.ok) throw new Error(`Request failed (${response.status})`);
 
     const declared = Number(response.headers?.get?.("content-length"));

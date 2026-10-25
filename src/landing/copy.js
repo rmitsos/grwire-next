@@ -13,14 +13,14 @@ export const NAV_SECTIONS = [
   { slug: "telco", path: "/telco", color: "var(--sec-telecom-fibre)", primary: true },
   { slug: "energy", path: "/energy", color: "var(--sec-energy-grids)" },
   { slug: "infrastructure", path: "/infrastructure", color: "var(--sec-infrastructure-works)" },
-  { slug: "finance", path: "/finance", color: "var(--sec-deals-companies)" },
+  { slug: "deals-companies", path: "/deals-companies", color: "var(--sec-deals-companies)" },
 ];
 
 const SECTION_LABELS = {
   telco: { el: "Τηλεπικοινωνίες & Οπτικές Ίνες", en: "Telecom & fibre" },
   energy: { el: "Ενέργεια & Δίκτυα", en: "Energy & grids" },
   infrastructure: { el: "Υποδομές & Έργα", en: "Infrastructure & works" },
-  finance: { el: "Συμφωνίες & Εταιρείες", en: "Deals & companies" },
+  "deals-companies": { el: "Συμφωνίες & Εταιρείες", en: "Deals & companies" },
 };
 
 // Statuses the newsletter API can redirect back with via ?status=. check-inbox / invalid-email /
