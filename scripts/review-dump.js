@@ -20,6 +20,7 @@ import {
   HOMEPAGE_MAX_ITEMS,
   SECTION_HOMEPAGE_CAPS,
   MAX_AGE_HOURS_NEWS,
+  BACKFILL_MAX_AGE_HOURS,
   DEFAULT_DAY_CAP_PER_SOURCE,
   DEFAULT_HOME_CAP_PER_SOURCE,
   hasFigureOrDecisionSignal,
@@ -168,12 +169,28 @@ export function buildReviewDump(report, { now = Date.now(), branch = null, commi
   });
 
   // Pass 2: production-faithful reads, same calls/limits as
-  // getHomepageData() and the [category] page.
+  // getHomepageData() and the [category] page. buildHomepageSections runs
+  // FIRST so a backfilled (>72h but <=7d old) article that does land on the
+  // homepage is never also recorded as dropped: only items that didn't make
+  // the homepage get a reason below, and "stale" is reserved for items
+  // outside even the 7-day backfill window (or with no date) — a non-shown
+  // item inside that window got either a specific cap/rule reason from
+  // buildHomepageSections' onDrop already, or (if the 12-item floor was
+  // reached without needing it) "backfill_not_needed".
   const homepageArticles = selectArticles(rows, { limit: 100, now });
-  for (const article of homepageArticles) {
-    if (!isFresh(article, now)) recordDrop(article, { stage: "stale" });
-  }
   const homepage = buildHomepageSections(homepageArticles, { now, onDrop: recordDrop });
+  const shownUrls = new Set(
+    [homepage.lead, ...homepage.recent, ...Object.values(homepage.columns).flat()]
+      .filter(Boolean).map((article) => article.url),
+  );
+  for (const article of homepageArticles) {
+    if (shownUrls.has(article.url)) continue;
+    if (!isFresh(article, now, BACKFILL_MAX_AGE_HOURS)) {
+      recordDrop(article, { stage: "stale" });
+    } else if (!dropped.some((drop) => drop.url === article.url)) {
+      recordDrop(article, { stage: "backfill_not_needed" });
+    }
+  }
 
   const sections = {};
   for (const slug of Object.keys(PUBLIC_CATEGORIES)) {

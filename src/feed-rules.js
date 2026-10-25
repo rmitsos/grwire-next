@@ -414,9 +414,48 @@ const TELCO_NETWORK_ANGLE_TERMS = [
   "δεη fiber", "grid telecom",
 ];
 
+// round-4 fix: "δίκτυο συνεργατών/διανομής/πωλήσεων/καταστημάτων/..." (and the
+// English "partner/dealer/distribution/sales network") is a commercial
+// reseller/dealer network, not a telecom one — stripped out before matching
+// TELCO_NETWORK_ANGLE_TERMS' generic "δικτυ*"/"network" terms so a story like
+// "...στο δίκτυο συνεργατών της" (a vendor's dealer network) does not count
+// as a telecom network angle just because it says "δίκτυο".
+const COMMERCIAL_NETWORK_AFTER_TERMS = [
+  "συνεργατων", "διανομησ", "διανομεων", "πωλησεων", "καταστηματων",
+  "μεταπωλητων", "πρακτορων", "franchise", "λιανικησ",
+];
+const COMMERCIAL_NETWORK_BEFORE_TERMS = ["partner", "dealer", "distribution", "sales"];
+
+/** Removes "δίκτυο <commercial term>" / "<commercial term> network" spans (within ~2 words) from `text`. */
+function stripCommercialNetworkPhrases(text) {
+  const tokens = tokenize(normaliseText(text));
+  const removed = new Set();
+  for (let i = 0; i < tokens.length; i += 1) {
+    if (tokens[i].startsWith("δικτυ")) {
+      for (let offset = 1; offset <= 2; offset += 1) {
+        if (COMMERCIAL_NETWORK_AFTER_TERMS.includes(tokens[i + offset])) {
+          removed.add(i);
+          removed.add(i + offset);
+          break;
+        }
+      }
+    }
+    if (tokens[i] === "network") {
+      for (let offset = 1; offset <= 2; offset += 1) {
+        if (COMMERCIAL_NETWORK_BEFORE_TERMS.includes(tokens[i - offset])) {
+          removed.add(i);
+          removed.add(i - offset);
+          break;
+        }
+      }
+    }
+  }
+  return tokens.filter((_token, index) => !removed.has(index)).join(" ");
+}
+
 /** Whether title+summary carry an actual telecom network/technology/operator angle (round-4 telco rule). */
 export function hasTelecomNetworkAngle(text = "") {
-  return matchesAnyTerm(text, TELCO_NETWORK_ANGLE_TERMS);
+  return matchesAnyTerm(stripCommercialNetworkPhrases(text), TELCO_NETWORK_ANGLE_TERMS);
 }
 
 /** Whether `text` matches at least one §1 keyword for `section`, honouring its negative list (round-4 tier-1 topical routing). */

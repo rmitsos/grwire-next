@@ -51,9 +51,15 @@ test("buildHomepageSections backfills up to 12 items from up to 7 days old when 
 
 test("buildHomepageSections does not backfill when 12+ items are already <72h old", () => {
   const now = Date.now();
-  const freshItems = Array.from({ length: 12 }, (_, i) => ({
+  // Spread across categories (4 telco + 4 energy + 3 infrastructure + 1
+  // deals = 12) so SECTION_HOMEPAGE_CAPS lets all 12 actually show — a
+  // single shared category would hit telecom-fibre's cap of 4 and leave
+  // fewer than 12 shown, which is exactly the real-world case round-4
+  // requires backfill to cover (see the home_cap test above).
+  const freshCategories = ["telco", "telco", "telco", "telco", "energy", "energy", "energy", "energy", "infrastructure", "infrastructure", "infrastructure", "deals"];
+  const freshItems = freshCategories.map((category, i) => ({
     url: `https://a.test/fresh-${i}`, title: `Νέο έργο δικτύου οπτικών ινών #${i}`, summary: "",
-    sourceId: `fresh-src-${i}`, categories: ["telco"], score: 10, publishedAt: new Date(now - 3_600_000).toISOString(), metadata: {},
+    sourceId: `fresh-src-${i}`, categories: [category], score: 10, publishedAt: new Date(now - 3_600_000).toISOString(), metadata: {},
   }));
   const backfillCandidate = {
     url: "https://a.test/backfill", title: "Ο ΑΔΜΗΕ ανακοίνωσε νέο υποσταθμό υψηλής τάσης", summary: "",
@@ -62,6 +68,35 @@ test("buildHomepageSections does not backfill when 12+ items are already <72h ol
   const result = buildHomepageSections([...freshItems, backfillCandidate], { now });
   const shown = [result.lead, ...result.recent, ...Object.values(result.columns).flat()].filter(Boolean);
   assert.ok(!shown.some((a) => a.url === "https://a.test/backfill"), "no backfill once 12 fresh items already exist");
+});
+
+test("buildHomepageSections backfills to 12 when 20+ fresh items exist but home_cap leaves only a handful shown", () => {
+  const now = Date.now();
+  // 10 fresh items each from 2 sources: home_cap (default 2) lets only 2 per
+  // source through (lead + 1 recent each = 4 total), even though all 20 are
+  // individually <72h old and would otherwise count toward the 12 floor.
+  const freshA = Array.from({ length: 10 }, (_, i) => ({
+    url: `https://a.test/fresh-a-${i}`, title: `Η Cosmote ανακοινώνει επέκταση δικτύου FTTH αρ. ${i}`, summary: "",
+    sourceId: "fresh-src-a", categories: ["telco"], score: 10 - i, publishedAt: new Date(now - 3_600_000).toISOString(), metadata: {},
+  }));
+  const freshB = Array.from({ length: 10 }, (_, i) => ({
+    url: `https://a.test/fresh-b-${i}`, title: `Ο ΑΔΜΗΕ ανακοινώνει έργο διασύνδεσης υποσταθμού αρ. ${i}`, summary: "",
+    sourceId: "fresh-src-b", categories: ["energy"], score: 10 - i, publishedAt: new Date(now - 3_600_000).toISOString(), metadata: {},
+  }));
+  // 10 older (4-6 day old) items from 10 distinct sources/categories so none
+  // of them trip a home_cap or section cap on their own.
+  const olderCategories = ["infrastructure", "tenders", "regulators", "deals", "telco", "energy", "infrastructure", "tenders", "regulators", "deals"];
+  const older = olderCategories.map((category, i) => ({
+    url: `https://a.test/older-${i}`, title: `Ανακοίνωση έργου υποδομών αρ. ${i}`, summary: "",
+    sourceId: `older-src-${i}`, categories: [category], score: 5,
+    publishedAt: new Date(now - (4 + i * 0.25) * 24 * 3_600_000).toISOString(), metadata: {},
+  }));
+  const result = buildHomepageSections([...freshA, ...freshB, ...older], { now });
+  const shown = [result.lead, ...result.recent, ...Object.values(result.columns).flat()].filter(Boolean);
+  assert.equal(shown.length, 12, `expected exactly 12 homepage items (the 12-item floor), got ${shown.length}`);
+  const backfillItems = shown.filter((a) => a.homepageBackfill);
+  assert.equal(backfillItems.length, 8, "expected 8 items filled in from the backfill pool to reach the 12-item floor");
+  for (const item of backfillItems) assert.ok(item.url.startsWith("https://a.test/older-"), `expected only older-* items to be backfilled, got ${item.url}`);
 });
 
 test("lead selection prefers tier 1/3 sources and a figure/decision signal, falling back to backfill only with no fresh lead candidate", () => {
@@ -175,6 +210,42 @@ test("selectArticles keeps a telco item that has a real network angle (ΕΕΤΤ 
   const articles = selectArticles(rows, { category: "telco" });
   assert.equal(articles.length, 1);
 });
+
+// round-4 fix: a commercial "δίκτυο συνεργατών/διανομής/..." (reseller/dealer
+// network) mention must not count as a telecom network angle just because it
+// says "δίκτυο" — this is the Westnet/Acer fibernews false positive found by
+// the no-DB review dump.
+test("hasTelecomNetworkAngle ignores a commercial partner/dealer/distribution/sales network mention", () => {
+  const westnetTitle = "Νέα στρατηγική συνεργασία Westnet και Acer στην Ελλάδα";
+  const westnetSummary = "Η Westnet, εταιρεία του Ομίλου Olympia, ανακοίνωσε τη συνεργασία της με την Acer, "
+    + "αναλαμβάνοντας τη διανομή των προϊόντων της στην ελληνική αγορά. Η συνεργασία αποτελεί μια σημαντική "
+    + "προσθήκη στο χαρτοφυλάκιο της Westnet, διευρύνοντας τις επιλογές που προσφέρει στο δίκτυο συνεργατών της.";
+  assert.ok(!hasTelecomNetworkAngle(`${westnetTitle} ${westnetSummary}`),
+    "a commercial 'δίκτυο συνεργατών' mention must not count as a telecom network angle");
+
+  assert.ok(!hasTelecomNetworkAngle("Η εταιρεία διευρύνει το δίκτυο διανομής των προϊόντων της"));
+  assert.ok(!hasTelecomNetworkAngle("Η εταιρεία ενίσχυσε το δίκτυο πωλήσεων και το δίκτυο καταστημάτων της"));
+  assert.ok(!hasTelecomNetworkAngle("New partner network launched for resellers"));
+  assert.ok(!hasTelecomNetworkAngle("The company expanded its dealer network and distribution network"));
+
+  // Genuine telecom network angles must still pass unaffected.
+  assert.ok(hasTelecomNetworkAngle("Sparkle: Διεθνής πρωτοβουλία για την επιτάχυνση της ανάπτυξης υποθαλάσσιων καλωδίων"));
+  assert.ok(hasTelecomNetworkAngle("Η επέκταση του δικτύου οπτικών ινών συνεχίζεται στην περιφέρεια"));
+});
+
+test("selectArticles drops a telco item whose only network mention is a commercial partner network (telco_no_network_angle)", () => {
+  const rows = [row({
+    url: "https://fibernews.gr/westnet-acer",
+    title: "Τηλεπικοινωνιακή εταιρεία Westnet ανακοινώνει συνεργασία με την Acer",
+    summary: "Η συνεργασία διευρύνει τις επιλογές που προσφέρει η Westnet στο δίκτυο συνεργατών της.",
+    sourceId: "fibernews", publishedAt: new Date().toISOString(),
+  })];
+  const dropped = [];
+  const articles = selectArticles(rows, { onDrop: (_row, reason) => dropped.push(reason) });
+  assert.equal(articles.length, 0);
+  assert.ok(dropped.some((r) => r.stage === "telco_no_network_angle"));
+});
+
 
 // --- 4. Stock-market noise ----------------------------------------------------
 

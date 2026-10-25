@@ -230,3 +230,63 @@ test("buildReviewDump: perSource carries a droppedByStage breakdown (keyed by re
   assert.equal(ppcDrop.reason.group, "ppc_non_network");
   assert.equal(byId["ppc-press"].droppedByStage[ppcDrop.reason.stage], 1);
 });
+
+// round-4 fix: buildHomepageSections runs before the stale/backfill_not_needed
+// pass now, so a backfilled (>72h but <=7d old) article that does land on the
+// homepage must never also show up in `dropped`; a not-shown item inside the
+// 7-day backfill window with no other reason gets "backfill_not_needed"
+// instead of "stale"; "stale" is reserved for items outside that window.
+const BACKFILL_OLDER_DEFS = [
+  ["telco1", "Η Vodafone εγκαινίασε νέο δίκτυο 5G σε αγροτικές περιοχές της Ελλάδας"],
+  ["telco2", "Η Nova ανακοίνωσε αναβάθμιση του δικτύου οπτικών ινών σε παραμεθόριες περιοχές της Ελλάδας"],
+  ["energy1", "Η ΔΕΔΔΗΕ ανακοίνωσε αναβάθμιση γραμμών διανομής ηλεκτρικής ενέργειας στην Ελλάδα"],
+  ["energy2", "Η ΡΑΑΕΥ εξέδωσε απόφαση για αποθήκευση ενέργειας σε μπαταρίες στην Ελλάδα"],
+  ["infra1", "Έναρξη κατασκευής νέας σήραγγας στον αυτοκινητόδρομο Αθηνών-Κορίνθου"],
+  ["infra2", "Το ΥΠΕΝ ενέκρινε χωροθέτηση νέου σιδηροδρομικού έργου στη Θεσσαλονίκη"],
+  ["tenders1", "Προκήρυξη διαγωνισμού για ανάθεση σύμβασης έργου ύδρευσης στην Κρήτη"],
+  ["tenders2", "Κατακύρωση σύμβασης προμήθειας εξοπλισμού σε διαγωνισμό του δημοσίου"],
+  ["regulators1", "Η ΕΕΤΤ δημοσίευσε διαβούλευση για τροπολογία κανονισμού φάσματος"],
+  ["regulators2", "Το Υπουργείο Ψηφιακής Διακυβέρνησης ανακοίνωσε νομοσχέδιο για το φάσμα συχνοτήτων"],
+  ["deals1", "Η Metlen ανακοίνωσε εξαγορά startup σε συμφωνία M&A στην Ελλάδα"],
+];
+
+const BACKFILL_REPORT = {
+  items: [
+    item({ url: "https://a.test/fresh-telco", title: "Η Cosmote επεκτείνει δίκτυο FTTH οπτικών ινών σε νέους δήμους της Ελλάδας", sourceId: "fresh-telco-src", publishedAt: "2026-10-25T11:00:00.000Z", score: 10 }),
+    item({ url: "https://a.test/fresh-energy", title: "Ο ΑΔΜΗΕ ανακοίνωσε νέα διασύνδεση υποσταθμού υψηλής τάσης στην Ελλάδα", sourceId: "fresh-energy-src", publishedAt: "2026-10-25T11:00:00.000Z", score: 10 }),
+    ...BACKFILL_OLDER_DEFS.map(([key, title], i) => item({
+      url: `https://a.test/older-${key}`, title, sourceId: `older-src-${key}`,
+      publishedAt: new Date(NOW - (4 + i * 0.18) * 24 * 3_600_000).toISOString(), score: 5,
+    })),
+    item({
+      url: "https://a.test/too-old", title: "Η Nova ανακοίνωσε παλιά επέκταση δικτύου FTTH οπτικών ινών στην Ελλάδα πριν καιρό",
+      sourceId: "too-old-src", publishedAt: new Date(NOW - 10 * 24 * 3_600_000).toISOString(), score: 5,
+    }),
+  ],
+  sources: [],
+};
+
+test("buildReviewDump: a backfilled homepage item is never also recorded as dropped", () => {
+  const dump = buildReviewDump(BACKFILL_REPORT, { now: NOW });
+  const shown = [dump.homepage.lead, ...dump.homepage.recent, ...Object.values(dump.homepage.columns).flat()].filter(Boolean);
+  assert.equal(shown.length, 12, `expected the 12-item backfill floor, got ${shown.length}`);
+  const backfilled = shown.filter((a) => a.homepageBackfill);
+  assert.ok(backfilled.length >= 8, `expected most of the 12 to be backfilled, got ${backfilled.length}`);
+  for (const article of shown) {
+    assert.ok(!dump.dropped.some((d) => d.url === article.url), `shown article ${article.url} must not appear in dropped`);
+  }
+});
+
+test("buildReviewDump: a not-shown item inside the 7-day backfill window with no other reason is backfill_not_needed, not stale", () => {
+  const dump = buildReviewDump(BACKFILL_REPORT, { now: NOW });
+  const leftover = dump.dropped.find((d) => d.url === "https://a.test/older-regulators2");
+  assert.ok(leftover, "expected the unused backfill-window candidate to be recorded as dropped");
+  assert.equal(leftover.reason.stage, "backfill_not_needed");
+});
+
+test("buildReviewDump: an item outside the 7-day backfill window is stale even when buildHomepageSections runs first", () => {
+  const dump = buildReviewDump(BACKFILL_REPORT, { now: NOW });
+  const staleDrop = dump.dropped.find((d) => d.url === "https://a.test/too-old");
+  assert.ok(staleDrop, "expected the >7-day-old item to be recorded as dropped");
+  assert.equal(staleDrop.reason.stage, "stale");
+});

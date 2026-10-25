@@ -216,9 +216,12 @@ export async function getNavVisibility({ now = Date.now() } = {}) {
  * Also enforces, across lead + recent + columns together:
  *  - sources-spec.md §3 max_age_hours.news: only items published within the
  *    last 72h are homepage-eligible (items with no publishedAt never are) —
- *    EXCEPT round-4's backfill: when fewer than HOMEPAGE_BACKFILL_MIN_ITEMS
- *    (12) items are <72h old, items up to BACKFILL_MAX_AGE_HOURS (7 days)
- *    old fill the gap, highest-scoring first (ties: newest), marked
+ *    EXCEPT round-4's backfill: whenever fewer than HOMEPAGE_BACKFILL_MIN_ITEMS
+ *    (12) items actually end up on the homepage after all caps/rules below
+ *    (not just when fewer than 12 are <72h old — a well-supplied fresh set
+ *    can still be whittled down under 12 by home_cap/section caps/event/Cyprus
+ *    rules), items up to BACKFILL_MAX_AGE_HOURS (7 days) old fill the
+ *    remainder, highest-scoring first (ties: newest), marked
  *    `homepageBackfill: true`. Backfill items still go through every other
  *    rule/cap below.
  *  - §2 home_cap per source (default DEFAULT_HOME_CAP_PER_SOURCE).
@@ -241,12 +244,14 @@ export async function getNavVisibility({ now = Date.now() } = {}) {
  */
 export function buildHomepageSections(articles = [], { now = Date.now(), onDrop } = {}) {
   const { fresh, older } = splitByFreshness(articles, { now });
-  const backfillPool = fresh.length < HOMEPAGE_BACKFILL_MIN_ITEMS
-    ? older
-        .filter((article) => isFresh(article, now, BACKFILL_MAX_AGE_HOURS))
-        .sort((a, b) => (b.score || 0) - (a.score || 0) || Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0))
-        .map((article) => ({ ...article, homepageBackfill: true }))
-    : [];
+  // Always computed, not just when fresh.length < 12: caps/rules below (home_cap,
+  // section caps, event/Cyprus rules) routinely shrink a 30+-item fresh set down
+  // to well under 12 shown, and the backfill fill loop further down needs this
+  // pool regardless of how many fresh items existed going in.
+  const backfillPool = older
+    .filter((article) => isFresh(article, now, BACKFILL_MAX_AGE_HOURS))
+    .sort((a, b) => (b.score || 0) - (a.score || 0) || Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0))
+    .map((article) => ({ ...article, homepageBackfill: true }));
 
   const shown = new Set();
   const perSourceCount = new Map();
@@ -339,9 +344,11 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop 
     if (eligible(article)) columns[primaryCategory].push(take(article));
   }
 
-  // round-4 homepage backfill: only reached when fresh.length was below the
-  // 12-item floor, so every fresh article has already been offered a slot
-  // above; fill the remainder from the up-to-7-day-old backfill pool.
+  // round-4 homepage backfill: every fresh article has already been offered
+  // a slot above (lead/recent/columns); top up from the up-to-7-day-old
+  // backfill pool whenever that left totalCount under the 12-item floor —
+  // whether because too few fresh items existed, or because caps/rules
+  // thinned out a large fresh set.
   for (const article of backfillPool) {
     if (totalCount >= HOMEPAGE_BACKFILL_MIN_ITEMS) break;
     if (shown.has(canonicalizeUrl(article.url))) continue;
