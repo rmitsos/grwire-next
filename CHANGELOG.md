@@ -3,6 +3,29 @@
 ## Unreleased
 
 ### Added
+- Round-4 feed rules: homepage backfill (fills to 12 items from up to 7-day-old coverage when
+  fewer than 12 are <72h old, `article.homepageBackfill`); event/conference-piece suppression
+  (`isEventPiece`/`hasFigureOrDecisionSignal` in `feed-rules.js`) with a homepage ban (never lead,
+  figure/decision-word exception for recent/columns only) and a 1-per-section cap on section
+  pages (`event_cap`); `telecom-fibre` now requires an actual network/technology/operator angle
+  (`hasTelecomNetworkAngle`), dropping telco-only items with none (`telco_no_network_angle`);
+  stock-market noise (target price, broker rating + σύσταση/broker context, buyback language) in
+  a new `NOISE_HARD_REJECT.stock_market` group; Cyprus-only items (`isCyprusOnly`) excluded from
+  the homepage but still shown on section pages; and Tier-1 sources (now carrying a `tier` field
+  in `config/sources.js`) always get `regulators-policy` plus a topical section via the broader
+  §1 keywords (`watch-rules.js` `sourceForcedCategories`), fixing ΡΑΑΕΥ/ΓΓΤΤ items that matched no
+  `DEFAULT_WATCH_RULES` rule and so were silently dropped by `rankItems`. ΥΠΕΝ switched from a
+  blind html-listing scrape to WordPress REST (category 7, `titleFilter` energy prefilter); ΓΓΤΤ
+  gets a dedicated `ggtt` adapter (`src/sources/ggtt.js`) restricted to `/posts/<slug>` links with
+  Greek-date/"Η προθεσμία έληξε" title parsing. `scanMarket` takes an optional `onDrop(item,
+  reason)` covering noise/relevance_rejected/no_category/day_cap/run_cap/link_invalid/
+  max_relevant. `/tenders` and `/regulators` are hidden from the public nav, footer and sitemap
+  until their section has >=3 items in the last 30 days (`computeNavVisibility`/
+  `getNavVisibility`) — the pages still resolve. `buildHomepageSections` now reports at most one
+  drop per (url, stage) instead of once per internal pass. `scripts/review-dump.js` surfaces all
+  of the above: scanMarket-level drops, `homepageBackfill`, a lead-selection `leadReason`,
+  section-level drops, `navVisibility`, and a per-source `droppedByStage` breakdown.
+
 - Bilingual subscribe/landing page (EL default at `/subscribe`, EN at `/en/subscribe`), plus
   `/subscribe/confirmed`, `/unsubscribe` and `/privacy` (and their `/en/...` equivalents). Built
   from `landing-copy.md`/`subscribe-flow.md`/`mockup.html`: hero, first-series teaser (telecom
@@ -41,6 +64,9 @@
   since mail scanners prefetch links and must never trigger an unsubscribe).
 
 ### Changed
+- Removed the `μερισμα (unless sector org)` dividend exception in `noiseRejectReason` — any
+  dividend mention is noise now, sector company or not (round-4 owner answer, supersedes the
+  earlier decision).
 - Newsletter routes are now language-aware end to end: `POST /api/newsletter/subscribe` redirects
   to `/en/subscribe` or `/subscribe` by `lang` (no longer leaks `lang` into the query string) and
   now wraps the service call in try/catch (`newsletter subscribe failed: <message>` only, never

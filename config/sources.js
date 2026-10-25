@@ -63,6 +63,7 @@ export const SOURCES = [
     id: "eett-press",
     name: "ΕΕΤΤ – Δελτία Τύπου",
     type: "rss",
+    tier: 1,
     url: "https://www.eett.gr/feed/?post_type=deltia_tipou",
     excludeTitlePatterns: ["^Τεστ"],
     sections: ["regulators-policy", "telecom-fibre"],
@@ -76,6 +77,7 @@ export const SOURCES = [
     id: "infocom-telecoms",
     name: "InfoCom – Telecoms",
     type: "rss",
+    tier: 4,
     url: "https://infocom.gr/telecoms/feed/",
     sections: ["telecom-fibre", "deals-companies"],
     weight: 0.8,
@@ -87,6 +89,7 @@ export const SOURCES = [
     id: "fibernews",
     name: "Fibernews",
     type: "rss",
+    tier: 4,
     url: "https://fibernews.gr/feed/",
     sections: ["telecom-fibre"],
     weight: 0.8,
@@ -98,6 +101,7 @@ export const SOURCES = [
     id: "united-fiber",
     name: "United Fiber",
     type: "rss",
+    tier: 3,
     url: "https://www.unitedfiber.gr/feed/",
     sections: ["telecom-fibre"],
     weight: 0.9,
@@ -111,6 +115,7 @@ export const SOURCES = [
     id: "ppc-press",
     name: "ΔΕΗ – Δελτία Τύπου (μηνιαία σελίδα)",
     type: "html-scrape",
+    tier: 3,
     urlTemplate: "https://www.ppcgroup.com/el/omilos-dei/grafeio-typou/deltia-typou/prosfata/deltia-tipou-{yyyy}/{month_el_latin}-{yyyy}/",
     monthElLatin: {
       1: "ianouarios", 2: "fevrouarios", 3: "martios", 4: "aprilios",
@@ -134,24 +139,44 @@ export const SOURCES = [
     // are excluded per spec (thousands of boilerplate licensing decisions,
     // e.g. "ΑΠΟΦΑΣΗ ΑΝΤΙΠΡΟΕΔΡΟΥ ... ΥΠ' ΑΡΙΘΜ.").
     id: "raaey-energy-announcements",
+    name: "ΡΑΑΕΥ",
     type: "wordpress",
+    tier: 1,
     url: "https://www.raaey.gr/energeia",
     categories: [17, 110, 109, 108, 111],
     lookbackDays: 21,
     limit: 30,
   },
   {
+    // round-4: ypen.gov.gr is WordPress; WP REST works (the old html source
+    // only ever scraped navigation links — no press releases, no dates).
+    // Category 7 = "Ανακοινώσεις Τύπου" (anakoinoseis-typou). ΥΠΕΝ also
+    // covers environment/urban planning/forestry, so titleFilter keeps only
+    // energy-relevant posts (see WordPressSourceAdapter).
     id: "ypen-energy-announcements",
-    type: "html",
-    url: "https://ypen.gov.gr/category/anakoinoseis-typou/",
-    linkPatterns: ["energia", "ενεργ", "anakoin", "press"],
-    limit: 100,
+    name: "ΥΠΕΝ – Ανακοινώσεις Τύπου",
+    type: "wordpress",
+    tier: 1,
+    url: "https://ypen.gov.gr",
+    categories: [7],
+    lookbackDays: 21,
+    titleFilter: [
+      "ενεργει*", "ηλεκτρ*", "απε", "φωτοβολταικ*", "αιολικ*", "αποθηκευσ*",
+      "δικτυ*", "φυσικ* αερι*", "υδρογον*", "διασυνδεσ*", "ραα*υ", "αδμηε",
+      "δεδδηε", "δεσφα", "εξοικονομ*",
+    ],
+    limit: 30,
   },
   {
+    // round-4: restricted to /posts/<slug> article links only (the old html
+    // listing source also picked up /section/ nav links and bare /posts).
+    // The GgttSourceAdapter also parses the Greek date ("20 Οκτωβρίου 2026")
+    // and an optional "Η προθεσμία έληξε" prefix out of the listing title.
     id: "ggtt-telecom-announcements",
-    type: "html",
+    name: "ΓΓΤΤ – Τηλεπικοινωνίες",
+    type: "ggtt",
+    tier: 1,
     url: "https://ggtt.mindigital.gr/section/telecom",
-    linkPatterns: ["telecom", "post", "news", "announcement", "τηλεπικ"],
     limit: 100,
   },
   {
@@ -160,6 +185,7 @@ export const SOURCES = [
     // WordPress source's category 294 (Τηλεπικοινωνίες), which has excerpts.
     id: "ot-telecoms",
     type: "html",
+    tier: 4,
     enabled: false,
     url: "https://www.ot.gr/category/epixeiriseis/tilepikoinonies/",
     linkPatterns: ["tilepikoin", "ote", "cosmote", "vodafone", "nova", "ftth", "fiber", "fibre", "5g", "network", "telekom"],
@@ -170,6 +196,7 @@ export const SOURCES = [
   {
     id: "netweek-telecoms",
     type: "html",
+    tier: 4,
     url: "https://netweek.gr/category/telecoms/",
     linkPatterns: ["telecom", "ote", "cosmote", "vodafone", "nova", "ftth", "fiber", "fibre", "5g", "ufbb", "network", "connectivity", "τηλεπικ"],
     minimumTitleLength: 16,
@@ -178,6 +205,7 @@ export const SOURCES = [
   {
     id: "naftemporiki-telecoms",
     type: "html",
+    tier: 4,
     url: "https://www.naftemporiki.gr/tag/tilepikoinonies/",
     linkPatterns: ["tilepikoin", "telecom", "ote", "cosmote", "vodafone", "nova", "ftth", "fiber", "fibre", "5g", "network", "internet", "δικτυ", "κινητ"],
     minimumTitleLength: 16,
@@ -190,6 +218,7 @@ export const SOURCES = [
     // RSS. The ΕΕΤΤ feed above (eett-press) covers the same ground.
     id: "dnews-eett",
     type: "html",
+    tier: 4,
     enabled: false,
     url: "https://www.dnews.gr/site/tag/%CE%95%CE%95%CE%A4%CE%A4",
     linkPatterns: ["eett", "%CE%95%CE%95%CE%A4%CE%A4", "eidhseis", "tilepikoin", "telecom", "mobile", "χρεω"],
@@ -201,6 +230,7 @@ export const SOURCES = [
     // redirects to /404.html.
     id: "intracom-telecom-press",
     type: "html",
+    tier: 3,
     enabled: false,
     url: "https://www.intracom-telecom.com/en/news/press.htm",
     linkPatterns: ["/en/news/press/"],
@@ -214,11 +244,13 @@ export const SOURCES = [
     // favour of this feed).
     id: "energypress",
     type: "rss",
+    tier: 4,
     url: "https://energypress.gr/rss",
   },
   {
     id: "energypress-wordpress",
     type: "wordpress",
+    tier: 4,
     enabled: false,
     url: "https://energypress.gr",
     lookbackDays: 7,
@@ -227,6 +259,7 @@ export const SOURCES = [
   {
     id: "ypodomes-wordpress",
     type: "wordpress",
+    tier: 4,
     url: "https://ypodomes.com",
     lookbackDays: 7,
     limit: 100,
@@ -234,6 +267,7 @@ export const SOURCES = [
   {
     id: "insider-wordpress",
     type: "wordpress",
+    tier: 4,
     enabled: false,
     url: "https://www.insider.gr",
     lookbackDays: 7,
@@ -242,6 +276,7 @@ export const SOURCES = [
   {
     id: "naftemporiki",
     type: "rss",
+    tier: 4,
     url: "https://www.naftemporiki.gr/feed/",
   },
   {
@@ -253,6 +288,7 @@ export const SOURCES = [
     // WP REST category query (verified 200, with excerpts) already avoids.
     id: "ot-gr",
     type: "wordpress",
+    tier: 4,
     url: "https://www.ot.gr",
     categories: [7, 21, 294, 295],
     lookbackDays: 7,
@@ -267,6 +303,7 @@ export const SOURCES = [
     // gnews-fibre).
     id: "google-news-greek-telco",
     type: "rss",
+    tier: 4,
     enabled: false,
     url: "https://news.google.com/rss/search?q=%28OTE%20OR%20Cosmote%20OR%20Vodafone%20OR%20Nova%20OR%20Intracom%20OR%20FTTH%20OR%205G%20OR%20telecom%20OR%20%CF%84%CE%B7%CE%BB%CE%B5%CF%80%CE%B9%CE%BA%CE%BF%CE%B9%CE%BD%CF%89%CE%BD%CE%AF%CE%B5%CF%82%20OR%20%CE%95%CE%95%CE%A4%CE%A4%29%20Greece&hl=el&gl=GR&ceid=GR%3Ael",
     limit: 60,
@@ -274,6 +311,7 @@ export const SOURCES = [
   {
     id: "google-news-greek-energy",
     type: "rss",
+    tier: 4,
     url: "https://news.google.com/rss/search?q=%28ADMIE%20OR%20IPTO%20OR%20HEDNO%20OR%20DEDDIE%20OR%20RAAEY%20OR%20PPC%20OR%20renewable%20OR%20storage%29%20Greece&hl=el&gl=GR&ceid=GR%3Ael",
     limit: 60,
   },

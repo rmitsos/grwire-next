@@ -348,9 +348,9 @@ test("buildAlternatesMetadata: article canonical/hreflang/x-default/og for an ex
 
 // ---- sitemap -----------------------------------------------------------------------------
 
-test("sitemap: real content/insights articles are currently all draft, so no insight URLs appear", () => {
+test("sitemap: real content/insights articles are currently all draft, so no insight URLs appear", async () => {
   const base = siteBase();
-  const entries = sitemap();
+  const entries = await sitemap();
   const urls = entries.map((entry) => entry.url);
   assert.ok(!urls.includes(`${base}/insights`));
   assert.ok(!urls.includes(`${base}/en/insights`));

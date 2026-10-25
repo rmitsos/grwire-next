@@ -15,13 +15,14 @@ import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { SOURCES } from "../config/sources.js";
 import { scanMarket } from "../src/pipeline.js";
-import { selectArticles, buildHomepageSections, PUBLIC_CATEGORIES } from "../src/public-data.js";
+import { selectArticles, buildHomepageSections, computeNavVisibility, PUBLIC_CATEGORIES } from "../src/public-data.js";
 import {
   HOMEPAGE_MAX_ITEMS,
   SECTION_HOMEPAGE_CAPS,
   MAX_AGE_HOURS_NEWS,
   DEFAULT_DAY_CAP_PER_SOURCE,
   DEFAULT_HOME_CAP_PER_SOURCE,
+  hasFigureOrDecisionSignal,
   homepageSectionOf,
   isFresh,
   splitByFreshness,
@@ -77,12 +78,45 @@ function toOutputItem(article) {
   };
 }
 
-function buildPerSourceReport(report, homepage) {
+// Homepage items (and only homepage items) additionally carry whether they
+// were filled in by the round-4 backfill rule — kept off the plain
+// toOutputItem shape so the sections-page item key list (tested exactly in
+// review-dump.test.js) does not change.
+function toHomepageOutputItem(article) {
+  return { ...toOutputItem(article), homepageBackfill: Boolean(article.homepageBackfill) };
+}
+
+// round-4: a short explanation of why the chosen lead won (tier preference,
+// figure/decision signal, backfill), for the dump's "lead-selection info"
+// requirement — mirrors src/public-data.js leadPreferenceScore without
+// importing a private helper.
+function describeLeadReason(article) {
+  if (!article) return null;
+  const source = SOURCE_BY_ID.get(article.sourceId);
+  const tier = source?.tier ?? null;
+  return {
+    sourceId: article.sourceId || null,
+    tier,
+    preferredTier: tier === 1 || tier === 3,
+    hasFigureOrDecisionSignal: hasFigureOrDecisionSignal(`${article.title || ""} ${article.summary || ""}`),
+    homepageBackfill: Boolean(article.homepageBackfill),
+    score: article.score,
+  };
+}
+
+function buildPerSourceReport(report, homepage, dropped) {
   const shownOnHomepage = new Map();
   const count = (article) => shownOnHomepage.set(article.sourceId, (shownOnHomepage.get(article.sourceId) || 0) + 1);
   if (homepage.lead) count(homepage.lead);
   homepage.recent.forEach(count);
   Object.values(homepage.columns).flat().forEach(count);
+
+  const droppedByStageBySource = new Map();
+  for (const drop of dropped) {
+    const bySource = droppedByStageBySource.get(drop.sourceId) || {};
+    bySource[drop.reason.stage] = (bySource[drop.reason.stage] || 0) + 1;
+    droppedByStageBySource.set(drop.sourceId, bySource);
+  }
 
   return report.sources.map((source) => ({
     id: source.id,
@@ -92,6 +126,7 @@ function buildPerSourceReport(report, homepage) {
     capped: source.dayCapped || 0,
     noiseRejected: source.noiseRejected || 0,
     shownOnHomepage: shownOnHomepage.get(source.id) || 0,
+    droppedByStage: droppedByStageBySource.get(source.id) || {},
     error: source.ok ? null : source.error || null,
   }));
 }
@@ -99,22 +134,33 @@ function buildPerSourceReport(report, homepage) {
 /**
  * Pure transform: a scanMarket() report -> the JSON this script writes.
  * No network, no DB — takes an already-fetched report (real or a fixture).
+ * `scanDrops` is the list of `{ item, reason }` pairs collected via
+ * scanMarket's optional `onDrop` callback (noise/relevance_rejected/
+ * no_category/day_cap/run_cap/link_invalid/max_relevant) — items dropped
+ * before ever reaching `report.items`, so they would otherwise never show
+ * up in this dump at all (the root cause the round-4 brief calls out for
+ * ΡΑΑΕΥ/ΥΠΕΝ/ΓΓΤΤ).
  */
-export function buildReviewDump(report, { now = Date.now(), branch = null, commit = null } = {}) {
+export function buildReviewDump(report, { now = Date.now(), branch = null, commit = null, scanDrops = [] } = {}) {
   const dropped = [];
-  const recordDrop = (item, reason) => dropped.push({
-    title: item.title,
-    url: item.canonical_url || item.url,
-    sourceId: item.source_id || item.sourceId,
-    reason,
-  });
+  const reportedDropKeys = new Set();
+  const recordDrop = (item, reason) => {
+    const url = item.canonical_url || item.url;
+    const key = `${url}|${reason.stage}`;
+    if (reportedDropKeys.has(key)) return;
+    reportedDropKeys.add(key);
+    dropped.push({ title: item.title, url, sourceId: item.source_id || item.sourceId, reason });
+  };
+
+  for (const { item, reason } of scanDrops) recordDrop(item, reason);
 
   const rows = report.items.map((item, index) => toRow(item, index));
 
-  // Pass 1: every noise/day_cap/duplicate drop across the FULL scanned set,
-  // not just the limit:100 slice the site reads for any single view —
-  // otherwise an item dropped only because it fell outside that slice would
-  // look like a noise/dedupe drop when it isn't one.
+  // Pass 1: every noise/day_cap/duplicate/telco_no_network_angle drop
+  // across the FULL scanned set, not just the limit:100 slice the site
+  // reads for any single view — otherwise an item dropped only because it
+  // fell outside that slice would look like a noise/dedupe drop when it
+  // isn't one.
   const allArticles = selectArticles(rows, {
     limit: Number.MAX_SAFE_INTEGER,
     now,
@@ -131,10 +177,15 @@ export function buildReviewDump(report, { now = Date.now(), branch = null, commi
 
   const sections = {};
   for (const slug of Object.keys(PUBLIC_CATEGORIES)) {
-    const sectionArticles = selectArticles(rows, { category: slug, limit: 100, now });
+    // event_cap (max 1 event piece per section page) only triggers once a
+    // `category` is passed in, so this per-section call (with onDrop) is
+    // also what surfaces it in the dump.
+    const sectionArticles = selectArticles(rows, { category: slug, limit: 100, now, onDrop: recordDrop });
     const { fresh, older } = splitByFreshness(sectionArticles, { now });
     sections[slug] = { fresh: fresh.map(toOutputItem), older: older.map(toOutputItem) };
   }
+
+  const navVisibility = computeNavVisibility(allArticles, { now });
 
   return {
     header: {
@@ -153,15 +204,17 @@ export function buildReviewDump(report, { now = Date.now(), branch = null, commi
       },
     },
     homepage: {
-      lead: homepage.lead ? toOutputItem(homepage.lead) : null,
-      recent: homepage.recent.map(toOutputItem),
+      lead: homepage.lead ? toHomepageOutputItem(homepage.lead) : null,
+      leadReason: describeLeadReason(homepage.lead),
+      recent: homepage.recent.map(toHomepageOutputItem),
       columns: Object.fromEntries(
-        Object.entries(homepage.columns).map(([slug, items]) => [slug, items.map(toOutputItem)]),
+        Object.entries(homepage.columns).map(([slug, items]) => [slug, items.map(toHomepageOutputItem)]),
       ),
     },
     sections,
     dropped,
-    perSource: buildPerSourceReport(report, homepage),
+    perSource: buildPerSourceReport(report, homepage, dropped),
+    navVisibility,
   };
 }
 
@@ -185,8 +238,9 @@ async function main() {
   const branch = process.env.GIT_BRANCH || (await gitRevParse(["--abbrev-ref", "HEAD"]));
   const commit = process.argv[3] || process.env.GIT_COMMIT || (await gitRevParse(["HEAD"]));
   try {
-    const report = await scanMarket({ sources: SOURCES });
-    const dump = buildReviewDump(report, { now: Date.now(), branch, commit });
+    const scanDrops = [];
+    const report = await scanMarket({ sources: SOURCES, onDrop: (item, reason) => scanDrops.push({ item, reason }) });
+    const dump = buildReviewDump(report, { now: Date.now(), branch, commit, scanDrops });
     writeFileSync(outPath, `${JSON.stringify(dump, null, 2)}\n`);
     process.stdout.write(`Wrote ${outPath}\n`);
   } catch (error) {

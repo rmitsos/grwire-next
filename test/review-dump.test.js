@@ -191,3 +191,42 @@ test("buildReviewDump: output items carry title/source/url/publishedAt/sections/
   assert.deepEqual(fibreItem.source, { id: "ppc-press", name: "ΔΕΗ – Δελτία Τύπου (μηνιαία σελίδα)" });
   assert.match(fibreItem.publishedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:00$/);
 });
+
+// --- round-4 additions -------------------------------------------------------
+
+test("buildReviewDump: homepage items (only) carry homepageBackfill, and leadReason explains the chosen lead", () => {
+  const dump = buildReviewDump(REPORT, { now: NOW });
+  const homepageItems = [dump.homepage.lead, ...dump.homepage.recent, ...Object.values(dump.homepage.columns).flat()].filter(Boolean);
+  for (const item of homepageItems) assert.equal(typeof item.homepageBackfill, "boolean");
+  assert.ok(dump.homepage.leadReason, "expected a leadReason for the chosen lead");
+  assert.equal(dump.homepage.leadReason.sourceId, dump.homepage.lead.source.id);
+  assert.equal(typeof dump.homepage.leadReason.hasFigureOrDecisionSignal, "boolean");
+});
+
+test("buildReviewDump: scanDrops (scanMarket's onDrop, for items that never reached report.items) are merged into dropped", () => {
+  const fakeScanDrop = {
+    item: { title: "Ανακοίνωση ΡΑΑΕΥ χωρίς κατηγορία", url: "https://raaey.test/dropped-at-scan", sourceId: "raaey-energy-announcements" },
+    reason: { stage: "no_category" },
+  };
+  const dump = buildReviewDump(REPORT, { now: NOW, scanDrops: [fakeScanDrop] });
+  const drop = dump.dropped.find((d) => d.url === "https://raaey.test/dropped-at-scan");
+  assert.ok(drop, "expected the scanMarket-level drop to appear in the dump");
+  assert.equal(drop.reason.stage, "no_category");
+  assert.equal(drop.sourceId, "raaey-energy-announcements");
+});
+
+test("buildReviewDump: navVisibility reports tenders/regulators shown/hidden with counts", () => {
+  const dump = buildReviewDump(REPORT, { now: NOW });
+  assert.equal(typeof dump.navVisibility.tenders.shown, "boolean");
+  assert.equal(typeof dump.navVisibility.regulators.shown, "boolean");
+  assert.equal(typeof dump.navVisibility.tenders.count, "number");
+});
+
+test("buildReviewDump: perSource carries a droppedByStage breakdown (keyed by reason.stage)", () => {
+  const dump = buildReviewDump(REPORT, { now: NOW });
+  const byId = Object.fromEntries(dump.perSource.map((s) => [s.id, s]));
+  assert.equal(byId["test-daycap-src"].droppedByStage.day_cap, 1);
+  const ppcDrop = dump.dropped.find((d) => d.url === "https://ppcgroup.com/sponsorship");
+  assert.equal(ppcDrop.reason.group, "ppc_non_network");
+  assert.equal(byId["ppc-press"].droppedByStage[ppcDrop.reason.stage], 1);
+});

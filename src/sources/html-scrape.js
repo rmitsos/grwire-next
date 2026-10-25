@@ -102,8 +102,10 @@ export function buildMonthUrls(source, now = Date.now()) {
 
 // Interprets a dd.mm.yyyy date as Europe/Athens midnight and returns it as
 // an ISO instant, accounting for EET/EEST without a timezone-database
-// dependency (Intl already knows the Europe/Athens offset).
-function athensDateToIso(dd, mm, yyyy) {
+// dependency (Intl already knows the Europe/Athens offset). Exported so
+// other adapters with their own date formats (see ggtt.js) can reuse the
+// Athens-offset logic instead of duplicating it.
+export function athensDateToIso(dd, mm, yyyy) {
   const year = Number(yyyy);
   const month = Number(mm);
   const day = Number(dd);

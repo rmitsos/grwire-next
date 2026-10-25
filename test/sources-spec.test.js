@@ -160,9 +160,18 @@ test("sourceForcedCategories is a no-op for other sources", () => {
 });
 
 test("sourceForcedCategories is not forced for a ΔΕΗ release matching neither the drop nor the keep list", () => {
-  const unrelated = { sourceId: "ppc-press", title: "Η ΔΕΗ στην 90η ΔΕΘ χωρίς άλλο αντικείμενο", summary: "" };
+  const unrelated = { sourceId: "ppc-press", title: "Η ΔΕΗ χωρίς άλλο αντικείμενο", summary: "" };
   assert.equal(noiseRejectReason(unrelated), null);
   assert.deepEqual(sourceForcedCategories(unrelated), []);
+});
+
+// round-4 owner answer: ΔΕΘ (Thessaloniki International Fair) appearances
+// are dropped entirely for ppc-press, not merely homepage-suppressed like a
+// generic event piece elsewhere.
+test('a ΔΕΗ "90η ΔΕΘ" release is dropped as ppc_non_network, not kept as an event piece', () => {
+  const deth = { sourceId: "ppc-press", title: "Η ΔΕΗ στην 90η ΔΕΘ με νέα προϊόντα και υπηρεσίες", summary: "" };
+  assert.deepEqual(noiseRejectReason(deth), { group: "ppc_non_network", term: null });
+  assert.deepEqual(sourceForcedCategories(deth), []);
 });
 
 // Real titles from the last scan (sources-spec.md round-3 owner answers).
@@ -564,12 +573,13 @@ test("resolveGoogleNewsItems resolves at most 20 Google items per scan, flagging
 
 // --- 6. Off-topic drops ------------------------------------------------------
 
-test("NOISE_HARD_REJECT matches the spec's four in-scope term groups", () => {
+test("NOISE_HARD_REJECT matches the spec's in-scope term groups, plus round-4's stock_market group", () => {
   assert.deepEqual(NOISE_HARD_REJECT, {
     consumer_tech: ["review", "unboxing", "κινητο* τηλεφων*", "smartwatch", "gaming", "προσφορ* καταστηματ*"],
-    market_wraps: ["χρηματιστηρι* κλεισιμο", "γενικοσ δεικτησ", "μερισμα", "περιθωρι* τραπεζ*"],
+    market_wraps: ["χρηματιστηρι* κλεισιμο", "γενικοσ δεικτησ", "μερισμα", "μερισματ*", "περιθωρι* τραπεζ*"],
     off_topic: ["ακινητ*", "ενοικι*", "τουρισμ*", "ξενοδοχει*", "κρουαζιερ*", "αθλητ*", "γηπεδ*", "ποδοσφαιρ*", "τηλεοπτικ* προγραμμα"],
     marketing: ["διαφημιστικ* καμπανια*", "βραβει*"],
+    stock_market: ["τιμη στοχο*", "τιμησ στοχου", "target price", "ιδιες μετοχεσ", "ιδιων μετοχων"],
   });
 });
 
@@ -615,7 +625,9 @@ for (const { title, rejected } of POLITICAL_QUOTE_CASES) {
 
 const NOISE_CASES = [
   { title: "Μέρισμα 0,50 ευρώ ανακοίνωσε η Alpha Bank", rejected: true },
-  { title: "Μέρισμα από τον ΟΤΕ", rejected: false },
+  // round-4 owner answer: the old "μερισμα (unless sector org)" exception is
+  // removed — ANY dividend mention is noise now, ΟΤΕ included.
+  { title: "Μέρισμα από τον ΟΤΕ", rejected: true },
   { title: "Μέρισμα 0,30 ευρώ δεν θα καταβληθεί ποτέ στους μετόχους", rejected: true },
   { title: "Novartis μέρισμα στους μετόχους", rejected: true },
   { title: "Χρηματιστήριο: Κλείσιμο με άνοδο ο Γενικός Δείκτης", rejected: true },

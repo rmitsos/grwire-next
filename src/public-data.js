@@ -6,13 +6,20 @@ import { canonicalizeUrl } from "./sources/utils.js";
 import { isGoogleNewsUrl } from "./google-news.js";
 import { SOURCES } from "../config/sources.js";
 import {
+  BACKFILL_MAX_AGE_HOURS,
   DEFAULT_DAY_CAP_PER_SOURCE,
   DEFAULT_HOME_CAP_PER_SOURCE,
+  HOMEPAGE_BACKFILL_MIN_ITEMS,
   HOMEPAGE_MAX_ITEMS,
   SECTION_HOMEPAGE_CAPS,
+  SECTION_NAV_WINDOW_DAYS,
   SECTION_SHARE_CAP,
   athensDayKey,
+  hasFigureOrDecisionSignal,
+  hasTelecomNetworkAngle,
   homepageSectionOf,
+  isCyprusOnly,
+  isEventPiece,
   isFresh,
   noiseRejectReason,
   rulesOverrideCategory,
@@ -95,9 +102,42 @@ export function selectArticles(rows, { category, limit = 80, now = Date.now(), o
   });
   const dayCapped = applyDayCap(withoutNoise, { now, onDrop: (row) => onDrop?.(row, { stage: "day_cap" }) });
   const deduped = collapseDuplicateArticles(dayCapped, { onDrop: (row) => onDrop?.(row, { stage: "duplicate" }) });
-  let cleaned = deduped.map(reclassifyRow);
-  if (category) cleaned = cleaned.filter((row) => row.categories.includes(category));
+  let cleaned = deduped.map(reclassifyRow).flatMap((row) => dropTelcoWithoutNetworkAngle(row, onDrop));
+  if (category) {
+    cleaned = cleaned.filter((row) => row.categories.includes(category));
+    cleaned = enforceEventCapPerSection(cleaned, onDrop);
+  }
   return cleaned.slice(0, limit).map(toArticle);
+}
+
+// round-4 telco rule: telecom-fibre is only a valid category when the item
+// actually names a network/technology angle or operator (hasTelecomNetworkAngle)
+// — a "telecommunications company" story that never gets more specific than
+// that (e.g. a generic AI-tools piece from a telco, a consumer-gadget piece)
+// loses the telco category, and is dropped outright if it had no other one.
+function dropTelcoWithoutNetworkAngle(row, onDrop) {
+  if (!row.categories.includes("telco")) return [row];
+  if (hasTelecomNetworkAngle(`${row.title || ""} ${row.summary || ""}`)) return [row];
+  const categories = row.categories.filter((c) => c !== "telco");
+  if (!categories.length) {
+    onDrop?.(row, { stage: "telco_no_network_angle" });
+    return [];
+  }
+  return [{ ...row, categories }];
+}
+
+// round-4 event rule, section-page half: at most one event piece per
+// section page — keep the highest-scoring (ties: newest), drop the rest.
+function enforceEventCapPerSection(rows, onDrop) {
+  const eventRows = rows.filter((row) => isEventPiece(row.title));
+  if (eventRows.length <= 1) return rows;
+  const [keep] = [...eventRows].sort((a, b) =>
+    (b.score || 0) - (a.score || 0) || Date.parse(b.published_at || 0) - Date.parse(a.published_at || 0));
+  const dropUrls = new Set(eventRows.filter((row) => row !== keep).map((row) => row.canonical_url));
+  for (const row of rows) {
+    if (dropUrls.has(row.canonical_url)) onDrop?.(row, { stage: "event_cap" });
+  }
+  return rows.filter((row) => !dropUrls.has(row.canonical_url));
 }
 
 export async function getLatestArticles({ category, query, limit = 80 } = {}) {
@@ -136,6 +176,37 @@ export async function getHomepageData() {
   return { articles, story, ...buildHomepageSections(articles) };
 }
 
+// round-4 §7: /tenders and /regulators are hidden from nav/sitemap until
+// their section has >=3 items in the last SECTION_NAV_WINDOW_DAYS (30) days
+// — pure, so scripts/review-dump.js can compute the same thing from a
+// fresh (DB-less) scan. Pages still resolve either way; this only drives
+// whether links to them are shown.
+export function computeNavVisibility(articles = [], { now = Date.now() } = {}) {
+  const countInWindow = (slug) => articles.filter((article) =>
+    article.categories?.includes(slug) && isFresh(article, now, SECTION_NAV_WINDOW_DAYS * 24)).length;
+  const build = (slug) => {
+    const count = countInWindow(slug);
+    return { shown: count >= 3, count };
+  };
+  return { tenders: build("tenders"), regulators: build("regulators") };
+}
+
+/**
+ * DB-backed wrapper of computeNavVisibility; getLatestArticles already
+ * returns [] with no DATABASE_URL, so both links are hidden. A read failure
+ * is swallowed (hidden, not thrown): this runs in the shared public layout
+ * on every page, and a nav-visibility hiccup must not take the whole site
+ * down the way a real page-content read failure legitimately would.
+ */
+export async function getNavVisibility({ now = Date.now() } = {}) {
+  try {
+    const articles = await getLatestArticles({ limit: 300 });
+    return computeNavVisibility(articles, { now });
+  } catch {
+    return computeNavVisibility([], { now });
+  }
+}
+
 /**
  * Lays out the homepage without repeating an article across sections. Each
  * article is placed once: as the lead, in "recent", or in the column for its
@@ -144,7 +215,12 @@ export async function getHomepageData() {
  *
  * Also enforces, across lead + recent + columns together:
  *  - sources-spec.md §3 max_age_hours.news: only items published within the
- *    last 72h are homepage-eligible (items with no publishedAt never are).
+ *    last 72h are homepage-eligible (items with no publishedAt never are) —
+ *    EXCEPT round-4's backfill: when fewer than HOMEPAGE_BACKFILL_MIN_ITEMS
+ *    (12) items are <72h old, items up to BACKFILL_MAX_AGE_HOURS (7 days)
+ *    old fill the gap, highest-scoring first (ties: newest), marked
+ *    `homepageBackfill: true`. Backfill items still go through every other
+ *    rule/cap below.
  *  - §2 home_cap per source (default DEFAULT_HOME_CAP_PER_SOURCE).
  *  - §1 homepage_cap per spec section (SECTION_HOMEPAGE_CAPS, keyed by
  *    homepageSectionOf(article) — the article's primary *spec* section,
@@ -154,29 +230,71 @@ export async function getHomepageData() {
  *  - §5 homepage.max_items (20) total, across lead + recent + columns.
  *  - Google News items flagged metadata.sectionOnly (§2 "Google News
  *    handling") are excluded; section pages still list them.
+ *  - round-4 event rule: an event/conference piece (isEventPiece) never
+ *    appears on the homepage unless its title/summary also carries a figure
+ *    or decision word (hasFigureOrDecisionSignal) — and even then it can
+ *    never be the lead.
+ *  - round-4 Cyprus-only rule: an item about Cyprus with no Greece/Greek
+ *    mention (isCyprusOnly) never appears on the homepage.
  * Skipped items are never replaced with padding: a slot that runs out of
  * eligible articles is just left shorter than its usual capacity.
  */
 export function buildHomepageSections(articles = [], { now = Date.now(), onDrop } = {}) {
-  const { fresh } = splitByFreshness(articles, { now });
+  const { fresh, older } = splitByFreshness(articles, { now });
+  const backfillPool = fresh.length < HOMEPAGE_BACKFILL_MIN_ITEMS
+    ? older
+        .filter((article) => isFresh(article, now, BACKFILL_MAX_AGE_HOURS))
+        .sort((a, b) => (b.score || 0) - (a.score || 0) || Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0))
+        .map((article) => ({ ...article, homepageBackfill: true }))
+    : [];
 
   const shown = new Set();
   const perSourceCount = new Map();
   const perSpecSectionCount = new Map();
   let totalCount = 0;
 
-  const eligible = (article) => {
-    if (totalCount >= HOMEPAGE_MAX_ITEMS) { onDrop?.(article, { stage: "total_cap" }); return false; }
-    if (article.metadata?.sectionOnly) { onDrop?.(article, { stage: "section_only" }); return false; }
-    if (shown.has(canonicalizeUrl(article.url))) return false;
+  // round-4 item 8 fix: buildHomepageSections probes eligibility for the
+  // same not-yet-shown article across multiple passes (lead, recent,
+  // columns, backfill); only the first drop reason per (url, stage) is ever
+  // reported, so a home_cap (or any other) drop no longer appears twice for
+  // one article.
+  const reportedDropKeys = new Set();
+  const reportDrop = (article, reason) => {
+    if (!onDrop) return;
+    const key = `${canonicalizeUrl(article.url)}|${reason.stage}`;
+    if (reportedDropKeys.has(key)) return;
+    reportedDropKeys.add(key);
+    onDrop(article, reason);
+  };
+
+  // Pure (no onDrop side effect): used both by eligible() below and to scan
+  // for the best lead candidate without reporting a "drop" for every
+  // non-chosen candidate (they are still reconsidered for recent/columns).
+  const checkEligible = (article, { forLead = false } = {}) => {
+    if (totalCount >= HOMEPAGE_MAX_ITEMS) return { ok: false, stage: "total_cap" };
+    if (article.metadata?.sectionOnly) return { ok: false, stage: "section_only" };
+    if (isCyprusOnly(article)) return { ok: false, stage: "cyprus_only" };
+    if (isEventPiece(article.title)) {
+      if (forLead) return { ok: false, stage: "event_piece_lead" };
+      if (!hasFigureOrDecisionSignal(`${article.title || ""} ${article.summary || ""}`)) {
+        return { ok: false, stage: "event_piece" };
+      }
+    }
     const homeCap = SOURCE_BY_ID.get(article.sourceId)?.homeCap ?? DEFAULT_HOME_CAP_PER_SOURCE;
-    if ((perSourceCount.get(article.sourceId) || 0) >= homeCap) { onDrop?.(article, { stage: "home_cap" }); return false; }
+    if ((perSourceCount.get(article.sourceId) || 0) >= homeCap) return { ok: false, stage: "home_cap" };
     const specSection = homepageSectionOf(article);
     if (specSection) {
       const sectionCap = Math.min(SECTION_HOMEPAGE_CAPS[specSection] ?? Infinity, SECTION_SHARE_CAP);
-      if ((perSpecSectionCount.get(specSection) || 0) >= sectionCap) { onDrop?.(article, { stage: "section_cap", specSection }); return false; }
+      if ((perSpecSectionCount.get(specSection) || 0) >= sectionCap) {
+        return { ok: false, stage: "section_cap", specSection };
+      }
     }
-    return true;
+    return { ok: true };
+  };
+  const eligible = (article, options) => {
+    const result = checkEligible(article, options);
+    if (!result.ok) reportDrop(article, { stage: result.stage, ...(result.specSection ? { specSection: result.specSection } : {}) });
+    return result.ok;
   };
   const take = (article) => {
     shown.add(canonicalizeUrl(article.url));
@@ -187,9 +305,22 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop 
     return article;
   };
 
+  // round-4 lead rule: never an event piece (not even with a figure/decision
+  // word — forLead always rejects); prefer Tier 1/3 sources and items whose
+  // title/summary carries a figure or decision word; fresh items first,
+  // falling back to the backfill pool only when no fresh item is eligible.
   let lead = null;
-  for (const article of fresh) {
-    if (eligible(article)) { lead = take(article); break; }
+  const freshLeadCandidates = fresh.filter((article) => checkEligible(article, { forLead: true }).ok);
+  const leadCandidates = freshLeadCandidates.length
+    ? freshLeadCandidates
+    : backfillPool.filter((article) => checkEligible(article, { forLead: true }).ok);
+  if (leadCandidates.length) {
+    const [best] = [...leadCandidates].sort((a, b) => {
+      const preferenceDiff = leadPreferenceScore(b) - leadPreferenceScore(a);
+      if (preferenceDiff) return preferenceDiff;
+      return (b.score || 0) - (a.score || 0) || Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0);
+    });
+    lead = take(best);
   }
 
   const recent = [];
@@ -208,7 +339,27 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop 
     if (eligible(article)) columns[primaryCategory].push(take(article));
   }
 
+  // round-4 homepage backfill: only reached when fresh.length was below the
+  // 12-item floor, so every fresh article has already been offered a slot
+  // above; fill the remainder from the up-to-7-day-old backfill pool.
+  for (const article of backfillPool) {
+    if (totalCount >= HOMEPAGE_BACKFILL_MIN_ITEMS) break;
+    if (shown.has(canonicalizeUrl(article.url))) continue;
+    if (eligible(article)) recent.push(take(article));
+  }
+
   return { lead, recent, columns };
+}
+
+// round-4 lead-preference scoring: Tier 1/3 sources and a figure/decision
+// word in the title/summary make an item a better lead candidate, but never
+// override the hard caps/event/Cyprus rules in checkEligible above.
+function leadPreferenceScore(article) {
+  let score = 0;
+  const tier = SOURCE_BY_ID.get(article.sourceId)?.tier;
+  if (tier === 1 || tier === 3) score += 2;
+  if (hasFigureOrDecisionSignal(`${article.title || ""} ${article.summary || ""}`)) score += 1;
+  return score;
 }
 
 export async function getLatestStory() {
@@ -294,6 +445,7 @@ function reclassifyRow(row) {
     summary: row.summary,
     publishedAt: row.published_at,
     sourceId: row.source_id,
+    tier: SOURCE_BY_ID.get(row.source_id)?.tier,
     metadata: row.metadata || {},
   }], DEFAULT_WATCH_RULES);
   const categories = ranked?.relevance?.map((match) => match.category) || [];

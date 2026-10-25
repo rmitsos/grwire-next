@@ -118,7 +118,11 @@ export const SPEC_SECTION_KEYWORDS = Object.freeze({
 // watch-rules.js) so it runs through noiseRejectReason, which both
 // pipeline.js (scan) and public-data.js (read) already call upstream of any
 // forced-category routing — drop wins over keep for free.
-const PPC_SPONSORSHIP_EVENT_TERMS = ["χορηγ*", "φεστιβαλ*", "εκδηλωσ*", "we4all", "τουρνουα*", "basketball", "3x3"];
+// "δεθ" (ΔΕΘ, the Thessaloniki International Fair) is in this list too:
+// round-4 owner answer — "Η ΔΕΗ στην 90η ΔΕΘ ..." must be dropped entirely,
+// not merely homepage-suppressed like a generic event piece (see
+// isEventPiece below).
+const PPC_SPONSORSHIP_EVENT_TERMS = ["χορηγ*", "φεστιβαλ*", "εκδηλωσ*", "we4all", "τουρνουα*", "basketball", "3x3", "δεθ"];
 const PPC_RETAIL_SUBJECT_TERMS = ["τιμολογ*", "προγραμμα*", "προιον*", "τιμη*"];
 const PPC_RETAIL_AUDIENCE_TERMS = ["νοικοκυρι*", "οικιακ*", "φοιτητ*", "καταναλωτ*", "πελατ*"];
 
@@ -221,14 +225,23 @@ export function rulesOverrideCategory(article = {}) {
 // code, not match text, so they are not part of the term strings themselves.
 export const NOISE_HARD_REJECT = Object.freeze({
   consumer_tech: ["review", "unboxing", "κινητο* τηλεφων*", "smartwatch", "gaming", "προσφορ* καταστηματ*"],
-  market_wraps: ["χρηματιστηρι* κλεισιμο", "γενικοσ δεικτησ", "μερισμα", "περιθωρι* τραπεζ*"],
+  // round-4 owner answer: "μερισμα (unless sector org)" from the original
+  // spec is superseded — ANY dividend mention is noise now, sector org or
+  // not (see isStockRatingNoise/stock_market below for the rest of the
+  // stock-market noise this round adds).
+  market_wraps: ["χρηματιστηρι* κλεισιμο", "γενικοσ δεικτησ", "μερισμα", "μερισματ*", "περιθωρι* τραπεζ*"],
   off_topic: ["ακινητ*", "ενοικι*", "τουρισμ*", "ξενοδοχει*", "κρουαζιερ*", "αθλητ*", "γηπεδ*", "ποδοσφαιρ*", "τηλεοπτικ* προγραμμα"],
   marketing: ["διαφημιστικ* καμπανια*", "βραβει*"],
+  // round-4: broker-note noise (target price, buyback language). The rating
+  // combo (σύσταση + outperform/buy/neutral/overweight/underweight/hold, or
+  // those rating words with other broker context) needs co-occurrence logic,
+  // so it is handled by isStockRatingNoise() below instead of a plain term.
+  stock_market: ["τιμη στοχο*", "τιμησ στοχου", "target price", "ιδιες μετοχεσ", "ιδιων μετοχων"],
 });
 
 // organizations.js has no telecom/energy/infrastructure classification field,
-// so per the spec's fallback instruction this list is defined explicitly here
-// for the "μερισμα (unless sector org)" exception.
+// so per the spec's fallback instruction this list is defined explicitly here;
+// used by watch-rules.js' deals-companies rule (requiredEntities/bannedEntities).
 export const SECTOR_ORGANIZATIONS = Object.freeze([
   "ΟΤΕ", "OTE", "Cosmote", "Vodafone", "Nova", "United Fiber",
   "ΔΕΗ", "PPC", "ΑΔΜΗΕ", "IPTO", "ΔΕΔΔΗΕ", "HEDNO", "ΔΕΣΦΑ", "ΔΕΠΑ",
@@ -265,8 +278,19 @@ const TENDER_DEAL_HARD_NEWS_TERMS = [
 ];
 const EURO_AMOUNT_RE = /(€\s*\d|\d\s*€|\d[\d.,]*\s*(εκατ\.?\s*|δισ\.?\s*)?(ευρω|euro|eur\b))/;
 
-function mentionsSectorOrganization(text) {
-  return matchesAnyTerm(text, SECTOR_ORGANIZATIONS);
+// round-4 owner answer (sources-spec.md noise_hard_reject, superseding the
+// "μερισμα (unless sector org)" exception above): a broker rating only
+// counts as noise when it's a σύσταση paired with a rating word, or a
+// rating word next to other broker context — a bare "buy"/"hold" inside
+// unrelated English text must not be rejected.
+const STOCK_RATING_WORDS = ["outperform", "buy", "neutral", "overweight", "underweight", "hold"];
+const STOCK_RECOMMENDATION_TERMS = ["συστασ*"];
+const STOCK_BROKER_CONTEXT_TERMS = ["μεσιτικ*", "χρηματιστηριακ*", "αναλυτ*", "broker", "χρηματιστηρι*"];
+
+function isStockRatingNoise(text) {
+  if (!matchesAnyTerm(text, STOCK_RATING_WORDS)) return false;
+  if (matchesAnyTerm(text, STOCK_RECOMMENDATION_TERMS)) return true;
+  return matchesAnyTerm(text, STOCK_BROKER_CONTEXT_TERMS);
 }
 
 function hasEuroAmount(text) {
@@ -295,11 +319,11 @@ export function noiseRejectReason(item = {}) {
   for (const [group, terms] of Object.entries(NOISE_HARD_REJECT)) {
     for (const term of terms) {
       if (!matchesAnyTerm(text, [term])) continue;
-      if (group === "market_wraps" && term === "μερισμα" && mentionsSectorOrganization(text)) continue;
       if (group === "marketing" && term === "βραβει*" && matchesAnyTerm(text, CONTRACT_AWARD_TERMS)) continue;
       return { group, term };
     }
   }
+  if (isStockRatingNoise(text)) return { group: "stock_market", term: null };
   if (isPpcNonNetwork(item, text)) return { group: "ppc_non_network", term: null };
   if (isPoliticalQuoteWithNoDecision(text)) return { group: "political_quote_no_decision", term: null };
   return null;
@@ -327,4 +351,78 @@ export function splitByFreshness(articles = [], { now = Date.now(), maxAgeHours 
   const older = [];
   for (const article of articles) (isFresh(article, now, maxAgeHours) ? fresh : older).push(article);
   return { fresh, older };
+}
+
+// round-4: homepage backfill fills up to 12 total items with older-but-
+// still-relevant coverage (up to this many hours old) when fewer than 12
+// items are <72h old.
+export const BACKFILL_MAX_AGE_HOURS = 24 * 7;
+export const HOMEPAGE_BACKFILL_MIN_ITEMS = 12;
+
+// round-4: the §7 nav-visibility window ("hide /tenders and /regulators
+// until each has >=3 items") is a separate, wider window than the 72h
+// homepage freshness window or the unbounded section-page "older" list.
+export const SECTION_NAV_WINDOW_DAYS = 30;
+
+/** How many of `articles` (any shape with `publishedAt`) fall within SECTION_NAV_WINDOW_DAYS of `now`. */
+export function countWithinNavWindow(articles = [], { now = Date.now() } = {}) {
+  return articles.filter((article) => isFresh(article, now, SECTION_NAV_WINDOW_DAYS * 24)).length;
+}
+
+// round-4 event-piece rule: title matches (case/accent-insensitive, Greek
+// inflections handled by matchesAnyTerm's stemming).
+const EVENT_TERMS = ["summit", "συνεδρι*", "forum", "φορουμ*", "ημεριδ*", "εκδηλωσ*", "δεθ", "βραβευσ*"];
+
+/** Whether an article's title reads as an event/conference piece (sources-spec round-4 event rule). */
+export function isEventPiece(title = "") {
+  return matchesAnyTerm(title, EVENT_TERMS);
+}
+
+const POWER_UNIT_RE = /\d+[.,]?\d*\s*(mwh|mw|gw)\b/i;
+const DECISION_WORD_TERMS = ["αποφασ*", "συμβασ*", "διαγωνισμ*", "εγκρ*"];
+
+/** A figure (€ amount, MW/GW/MWh, νοικοκυριά count, a numbered γραμμή) or a decision word — the event-piece exception. */
+export function hasFigureOrDecisionSignal(text = "") {
+  if (hasEuroAmount(text)) return true;
+  if (POWER_UNIT_RE.test(normaliseText(text))) return true;
+  if (matchesAnyTerm(text, ["νοικοκυρι*"])) return true;
+  if (matchesAnyTerm(text, ["γραμμ*"]) && /\d/.test(normaliseText(text))) return true;
+  return matchesAnyTerm(text, DECISION_WORD_TERMS);
+}
+
+// round-4 Cyprus-only rule: a Cyprus mention with no Greece/Greek mention
+// anywhere means the item is about Cyprus only.
+const CYPRUS_TERMS = ["κυπρ*", "cyprus", "λευκωσι*", "cyta", "epic", "αηκ", "eac"];
+const GREECE_TERMS = ["ελλαδ*", "ελλην*", "greece", "greek"];
+
+/** sources-spec round-4: Cyprus-only items (no Greece/Greek mention) never appear on the homepage. */
+export function isCyprusOnly(article = {}) {
+  const text = `${article.title || ""} ${article.summary || ""}`;
+  return matchesAnyTerm(text, CYPRUS_TERMS) && !matchesAnyTerm(text, GREECE_TERMS);
+}
+
+// round-4 telecom-fibre network-angle requirement: an item may only carry
+// the telco category when title+summary actually name a network/technology
+// angle or a named operator — a company being "telecom" in name/sector
+// (e.g. matched only via the broader SPEC_SECTION_KEYWORDS/watch-rules.js
+// generic topic terms) is not enough on its own.
+const TELCO_NETWORK_ANGLE_TERMS = [
+  "δικτυ*", "οπτικ*", "ftth", "fttx", "fttb", "fttc", "5g", "φασμα*", "κεραι*", "παροχ*",
+  "εεττ", "καλωδι*", "υποθαλασσ*", "data center", "datacenter", "κεντρ* δεδομενων",
+  "δορυφορ*", "χαλκ*",
+  "οτε", "telekom", "cosmote", "vodafone", "nova", "united fiber", "united group",
+  "δεη fiber", "grid telecom",
+];
+
+/** Whether title+summary carry an actual telecom network/technology/operator angle (round-4 telco rule). */
+export function hasTelecomNetworkAngle(text = "") {
+  return matchesAnyTerm(text, TELCO_NETWORK_ANGLE_TERMS);
+}
+
+/** Whether `text` matches at least one §1 keyword for `section`, honouring its negative list (round-4 tier-1 topical routing). */
+export function specSectionKeywordMatch(text, section) {
+  const config = SPEC_SECTION_KEYWORDS[section];
+  if (!config) return false;
+  if (config.negative.some((term) => matchesAnyTerm(text, [term]))) return false;
+  return config.keywords.some((term) => matchesAnyTerm(text, [term]));
 }

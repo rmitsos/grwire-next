@@ -1,5 +1,5 @@
 import { stripTrailingSiteSuffix } from "./article-quality.js";
-import { matchesAnyTerm, SECTOR_ORGANIZATIONS } from "./feed-rules.js";
+import { matchesAnyTerm, specSectionKeywordMatch, SECTOR_ORGANIZATIONS } from "./feed-rules.js";
 
 function normalise(value = "") {
   return String(value ?? "")
@@ -243,21 +243,62 @@ export function scoreItem(item, rawRule) {
 const PPC_NETWORK_BUSINESS_TERMS = ["δικτυ*", "υποσταθμ*", "διασυνδεσ*", "απε", "αποθηκευσ*", "επενδυσ*", "εργ*", "αποτελεσματ*", "εξαγορ*"];
 const PPC_FIBRE_TERMS = ["fiber", "fibre", "ftth", "οπτικ* ιν*", "δεη fiber"];
 
-export function sourceForcedCategories(item = {}) {
-  if (item.sourceId !== "ppc-press") return [];
+// sources-spec.md §2.1 Tier 1 (regulators/government): every item from a
+// tier-1 source automatically carries regulators-policy, plus a topical
+// section when that section's §1 keywords match (specSectionKeywordMatch).
+// This is also the fix for the root cause described in the round-4 brief:
+// ΡΑΑΕΥ/ΓΓΤΤ items pass inspectArticle but match no DEFAULT_WATCH_RULES rule,
+// so without a forced match rankItems' `.filter((item) => item.relevance.length)`
+// silently drops them.
+const TIER1_TOPICAL_SECTIONS = Object.freeze({
+  telco: "telecom-fibre",
+  energy: "energy-grids",
+  infrastructure: "infrastructure-works",
+  deals: "deals-companies",
+});
+
+function tier1ForcedCategories(item) {
+  if (item.tier !== 1) return [];
   const text = `${item.title || ""} ${item.summary || ""}`;
-  const isFibre = matchesAnyTerm(text, PPC_FIBRE_TERMS);
-  const isNetworkOrBusiness = isFibre || matchesAnyTerm(text, PPC_NETWORK_BUSINESS_TERMS);
-  if (!isNetworkOrBusiness) return [];
+  // Scored below every DEFAULT_WATCH_RULES threshold (all 4) so that when a
+  // tier-1 item also earns a real rule match (or the topical forced match
+  // below), that one — not this always-present tag — becomes categories[0]
+  // (the homepage column/primary section). Still > 0, so a tier-1 item that
+  // matches nothing else is no longer invisible (score 0 == dropped).
   const forced = [{
-    ruleId: "ppc-press-source-routing", label: "ΔΕΗ press releases", category: "energy",
-    score: 20, accepted: true, reasons: ["source-level routing: ΔΕΗ network/business release"],
+    ruleId: "tier1-regulators-routing", label: "Tier-1 regulator/government source", category: "regulators",
+    score: 3, accepted: true, reasons: ["tier-1 source: automatic regulators-policy routing"],
   }];
-  if (isFibre) {
-    forced.push({
-      ruleId: "ppc-press-source-routing-fibre", label: "ΔΕΗ Fiber", category: "telco",
-      score: 15, accepted: true, reasons: ["source-level routing: ΔΕΗ Fiber/FTTH mention"],
-    });
+  for (const [category, section] of Object.entries(TIER1_TOPICAL_SECTIONS)) {
+    if (specSectionKeywordMatch(text, section)) {
+      forced.push({
+        ruleId: "tier1-topical-routing", label: "Tier-1 topical section match", category,
+        score: 16, accepted: true, reasons: [`tier-1 source: ${section} keyword match`],
+      });
+      break;
+    }
+  }
+  return forced;
+}
+
+export function sourceForcedCategories(item = {}) {
+  const forced = [...tier1ForcedCategories(item)];
+  if (item.sourceId === "ppc-press") {
+    const text = `${item.title || ""} ${item.summary || ""}`;
+    const isFibre = matchesAnyTerm(text, PPC_FIBRE_TERMS);
+    const isNetworkOrBusiness = isFibre || matchesAnyTerm(text, PPC_NETWORK_BUSINESS_TERMS);
+    if (isNetworkOrBusiness) {
+      forced.push({
+        ruleId: "ppc-press-source-routing", label: "ΔΕΗ press releases", category: "energy",
+        score: 20, accepted: true, reasons: ["source-level routing: ΔΕΗ network/business release"],
+      });
+      if (isFibre) {
+        forced.push({
+          ruleId: "ppc-press-source-routing-fibre", label: "ΔΕΗ Fiber", category: "telco",
+          score: 15, accepted: true, reasons: ["source-level routing: ΔΕΗ Fiber/FTTH mention"],
+        });
+      }
+    }
   }
   return forced;
 }

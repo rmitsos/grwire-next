@@ -1,5 +1,6 @@
 import { LANDING_ROUTES } from "../landing/routes.js";
 import { listInsights, insightPath, insightsIndexPath } from "../insights/content.js";
+import { getNavVisibility } from "../public-data.js";
 
 // Pure (no fs): takes already-parsed insight lists so draft-exclusion logic can be unit-tested
 // with synthetic fixtures. An index is only indexed/sitemapped while at least one of its listed
@@ -46,9 +47,18 @@ export function buildInsightSitemapEntries(base, elInsights, enInsights) {
   return [...indexEntries, ...articleEntries];
 }
 
-export default function sitemap() {
+export default async function sitemap() {
   const base = process.env.NEXT_PUBLIC_SITE_URL || "https://grwire.com";
-  const pages = ["", "/deals", "/telco", "/energy", "/infrastructure", "/tenders", "/regulators", "/search"].map((path) => ({
+  // sources-spec.md round-4 §7: /tenders and /regulators are excluded from
+  // the sitemap until their section has >=3 items in the last 30 days (the
+  // pages still resolve, they're just not advertised). Tenders stays
+  // before Regulators among the two, per the nav order.
+  const navVisibility = await getNavVisibility();
+  const paths = ["", "/deals", "/telco", "/energy", "/infrastructure"];
+  if (navVisibility.tenders.shown) paths.push("/tenders");
+  if (navVisibility.regulators.shown) paths.push("/regulators");
+  paths.push("/search");
+  const pages = paths.map((path) => ({
     url: `${base}${path}`,
     changeFrequency: "daily",
     priority: path ? 0.8 : 1,

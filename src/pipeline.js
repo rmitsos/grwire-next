@@ -21,6 +21,13 @@ export async function scanMarket({
   maxRelevantItems = 150,
   maxPerSource = 12,
   now = Date.now(),
+  // Optional per-item drop-reason callback, purely additive (no behaviour
+  // change when omitted): `onDrop(item, { stage, ... })` for every stage an
+  // item can fail — noise, relevance_rejected, no_category, day_cap,
+  // run_cap, link_invalid, max_relevant. Used by scripts/review-dump.js so
+  // sources with no DEFAULT_WATCH_RULES match (ΡΑΑΕΥ/ΥΠΕΝ/ΓΓΤΤ) show why
+  // each item was dropped instead of silently disappearing.
+  onDrop,
 }) {
   if (!Array.isArray(sources) || !sources.length) throw new TypeError("At least one source is required");
   const outcomes = [];
@@ -62,7 +69,7 @@ export async function scanMarket({
       // published so links keep working on hosts that require them.
       const canonical = canonicalizeUrl(item.url);
       if (!byUrl.has(canonical)) {
-        byUrl.set(canonical, { ...item, sourceId: source.id || source.url, url: cleanUrl(item.url), originalUrl: item.url });
+        byUrl.set(canonical, { ...item, sourceId: source.id || source.url, tier: source.tier, url: cleanUrl(item.url), originalUrl: item.url });
       }
     }
   }
@@ -103,6 +110,7 @@ export async function scanMarket({
     const reason = noiseRejectReason(item);
     if (!reason) return true;
     noiseRejectedBySource.set(item.sourceId, (noiseRejectedBySource.get(item.sourceId) || 0) + 1);
+    onDrop?.(item, { stage: "noise", ...reason });
     return false;
   });
 
@@ -111,7 +119,11 @@ export async function scanMarket({
   // sources-spec.md §2.2 ppc-press source-level routing (watch-rules.js
   // sourceForcedCategories) guarantees a category regardless of the generic
   // relevance gate, so those items must not be dropped here either.
-  const candidates = inspected.filter((item) => item.validation.accepted || sourceForcedCategories(item).length > 0);
+  const candidates = inspected.filter((item) => {
+    if (item.validation.accepted || sourceForcedCategories(item).length > 0) return true;
+    onDrop?.(item, { stage: "relevance_rejected" });
+    return false;
+  });
 
   if (validateLinks && candidates.length) {
     const candidatesToCheck = candidates
@@ -130,21 +142,37 @@ export async function scanMarket({
 
   const finalCandidates = candidates.filter((item) => {
     if (!validateLinks) return true;
-    return ["reachable", "syntax-valid", "not-checked"].includes(item.validation.url.status);
+    if (["reachable", "syntax-valid", "not-checked"].includes(item.validation.url.status)) return true;
+    onDrop?.(item, { stage: "link_invalid" });
+    return false;
   });
   // Fresh market coverage must reach storage before older, higher-scoring
   // evergreen items. Keep relevance as the tie-breaker within the same news
   // cycle so the homepage and daily story do not stagnate on old coverage.
   const rankedAll = rankItems(finalCandidates, rules);
+  if (onDrop) {
+    const rankedUrls = new Set(rankedAll.map((item) => item.url));
+    for (const item of finalCandidates) {
+      if (!rankedUrls.has(item.url)) onDrop(item, { stage: "no_category" });
+    }
+  }
   const dayCappedBySource = new Map();
   const perSourceCapped = capPerSource(rankedAll, {
     sources: activeSources,
     maxPerSource,
     now,
-    onDayCapDrop: (item) => dayCappedBySource.set(item.sourceId, (dayCappedBySource.get(item.sourceId) || 0) + 1),
+    onDayCapDrop: (item) => {
+      dayCappedBySource.set(item.sourceId, (dayCappedBySource.get(item.sourceId) || 0) + 1);
+      onDrop?.(item, { stage: "day_cap" });
+    },
+    onRunCapDrop: (item) => onDrop?.(item, { stage: "run_cap" }),
   });
-  let ranked = perSourceCapped
-    .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0) || b.score - a.score)
+  const sortedCapped = perSourceCapped
+    .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0) || b.score - a.score);
+  if (onDrop) {
+    for (const item of sortedCapped.slice(maxRelevantItems)) onDrop(item, { stage: "max_relevant" });
+  }
+  let ranked = sortedCapped
     .slice(0, maxRelevantItems)
     .map((item) => {
       const source = activeSources.find((candidate) => candidate.id === item.sourceId);
@@ -206,7 +234,7 @@ export async function scanMarket({
 // Athens calendar day (items with no publishedAt count toward the scan
 // day), then the existing maxPerSource/maxItems limit as an overall
 // per-run ceiling. Both keep each source's highest-ranked items.
-function capPerSource(items, { sources = [], maxPerSource = 12, now = Date.now(), onDayCapDrop } = {}) {
+function capPerSource(items, { sources = [], maxPerSource = 12, now = Date.now(), onDayCapDrop, onRunCapDrop } = {}) {
   const dayCapBySource = new Map();
   const runLimitBySource = new Map();
   for (const source of sources) {
@@ -231,7 +259,7 @@ function capPerSource(items, { sources = [], maxPerSource = 12, now = Date.now()
   for (const item of afterDayCap) {
     const limit = runLimitBySource.get(item.sourceId) ?? maxPerSource;
     const count = runCounts.get(item.sourceId) || 0;
-    if (count >= limit) continue;
+    if (count >= limit) { onRunCapDrop?.(item); continue; }
     runCounts.set(item.sourceId, count + 1);
     kept.push(item);
   }
