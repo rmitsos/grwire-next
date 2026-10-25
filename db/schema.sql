@@ -156,3 +156,26 @@ SELECT
 FROM relationship_evidence
 WHERE visibility = 'public'
   AND kind <> 'professional_note';
+
+-- Newsletter subscribers (double opt-in). Applied lazily by
+-- src/newsletter/store.js#ensureSubscriberSchema, not by ensureDatabase() above,
+-- so it is not created on every ingest run.
+CREATE TABLE IF NOT EXISTS subscribers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'unsubscribed')),
+  lang TEXT NOT NULL DEFAULT 'el' CHECK (lang IN ('el', 'en')),
+  consent_text_version TEXT NOT NULL,
+  consented_at TIMESTAMPTZ NOT NULL,
+  source_page TEXT,
+  confirm_token_hash TEXT,
+  confirm_sent_at TIMESTAMPTZ,
+  confirmed_at TIMESTAMPTZ,
+  unsubscribe_token_hash TEXT UNIQUE,
+  unsubscribed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS subscribers_email_idx ON subscribers (email);
+CREATE INDEX IF NOT EXISTS subscribers_status_created_idx ON subscribers (status, created_at);

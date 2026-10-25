@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Added
+- Newsletter sign-up backend (Phase 3 of plan.md): a `subscribers` table with double opt-in, GDPR
+  consent (timestamp, consent-text version, page and language recorded per signup), and a honeypot
+  field against bot sign-ups. New `src/newsletter/` module: `store.js` (lazy, idempotent schema —
+  not part of `ensureDatabase()`, so it isn't created by every ingest run), `tokens.js` (random
+  tokens, stored only as sha256 hashes), `provider.js` (a minimal Resend client plus
+  `assertTrackingDisabled()` to verify open/click tracking is off before any bulk send), `config.js`
+  (`getNewsletterConfig()`; the feature is disabled with no DB or provider calls unless
+  `RESEND_API_KEY`, `NEWSLETTER_FROM`, `NEWSLETTER_SITE_URL` and `DATABASE_URL` are all set), and
+  `service.js` (subscribe/confirm/unsubscribe logic, List-Unsubscribe / List-Unsubscribe-Post
+  headers per RFC 8058).
+- New routes `POST /api/newsletter/subscribe` (JSON or form, 303 redirect for form posts), `GET
+  /api/newsletter/confirm` (double opt-in confirmation link, 7-day expiry) and `GET`/`POST
+  /api/newsletter/unsubscribe` (one-click unsubscribe; `GET` only redirects to a confirmation page,
+  since mail scanners prefetch links and must never trigger an unsubscribe).
+
 ### Changed
 - Articles are now deduplicated by a canonical URL (lowercase host, no `www.`, no tracking
   parameters, no `/amp` suffix) and by a Greek-accent- and inflection-tolerant title comparison, so
