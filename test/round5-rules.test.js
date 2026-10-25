@@ -304,6 +304,19 @@ test("noiseRejectReason: heating subsidy (επίδομα) and fuel-price roundup
   assert.equal(noiseRejectReason({ title: "Οι τιμές καυσίμων ανέβηκαν αυτή την εβδομάδα" })?.group, "consumer_fuel");
 });
 
+test("noiseRejectReason: consumer_fuel matches the TITLE only, not the summary", () => {
+  const priceIndex = {
+    title: "Άνοδος 5,6% στις τιμές οικοδομικών υλικών τον Σεπτέμβριο του 2026",
+    summary: "Ο δείκτης τιμών οικοδομικών υλικών κατέγραψε άνοδο, με τα τσιμέντα, τον σίδηρο και το πετρέλαιο κίνησης μεταξύ των συνιστωσών που συνέβαλαν στην αύξηση.",
+  };
+  assert.equal(noiseRejectReason(priceIndex), null);
+
+  const headlineFuel = {
+    title: "Μείωση 40 λεπτά στο πετρέλαιο θέρμανσης, 20 λεπτά στο diesel κίνησης",
+  };
+  assert.equal(noiseRejectReason(headlineFuel)?.group, "consumer_fuel");
+});
+
 test("noiseRejectReason: marine-park/environment-only drops (no grid/works angle)", () => {
   const reason = noiseRejectReason({ title: "Η Ελλάδα προχωρά στην προστασία των θαλασσών της – στο ΣτΕ τα θαλάσσια πάρκα" });
   assert.ok(reason);

@@ -354,6 +354,16 @@ function isEnvironmentOnlyNoise(text) {
   return matchesAnyTerm(text, ENVIRONMENT_ONLY_TERMS) && !matchesAnyTerm(text, GRID_WORKS_TERMS);
 }
 
+// round-5 follow-up: consumer_fuel measures are identified by the HEADLINE,
+// not the summary — a price-index story (e.g. construction materials) whose
+// summary merely lists diesel/heating oil among its components is sector
+// news, not a fuel-price piece, so this group is checked title-only (same
+// co-occurrence-helper shape as isEnvironmentOnlyNoise/isStockRatingNoise
+// above) instead of going through the title+summary loop below.
+function consumerFuelNoiseTerm(title) {
+  return NOISE_HARD_REJECT.consumer_fuel.find((term) => matchesAnyTerm(title, [term])) || null;
+}
+
 /**
  * Returns `{ group, term }` for the first noise_hard_reject term matched in
  * `item.title` + `item.summary`, or for the rules-based
@@ -361,14 +371,18 @@ function isEnvironmentOnlyNoise(text) {
  * through.
  */
 export function noiseRejectReason(item = {}) {
-  const text = `${item.title || ""} ${item.summary || ""}`;
+  const title = item.title || "";
+  const text = `${title} ${item.summary || ""}`;
   for (const [group, terms] of Object.entries(NOISE_HARD_REJECT)) {
+    if (group === "consumer_fuel") continue;
     for (const term of terms) {
       if (!matchesAnyTerm(text, [term])) continue;
       if (group === "marketing" && term === "βραβει*" && matchesAnyTerm(text, CONTRACT_AWARD_TERMS)) continue;
       return { group, term };
     }
   }
+  const consumerFuelTerm = consumerFuelNoiseTerm(title);
+  if (consumerFuelTerm) return { group: "consumer_fuel", term: consumerFuelTerm };
   if (isStockRatingNoise(text)) return { group: "stock_market", term: null };
   if (isPpcNonNetwork(item, text)) return { group: "ppc_non_network", term: null };
   if (isPoliticalQuoteWithNoDecision(text)) return { group: "political_quote_no_decision", term: null };
