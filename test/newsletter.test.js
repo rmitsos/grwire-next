@@ -147,7 +147,7 @@ test("subscribe: repeat subscription of an already-confirmed address sends nothi
   await service.subscribe({ email: "repeat@example.com", lang: "el", consent: true });
   const confirmToken = extractToken(provider.sent[0].text, "token");
   const confirmResult = await service.confirm(confirmToken);
-  assert.deepEqual(confirmResult, { ok: true });
+  assert.deepEqual(confirmResult, { ok: true, lang: "el" });
   assert.equal(store.rows.get("repeat@example.com").status, "confirmed");
 
   const secondResult = await service.subscribe({ email: "repeat@example.com", lang: "el", consent: true });
@@ -160,8 +160,18 @@ test("confirm: valid token confirms the row", async () => {
   await service.subscribe({ email: "valid@example.com", lang: "el", consent: true });
   const token = extractToken(provider.sent[0].text, "token");
   const result = await service.confirm(token);
-  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(result, { ok: true, lang: "el" });
   assert.equal(store.rows.get("valid@example.com").status, "confirmed");
+});
+
+test("confirm: valid token for an EN subscriber reports lang back", async () => {
+  const { store, provider, service } = setup();
+  await service.subscribe({ email: "valid-en@example.com", lang: "en", consent: true });
+  const token = extractToken(provider.sent[0].text, "token");
+  assert.match(provider.sent[0].text, /&lang=en/);
+  const result = await service.confirm(token);
+  assert.deepEqual(result, { ok: true, lang: "en" });
+  assert.equal(store.rows.get("valid-en@example.com").status, "confirmed");
 });
 
 test("confirm: expired token is rejected", async () => {
@@ -223,10 +233,10 @@ test("sendToSubscriber refuses to send to a non-confirmed subscriber", async () 
   );
 });
 
-test("sendToSubscriber sends to a confirmed subscriber with unsubscribe headers and link", async () => {
+test("sendToSubscriber sends to an EL confirmed subscriber: API url in the header, page url in the body", async () => {
   const { provider, service } = setup();
   await service.sendToSubscriber({
-    subscriber: { email: "confirmed@example.com", status: "confirmed" },
+    subscriber: { email: "confirmed@example.com", status: "confirmed", lang: "el" },
     unsubscribeToken: "weekly-tok",
     subject: "Weekly",
     html: "<p>hi</p>",
@@ -236,11 +246,31 @@ test("sendToSubscriber sends to a confirmed subscriber with unsubscribe headers 
   const message = provider.sent[0];
   assert.equal(message.to, "confirmed@example.com");
   assert.deepEqual(message.headers, {
-    "List-Unsubscribe": "<https://www.grwire.com/unsubscribe?token=weekly-tok>",
+    "List-Unsubscribe": "<https://www.grwire.com/api/newsletter/unsubscribe?token=weekly-tok>",
     "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
   });
-  assert.match(message.html, /unsubscribe\?token=weekly-tok/);
-  assert.match(message.text, /unsubscribe\?token=weekly-tok/);
+  assert.match(message.html, /href="https:\/\/www\.grwire\.com\/unsubscribe\?token=weekly-tok"/);
+  assert.match(message.html, />Διαγραφή</);
+  assert.match(message.text, /Διαγραφή: https:\/\/www\.grwire\.com\/unsubscribe\?token=weekly-tok/);
+});
+
+test("sendToSubscriber sends to an EN confirmed subscriber: /en/unsubscribe page link, English label", async () => {
+  const { provider, service } = setup();
+  await service.sendToSubscriber({
+    subscriber: { email: "confirmed-en@example.com", status: "confirmed", lang: "en" },
+    unsubscribeToken: "weekly-tok-en",
+    subject: "Weekly",
+    html: "<p>hi</p>",
+    text: "hi",
+  });
+  const message = provider.sent[0];
+  assert.deepEqual(message.headers, {
+    "List-Unsubscribe": "<https://www.grwire.com/api/newsletter/unsubscribe?token=weekly-tok-en>",
+    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+  });
+  assert.match(message.html, /href="https:\/\/www\.grwire\.com\/en\/unsubscribe\?token=weekly-tok-en"/);
+  assert.match(message.html, />Unsubscribe</);
+  assert.match(message.text, /Unsubscribe: https:\/\/www\.grwire\.com\/en\/unsubscribe\?token=weekly-tok-en/);
 });
 
 test("tokens: hashesMatch is constant-time-safe and correct", () => {
@@ -361,4 +391,53 @@ test("subscribe route: returns 503 and never touches the DB when config is missi
       else process.env[key] = previous[key];
     }
   }
+});
+
+test("confirm route: config missing redirects to the EL or EN subscribe page by ?lang=, never touches the DB", async () => {
+  const keys = ["RESEND_API_KEY", "NEWSLETTER_FROM", "NEWSLETTER_SITE_URL", "DATABASE_URL"];
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  for (const key of keys) delete process.env[key];
+
+  try {
+    const { GET } = await import("../src/app/api/newsletter/confirm/route.js");
+
+    const elResponse = await GET(new Request("https://www.grwire.com/api/newsletter/confirm?token=abc"));
+    assert.equal(elResponse.status, 303);
+    assert.equal(elResponse.headers.get("location"), "https://www.grwire.com/subscribe?status=unavailable");
+
+    const enResponse = await GET(new Request("https://www.grwire.com/api/newsletter/confirm?token=abc&lang=en"));
+    assert.equal(enResponse.status, 303);
+    assert.equal(enResponse.headers.get("location"), "https://www.grwire.com/en/subscribe?status=unavailable");
+  } finally {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+  }
+});
+
+test("unsubscribe route GET: never unsubscribes, redirects to the human page preserving the token and lang", async () => {
+  const { GET } = await import("../src/app/api/newsletter/unsubscribe/route.js");
+
+  const el = await GET(new Request("https://www.grwire.com/api/newsletter/unsubscribe?token=abc"));
+  assert.equal(el.status, 303);
+  assert.equal(el.headers.get("location"), "https://www.grwire.com/unsubscribe?token=abc");
+
+  const en = await GET(new Request("https://www.grwire.com/api/newsletter/unsubscribe?token=abc&lang=en"));
+  assert.equal(en.status, 303);
+  assert.equal(en.headers.get("location"), "https://www.grwire.com/en/unsubscribe?token=abc");
+});
+
+test("unsubscribe route: distinguishes an RFC 8058 one-click POST from a browser form POST", async () => {
+  const { isOneClickUnsubscribe, unsubscribeRedirectPath } = await import("../src/app/api/newsletter/unsubscribe/route.js");
+
+  assert.equal(isOneClickUnsubscribe("List-Unsubscribe=One-Click"), true);
+  assert.equal(isOneClickUnsubscribe(" List-Unsubscribe=One-Click \n"), true);
+  assert.equal(isOneClickUnsubscribe("lang=el"), false);
+  assert.equal(isOneClickUnsubscribe("lang=en"), false);
+  assert.equal(isOneClickUnsubscribe(""), false);
+
+  assert.equal(unsubscribeRedirectPath("lang=el"), "/unsubscribe");
+  assert.equal(unsubscribeRedirectPath("lang=en"), "/en/unsubscribe");
+  assert.equal(unsubscribeRedirectPath(""), "/unsubscribe");
 });

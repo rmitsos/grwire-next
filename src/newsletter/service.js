@@ -56,7 +56,10 @@ function confirmationEmail(lang, confirmUrl) {
 // deps: { store, provider, siteUrl, now, randomToken }
 export function createNewsletterService({ store, provider, siteUrl, now, randomToken }) {
   async function sendConfirmationEmail({ email, lang, confirmToken }) {
-    const confirmUrl = `${siteUrl}/api/newsletter/confirm?token=${encodeURIComponent(confirmToken)}`;
+    // lang=en lets /api/newsletter/confirm localize its redirect even when the token turns out
+    // to be invalid or expired, when a DB lookup can no longer tell us the subscriber's language.
+    const langParam = lang === "en" ? "&lang=en" : "";
+    const confirmUrl = `${siteUrl}/api/newsletter/confirm?token=${encodeURIComponent(confirmToken)}${langParam}`;
     const { subject, html, text } = confirmationEmail(lang, confirmUrl);
     await provider.send({ to: email, subject, html, text });
   }
@@ -97,7 +100,7 @@ export function createNewsletterService({ store, provider, siteUrl, now, randomT
   async function confirm(token) {
     if (typeof token !== "string" || !token) return { ok: false, error: "invalid-or-expired" };
     const row = await store.confirmByTokenHash(hashToken(token), { maxAgeDays: 7 });
-    return row ? { ok: true } : { ok: false, error: "invalid-or-expired" };
+    return row ? { ok: true, lang: row.lang } : { ok: false, error: "invalid-or-expired" };
   }
 
   async function unsubscribe(token) {
@@ -112,13 +115,19 @@ export function createNewsletterService({ store, provider, siteUrl, now, randomT
     if (subscriber.status !== "confirmed") {
       throw new Error("Cannot send to a subscriber who has not confirmed");
     }
-    const unsubscribeUrl = `${siteUrl}/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`;
-    const headers = buildListUnsubscribeHeaders(unsubscribeUrl);
+    // RFC 8058 requires the List-Unsubscribe target to accept a POST, so the header points at
+    // the API route. The visible link in the email body points at the human-readable page instead
+    // (it only accepts a button click there, not a bare POST from a mail client).
+    const apiUnsubscribeUrl = `${siteUrl}/api/newsletter/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`;
+    const isEn = subscriber.lang === "en";
+    const pageUnsubscribeUrl = `${siteUrl}${isEn ? "/en/unsubscribe" : "/unsubscribe"}?token=${encodeURIComponent(unsubscribeToken)}`;
+    const label = isEn ? "Unsubscribe" : "Διαγραφή";
+    const headers = buildListUnsubscribeHeaders(apiUnsubscribeUrl);
     return provider.send({
       to: subscriber.email,
       subject,
-      html: `${html}<p><a href="${unsubscribeUrl}">Unsubscribe</a></p>`,
-      text: `${text}\n\nUnsubscribe: ${unsubscribeUrl}`,
+      html: `${html}<p><a href="${pageUnsubscribeUrl}">${label}</a></p>`,
+      text: `${text}\n\n${label}: ${pageUnsubscribeUrl}`,
       headers,
     });
   }

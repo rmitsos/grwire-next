@@ -15,14 +15,23 @@ export async function POST(request) {
       : Response.json({ ok: false, error: "unavailable" }, { status: 503 });
   }
 
-  const runtime = createNewsletterRuntime();
-  const result = await runtime.service.subscribe({
-    email: data.email,
-    lang: data.lang,
-    consent: data.consent,
-    website: data.website,
-    sourcePage: data.sourcePage,
-  });
+  let result;
+  try {
+    const runtime = createNewsletterRuntime();
+    result = await runtime.service.subscribe({
+      email: data.email,
+      lang: data.lang,
+      consent: data.consent,
+      website: data.website,
+      sourcePage: data.sourcePage,
+    });
+  } catch (error) {
+    // Never log the email or any config value, only the error message.
+    console.error(`newsletter subscribe failed: ${error.message}`);
+    return isForm
+      ? redirectToSubscribe(request, "error", lang)
+      : Response.json({ ok: false, error: "error" }, { status: 500 });
+  }
 
   if (isForm) {
     return redirectToSubscribe(request, result.ok ? result.status : result.error, lang);
@@ -41,9 +50,9 @@ async function parseBody(request) {
 }
 
 function redirectToSubscribe(request, status, lang) {
-  const url = new URL("/subscribe", request.url);
+  const path = lang === "en" ? "/en/subscribe" : "/subscribe";
+  const url = new URL(path, request.url);
   url.searchParams.set("status", status);
-  url.searchParams.set("lang", lang);
   url.hash = "subscribe";
   return Response.redirect(url, 303);
 }

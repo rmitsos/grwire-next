@@ -3,6 +3,28 @@
 ## Unreleased
 
 ### Added
+- Bilingual subscribe/landing page (EL default at `/subscribe`, EN at `/en/subscribe`), plus
+  `/subscribe/confirmed`, `/unsubscribe` and `/privacy` (and their `/en/...` equivalents). Built
+  from `landing-copy.md`/`subscribe-flow.md`/`mockup.html`: hero, first-series teaser (telecom
+  launch focus), "what you get", a real-data sample section (latest telco/energy/infrastructure
+  article per section, via `getLatestArticles`, hidden entirely if there's no DB or no results —
+  no invented figures), "how we work", a second CTA and footer. Both subscribe forms are plain
+  HTML (`email`, a required `consent` checkbox, hidden `lang`/`sourcePage`, and an invisible
+  honeypot field) and work without JS; the `?status=` banner is a small client component inside
+  `<Suspense>` so the pages themselves stay static/ISR (`revalidate = 3600`).
+- `src/landing/`: `copy.js` (centralised EL/EN strings — the GDPR consent paragraph is imported
+  from `src/newsletter/service.js` rather than duplicated, so the displayed text can never drift
+  from what `CONSENT_TEXT_VERSION` records as shown), `routes.js` (EL/EN route map), `metadata.js`
+  (`buildLandingMetadata()`: canonical URL, `hreflang` alternates incl. `x-default`, Open Graph/
+  Twitter), and `fonts.js` (JetBrains Mono / Source Sans 3 / Source Serif 4 via `next/font/google`,
+  Greek + Latin subsets). New `src/app/landing.css`, loaded only by the landing layouts — the
+  existing site styles are untouched.
+- The app now has three root layouts via route groups, so each gets the right `<html lang>`:
+  `src/app/(site)/layout.js` (`lang="en"`, unchanged — the existing site, moved as-is from
+  `src/app/layout.js`), `src/app/(landing-el)/layout.js` (`lang="el"`) and
+  `src/app/(landing-en)/layout.js` (`lang="en"`). `src/app/global-not-found.js` plus
+  `experimental.globalNotFound` in `next.config.mjs` handle 404s for URLs that match none of the
+  three groups, since there's no longer a single top-level layout to compose one from.
 - Newsletter sign-up backend (Phase 3 of plan.md): a `subscribers` table with double opt-in, GDPR
   consent (timestamp, consent-text version, page and language recorded per signup), and a honeypot
   field against bot sign-ups. New `src/newsletter/` module: `store.js` (lazy, idempotent schema —
@@ -19,6 +41,21 @@
   since mail scanners prefetch links and must never trigger an unsubscribe).
 
 ### Changed
+- Newsletter routes are now language-aware end to end: `POST /api/newsletter/subscribe` redirects
+  to `/en/subscribe` or `/subscribe` by `lang` (no longer leaks `lang` into the query string) and
+  now wraps the service call in try/catch (`newsletter subscribe failed: <message>` only, never
+  the email or config); `GET /api/newsletter/confirm` redirects EN subscribers to
+  `/en/subscribe/confirmed` (`store.confirmByTokenHash`/`service.confirm` now return the
+  subscriber's `lang`), and localizes a failed/expired-token redirect via a `lang=en` hint carried
+  in the confirmation link itself. `service.sendToSubscriber` now sends two different unsubscribe
+  URLs: the `List-Unsubscribe`/`List-Unsubscribe-Post` headers point at the API route (RFC 8058
+  requires it to accept POST), while the visible link in the email body points at the human
+  `/unsubscribe` (or `/en/unsubscribe`) page, labelled "Διαγραφή"/"Unsubscribe" per subscriber
+  language.
+- `POST /api/newsletter/unsubscribe` now tells apart an RFC 8058 one-click POST (body is exactly
+  `List-Unsubscribe=One-Click`, response stays `200 "Unsubscribed"`) from a plain browser form post
+  from the new `/unsubscribe` page (body `lang=el`/`lang=en`, response is now a `303` to
+  `/unsubscribe?status=done` or `/en/unsubscribe?status=done`).
 - Articles are now deduplicated by a canonical URL (lowercase host, no `www.`, no tracking
   parameters, no `/amp` suffix) and by a Greek-accent- and inflection-tolerant title comparison, so
   the same story arriving via a tracked RSS link and a clean link, or with and without a trailing
