@@ -7,6 +7,7 @@ import { SubscribeForm } from "@/components/landing/SubscribeForm";
 import { StatusBanner } from "@/components/landing/StatusBanner";
 import { TelecomIcon, TRUST_ICONS } from "@/components/landing/icons";
 import { getLatestArticles } from "@/public-data";
+import { insightPath } from "@/insights/content";
 
 // Launch focus is telecom-fibre (landing-copy.md), so the sample cards show one latest article
 // per section the spec calls out, not every public category.
@@ -68,6 +69,11 @@ export async function SubscribePage({ lang }) {
                 <StatusBanner lang={lang} />
               </Suspense>
               <SubscribeForm lang={lang} sourcePage={sourcePage} idSuffix="hero" />
+              <p className="from-li">
+                {copy.hero.fromLinkedIn.before}
+                <a href={insightPath("fibre-switch", lang)}>{copy.hero.fromLinkedIn.link}</a>
+                {copy.hero.fromLinkedIn.after}
+              </p>
             </div>
             <aside className="teaser" aria-label={copy.series.title}>
               <span className="chip" style={{ "--c": "var(--sec-telecom-fibre)", border: 0, padding: 0 }}>

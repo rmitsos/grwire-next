@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArticleList, dateLabel } from "@/components/ArticleList";
 import { DailyStory } from "@/components/DailyStory";
 import { getHomepageData, PUBLIC_CATEGORIES } from "@/public-data";
+import { getInsight, insightPath, insightsIndexPath } from "@/insights/content";
 
 // Served from the cache and rebuilt at most once an hour, or straight after an
 // ingest (see /api/ingest). Rendering per request kept Neon awake around the clock.
@@ -9,6 +10,8 @@ export const revalidate = 3600;
 
 export default async function PublicHomepage() {
   const data = await getHomepageData();
+  // Reads a markdown file, not the DB, so it still renders when the DB is empty/unavailable.
+  const insight = getInsight("fibre-switch", "en");
 
   return (
     <main className="public-main">
@@ -32,6 +35,22 @@ export default async function PublicHomepage() {
       ) : (
         <section className="lead-story empty-lead">
           <div><span className="section-label">SYSTEM READY</span><h2>Your public wire is waiting for its first scan.</h2><p>Open Private Intelligence and select “Scan now” after the database is connected.</p></div>
+        </section>
+      )}
+
+      {insight && (
+        <section className="insight-promo">
+          <div>
+            <span className="section-label">INSIGHT</span>
+            <h2>{insight.title}</h2>
+            {insight.standfirst.map((line, index) => (
+              <p key={index}>{line}</p>
+            ))}
+            <div className="insight-promo-links">
+              <Link href={insightPath(insight.slug, "en")}>Read the analysis →</Link>
+              <Link href={insightsIndexPath("en")}>All insights →</Link>
+            </div>
+          </div>
         </section>
       )}
 

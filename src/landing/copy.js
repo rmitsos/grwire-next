@@ -62,6 +62,8 @@ export const LANDING_COPY = {
       lead: "Ένα email κάθε εβδομάδα με τα σημαντικά της αγοράς, τις αποφάσεις των ρυθμιστών και τους μεγάλους διαγωνισμούς. Κάθε αριθμός έχει πηγή και ημερομηνία.",
       teaserSoon: "Σύντομα",
       teaserNote: "Η πρώτη σειρά του GR Wire ξεκινά σύντομα.",
+      // landing-copy.md, "Context line for LinkedIn arrivals" — verbatim, split around the link text.
+      fromLinkedIn: { before: "Ήρθατε από μια ανάρτηση στο LinkedIn; Η πλήρης ανάλυση βρίσκεται ", link: "εδώ →", after: "." },
     },
     subscribeForm: {
       fieldLabel: "Το email σας",
@@ -159,6 +161,8 @@ export const LANDING_COPY = {
       lead: "One email a week with the main market news, regulator decisions and large tenders. Every figure carries its source and date.",
       teaserSoon: "Coming soon",
       teaserNote: "GR Wire's first series starts soon.",
+      // landing-copy.md, "Context line for LinkedIn arrivals" — verbatim, split around the link text.
+      fromLinkedIn: { before: "Came from a LinkedIn post? The full analysis is ", link: "here →", after: "." },
     },
     subscribeForm: {
       fieldLabel: "Your email",

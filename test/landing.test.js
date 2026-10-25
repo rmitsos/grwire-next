@@ -4,7 +4,7 @@ import { buildLandingMetadata, siteBase } from "../src/landing/metadata.js";
 import { LANDING_COPY, NAV_SECTIONS } from "../src/landing/copy.js";
 import { LANDING_ROUTES, otherLang } from "../src/landing/routes.js";
 
-const FORBIDDEN_SUBSTRINGS = ["/insights", "/tenders", "/regulators", "hello@grwire.com"];
+const FORBIDDEN_SUBSTRINGS = ["/tenders", "/regulators", "hello@grwire.com"];
 
 test("buildLandingMetadata: EL canonical, hreflang alternates (incl. x-default), og locale", () => {
   const base = siteBase();
@@ -119,7 +119,7 @@ test("LANDING_COPY: lang field matches each language's own key", () => {
   assert.equal(LANDING_COPY.en.lang, "en");
 });
 
-test("Landing copy and routes never reference /insights, /tenders, /regulators or hello@grwire.com", () => {
+test("Landing copy and routes never reference /tenders, /regulators or hello@grwire.com", () => {
   const serialized = JSON.stringify({ LANDING_COPY, NAV_SECTIONS, LANDING_ROUTES });
   for (const forbidden of FORBIDDEN_SUBSTRINGS) {
     assert.ok(!serialized.includes(forbidden), `found forbidden reference: ${forbidden}`);
