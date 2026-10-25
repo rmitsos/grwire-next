@@ -48,6 +48,8 @@
   `/finance` routes respectively.
 
 ### Fixed
+- `ot-gr`'s limit is lowered from 60 to 30: ot.gr's nginx/WAF returns HTTP 403 on WordPress REST
+  requests with `per_page >= 40`.
 - Rows already stored in the database keep their old `?utm_source=...` canonical URLs until a
   follow-up migration recomputes them; only newly ingested articles use the cleaned-up URL. The
   cleaned-up URL now keeps `www.` (existing rows already have it), so new and old rows for the

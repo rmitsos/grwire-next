@@ -192,7 +192,9 @@ export const SOURCES = [
     url: "https://www.ot.gr",
     categories: [7, 21, 294, 295],
     lookbackDays: 7,
-    limit: 60,
+    // ot.gr's nginx/WAF returns 403 on WP REST requests with per_page >= 40;
+    // per_page 30 is verified 200. Keep limit <= 30.
+    limit: 30,
   },
   {
     // Disabled per sources-spec.md §8 (verified 25 Oct 2026): this query

@@ -386,6 +386,12 @@ test("ot-gr source config switches to the WordPress REST endpoint with excerpts"
   assert.ok(Array.isArray(otGr.categories) && otGr.categories.length > 0, "expected a non-empty categories list");
 });
 
+test("ot-gr source config keeps limit <= 30 to avoid ot.gr's WAF 403 on per_page >= 40", () => {
+  const otGr = SOURCES.find((source) => source.id === "ot-gr");
+  assert.ok(otGr, "expected a source with id 'ot-gr'");
+  assert.ok(otGr.limit <= 30, `expected ot-gr limit <= 30, got ${otGr.limit}`);
+});
+
 test("energypress source config is enabled and uses the working /rss feed", () => {
   const energypress = SOURCES.find((source) => source.id === "energypress");
   assert.ok(energypress, "expected an 'energypress' source");
