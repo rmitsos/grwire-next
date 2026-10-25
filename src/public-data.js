@@ -17,8 +17,11 @@ import {
   athensDayKey,
   hasFigureOrDecisionSignal,
   hasTelecomNetworkAngle,
+  hasTier1ActionWord,
   homepageSectionOf,
+  isAgendaItem,
   isCyprusOnly,
+  isDealsEligible,
   isEventPiece,
   isFresh,
   noiseRejectReason,
@@ -102,7 +105,9 @@ export function selectArticles(rows, { category, limit = 80, now = Date.now(), o
   });
   const dayCapped = applyDayCap(withoutNoise, { now, onDrop: (row) => onDrop?.(row, { stage: "day_cap" }) });
   const deduped = collapseDuplicateArticles(dayCapped, { onDrop: (row) => onDrop?.(row, { stage: "duplicate" }) });
-  let cleaned = deduped.map(reclassifyRow).flatMap((row) => dropTelcoWithoutNetworkAngle(row, onDrop));
+  let cleaned = deduped.map(reclassifyRow)
+    .flatMap((row) => dropTelcoWithoutNetworkAngle(row, onDrop))
+    .flatMap((row) => dropDealsWithoutCompany(row, onDrop));
   if (category) {
     cleaned = cleaned.filter((row) => row.categories.includes(category));
     cleaned = enforceEventCapPerSection(cleaned, onDrop);
@@ -121,6 +126,25 @@ function dropTelcoWithoutNetworkAngle(row, onDrop) {
   const categories = row.categories.filter((c) => c !== "telco");
   if (!categories.length) {
     onDrop?.(row, { stage: "telco_no_network_angle" });
+    return [];
+  }
+  return [{ ...row, categories }];
+}
+
+// round-5 deals-companies gating: an item may carry "deals" only when
+// isDealsEligible holds (a sector company name is enough on its own; the
+// narrower exception is "αποτελέσματα" with no other deal word, which needs
+// the company specifically in the title) — both the DEFAULT_WATCH_RULES
+// deals-companies rule and tier-1 topical routing can assign the category
+// before this gate runs, so it is enforced once here regardless of origin.
+// If "deals" was the only category, the item is dropped entirely
+// (deals_no_company); otherwise its other categories are kept.
+function dropDealsWithoutCompany(row, onDrop) {
+  if (!row.categories.includes("deals")) return [row];
+  if (isDealsEligible(row)) return [row];
+  const categories = row.categories.filter((c) => c !== "deals");
+  if (!categories.length) {
+    onDrop?.(row, { stage: "deals_no_company" });
     return [];
   }
   return [{ ...row, categories }];
@@ -279,6 +303,13 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop 
     if (totalCount >= HOMEPAGE_MAX_ITEMS) return { ok: false, stage: "total_cap" };
     if (article.metadata?.sectionOnly) return { ok: false, stage: "section_only" };
     if (isCyprusOnly(article)) return { ok: false, stage: "cyprus_only" };
+    // round-5: agenda items (any tier) are checked before the tier-1
+    // action-word gate below — agenda overrides a tier-1 action word per
+    // feed-rules.js isAgendaItem, so its "agenda_item" reason must win over
+    // "tier1_no_action" when both would otherwise apply.
+    if (isAgendaItem(article.title)) return { ok: false, stage: "agenda_item" };
+    const tier = SOURCE_BY_ID.get(article.sourceId)?.tier;
+    if (tier === 1 && !hasTier1ActionWord(article.title)) return { ok: false, stage: "tier1_no_action" };
     if (isEventPiece(article.title)) {
       if (forLead) return { ok: false, stage: "event_piece_lead" };
       if (!hasFigureOrDecisionSignal(`${article.title || ""} ${article.summary || ""}`)) {
@@ -462,9 +493,17 @@ function reclassifyRow(row) {
   // article gets the "tenders"/"regulators" category — promoted to primary
   // (categories[0]) when it qualifies, keeping the rest of the categories.
   const override = rulesOverrideCategory({ title: row.title, summary: row.summary, categories });
+  let finalCategories = override ? [override, ...categories.filter((category) => category !== override)] : categories;
+  // round-5 agenda rule: applies to every tier, not just the tier-1 forced
+  // routing above, so an agenda item from a source with no regulators-policy
+  // match otherwise (e.g. a plain operator press release that reads as a
+  // ministerial-style diary piece) still always lists on /regulators.
+  if (isAgendaItem(row.title) && !finalCategories.includes("regulators")) {
+    finalCategories = [...finalCategories, "regulators"];
+  }
   return {
     ...row,
-    categories: override ? [override, ...categories.filter((category) => category !== override)] : categories,
+    categories: finalCategories,
     relevance: ranked?.relevance || [],
     score: ranked?.score || 0,
   };

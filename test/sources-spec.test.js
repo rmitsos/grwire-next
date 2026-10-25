@@ -573,13 +573,14 @@ test("resolveGoogleNewsItems resolves at most 20 Google items per scan, flagging
 
 // --- 6. Off-topic drops ------------------------------------------------------
 
-test("NOISE_HARD_REJECT matches the spec's in-scope term groups, plus round-4's stock_market group", () => {
+test("NOISE_HARD_REJECT matches the spec's in-scope term groups, plus round-4's stock_market and round-5's consumer_fuel groups", () => {
   assert.deepEqual(NOISE_HARD_REJECT, {
     consumer_tech: ["review", "unboxing", "κινητο* τηλεφων*", "smartwatch", "gaming", "προσφορ* καταστηματ*"],
     market_wraps: ["χρηματιστηρι* κλεισιμο", "γενικοσ δεικτησ", "μερισμα", "μερισματ*", "περιθωρι* τραπεζ*"],
     off_topic: ["ακινητ*", "ενοικι*", "τουρισμ*", "ξενοδοχει*", "κρουαζιερ*", "αθλητ*", "γηπεδ*", "ποδοσφαιρ*", "τηλεοπτικ* προγραμμα"],
     marketing: ["διαφημιστικ* καμπανια*", "βραβει*"],
     stock_market: ["τιμη στοχο*", "τιμησ στοχου", "target price", "ιδιες μετοχεσ", "ιδιων μετοχων"],
+    consumer_fuel: ["πετρελαιο θερμανσησ", "πετρελαιο κινησησ", "diesel κινησησ", "επιδομα*", "τιμες καυσιμων", "τιμη καυσιμων"],
   });
 });
 

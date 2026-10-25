@@ -1,5 +1,8 @@
 import { stripTrailingSiteSuffix } from "./article-quality.js";
-import { matchesAnyTerm, specSectionKeywordMatch, SECTOR_ORGANIZATIONS } from "./feed-rules.js";
+import {
+  matchesAnyTerm, specSectionKeywordMatch, SECTOR_ORGANIZATIONS,
+  hasTier1ActionWord, agendaScoreCap,
+} from "./feed-rules.js";
 
 function normalise(value = "") {
   return String(value ?? "")
@@ -310,10 +313,17 @@ export function rankItems(items, rules) {
       const forcedMatches = sourceForcedCategories(item)
         .filter((forced) => !ruleMatches.some((match) => match.category === forced.category));
       const matches = [...ruleMatches, ...forcedMatches];
+      let score = Math.max(0, ...matches.map((match) => match.score));
+      // round-5 tier-1 action-word bonus/agenda-item cap (decisions.md): the
+      // bonus only applies to tier-1 sources; the cap applies to an agenda
+      // item from any tier and always wins (see feed-rules.js isAgendaItem
+      // for the one exception, already baked into agendaScoreCap).
+      if (item.tier === 1 && hasTier1ActionWord(item.title)) score += 10;
+      score = agendaScoreCap(score, item.title);
       return {
         ...item,
         relevance: matches.sort((a, b) => b.score - a.score),
-        score: Math.max(0, ...matches.map((match) => match.score)),
+        score,
       };
     })
     .filter((item) => item.relevance.length)

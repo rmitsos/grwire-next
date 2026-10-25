@@ -237,6 +237,10 @@ export const NOISE_HARD_REJECT = Object.freeze({
   // those rating words with other broker context) needs co-occurrence logic,
   // so it is handled by isStockRatingNoise() below instead of a plain term.
   stock_market: ["τιμη στοχο*", "τιμησ στοχου", "target price", "ιδιες μετοχεσ", "ιδιων μετοχων"],
+  // round-5: consumer fuel/heating-price measures (heating/diesel fuel,
+  // the heating/other subsidy, retail fuel-price roundups) are household
+  // cost-of-living noise, not sector news.
+  consumer_fuel: ["πετρελαιο θερμανσησ", "πετρελαιο κινησησ", "diesel κινησησ", "επιδομα*", "τιμες καυσιμων", "τιμη καυσιμων"],
 });
 
 // organizations.js has no telecom/energy/infrastructure classification field,
@@ -247,6 +251,36 @@ export const SECTOR_ORGANIZATIONS = Object.freeze([
   "ΔΕΗ", "PPC", "ΑΔΜΗΕ", "IPTO", "ΔΕΔΔΗΕ", "HEDNO", "ΔΕΣΦΑ", "ΔΕΠΑ",
   "Grid Telecom", "Intracom", "ΓΕΚ ΤΕΡΝΑ", "GEK TERNA", "Aktor", "AKTOR", "Metlen",
 ]);
+
+// round-5 deals-companies gating (decisions.md): an item may carry the
+// "deals" category only when title+summary name a sector company (reusing
+// SECTOR_ORGANIZATIONS, whole-word matched via matchesAnyTerm) — a sector
+// company with no deal language at all is still a deals story (e.g. a
+// company's new investment). "αποτελέσματα" ("results") is the one signal
+// that isn't enough on its own: when it's the *only* deals-ish term present
+// (no other DEALS_WORD_TERMS alongside it), the company must specifically
+// be in the title, not just the summary, to count. This is the fix for the
+// ΕΕΤΤ/BEREC "Αποτελέσματα της ... Συνεδρίασης" false positive: no company
+// is named at all, so it never qualifies regardless of this narrower rule.
+// Applied as a single post-hoc gate in public-data.js
+// (dropDealsWithoutCompany), regardless of whether "deals" came from the
+// DEFAULT_WATCH_RULES rule or tier-1 topical routing, so both paths are
+// tightened the same way.
+const DEALS_WORD_TERMS = ["εξαγορ*", "συγχωνευσ*", "κοινοπραξ*", "πωλησ*", "αυξηση κεφαλαιου", "αυξησης κεφαλαιου", "ομολογ*"];
+const DEALS_RESULTS_TERMS = ["αποτελεσματ*"];
+
+export function hasSectorCompanyMention(text = "") {
+  return matchesAnyTerm(text, SECTOR_ORGANIZATIONS);
+}
+
+export function isDealsEligible(article = {}) {
+  const title = article.title || "";
+  const text = `${title} ${article.summary || ""}`;
+  if (!hasSectorCompanyMention(text)) return false;
+  const resultsOnly = matchesAnyTerm(text, DEALS_RESULTS_TERMS) && !matchesAnyTerm(text, DEALS_WORD_TERMS);
+  if (resultsOnly) return hasSectorCompanyMention(title);
+  return true;
+}
 
 // §5 noise_hard_reject.marketing: "βραβει* (unless contract)" — an award
 // claim only survives the reject when contract-award language is present.
@@ -308,6 +342,18 @@ function isPoliticalQuoteWithNoDecision(text) {
   return true;
 }
 
+// round-5: marine-park/environment-only items are noise UNLESS the text also
+// carries a grid/works angle — a θαλάσσιο πάρκο story about an ΑΔΜΗΕ/ΔΕΔΔΗΕ
+// cable, substation or other works is sector news, not an environment-only
+// piece, so the exclusion term list is checked the same way as
+// isPpcNonNetwork/isStockRatingNoise above (co-occurrence, not a plain term).
+const ENVIRONMENT_ONLY_TERMS = ["θαλασσι* παρκ*", "προστασια των θαλασσων", "προστασια τησ θαλασσασ"];
+const GRID_WORKS_TERMS = ["δικτυ*", "διασυνδεσ*", "καλωδι*", "αδμηε", "δεδδηε", "εργ*", "υποσταθμ*"];
+
+function isEnvironmentOnlyNoise(text) {
+  return matchesAnyTerm(text, ENVIRONMENT_ONLY_TERMS) && !matchesAnyTerm(text, GRID_WORKS_TERMS);
+}
+
 /**
  * Returns `{ group, term }` for the first noise_hard_reject term matched in
  * `item.title` + `item.summary`, or for the rules-based
@@ -326,6 +372,7 @@ export function noiseRejectReason(item = {}) {
   if (isStockRatingNoise(text)) return { group: "stock_market", term: null };
   if (isPpcNonNetwork(item, text)) return { group: "ppc_non_network", term: null };
   if (isPoliticalQuoteWithNoDecision(text)) return { group: "political_quote_no_decision", term: null };
+  if (isEnvironmentOnlyNoise(text)) return { group: "environment_only", term: null };
   return null;
 }
 
@@ -470,4 +517,90 @@ export function specSectionKeywordMatch(text, section) {
   if (!config) return false;
   if (config.negative.some((term) => matchesAnyTerm(text, [term]))) return false;
   return config.keywords.some((term) => matchesAnyTerm(text, [term]));
+}
+
+// round-5 tier-1 action-word rule (decisions.md): a tier-1 (regulator/
+// government) item is only homepage-eligible when its TITLE carries a
+// genuine regulatory/administrative action word — tier-1 sources also post
+// a lot of agenda/diary content (visits, greetings, speeches) that reads as
+// news but is not actually a decision/consultation/tender. Action-word
+// tier-1 items also get a +10 score bonus (applied in watch-rules.js
+// rankItems, the single place the final per-item score is computed) so they
+// out-rank routine tier-1 coverage for lead choice and backfill ordering.
+const TIER1_ACTION_WORD_TERMS = [
+  "διαβουλευσ*", "αποφασ*", "νομοσχεδι*", "ρυθμισ*", "κανονισμ*", "προσκλησ*",
+  "προκηρυξ*", "διαγωνισμ*", "εγκρισ*", "αδειοδοτησ*",
+  "προγραμμα αναπτυξησ", "προγραμματος αναπτυξησ", "σχεδιο αναπτυξησ", "σχεδιου αναπτυξησ",
+  "φασμα*", "δημοπρασι*", "εκχωρησ*",
+];
+
+export function hasTier1ActionWord(title = "") {
+  return matchesAnyTerm(title, TIER1_ACTION_WORD_TERMS);
+}
+
+// Allows exactly one leading modifier word before the action-word phrase
+// itself, so "Δημόσια Διαβούλευση …" (the formal name of a public
+// consultation) still counts as "starting with" the "διαβουλευσ*" phrase,
+// matching the spec's own example.
+const STARTS_WITH_MAX_LEADING_WORDS = 1;
+
+/** Anchored variant of matchesAnyTerm: true only when `text` STARTS WITH one of `terms` (allowing one leading word). */
+function startsWithAnyTerm(text, terms = []) {
+  const tokens = tokenize(normaliseText(text));
+  return terms.some((term) => {
+    const words = normaliseText(term).split(" ").filter(Boolean);
+    if (!words.length) return false;
+    for (let offset = 0; offset <= STARTS_WITH_MAX_LEADING_WORDS; offset += 1) {
+      if (words.length + offset > tokens.length) continue;
+      const matched = words.every((word, index) => {
+        const token = tokens[offset + index];
+        const isPrefix = word.endsWith("*");
+        const stem = isPrefix ? word.slice(0, -1) : word;
+        return isPrefix ? token.startsWith(stem) : token === stem;
+      });
+      if (matched) return true;
+    }
+    return false;
+  });
+}
+
+// round-5 agenda-item rule (decisions.md): visit/participation/greeting/
+// speech/interview-style titles — a minister's or official's diary, not a
+// decision — never appear on the homepage, from ANY tier (not just tier 1).
+const AGENDA_TERMS = [
+  "επισκεψ*", "συναντησ*", "συμμετοχη του", "συμμετοχη τησ", "συμμετοχη του γενικου",
+  "χαιρετισμ*", "ομιλι*", "συνεντευξ*",
+];
+// "<Capitalised Name> σε/στην/στη/στο/στον <Capitalised Place>" at the very
+// start of the title, e.g. "Σταύρος Παπασταύρου σε Πάτμο και Λέρο: ...".
+// Matched on the raw (not accent/case-normalised) title: capitalisation is
+// the signal here, which normaliseText would destroy.
+const NAME_VISIT_START_RE = /^[Α-ΩΆΈΉΊΌΎΏΪΫ][\p{L}'-]+\s+[Α-ΩΆΈΉΊΌΎΏΪΫ][\p{L}'-]+\s+(σε|στην|στη|στο|στον)\s+[Α-ΩΆΈΉΊΌΎΏΪΫ][\p{L}'-]+/u;
+// "Στ(ην|ο|η|ον) <Place...> ο/η <Capitalised Name>" at the start, e.g.
+// "Στην Πάτμο και τη Λέρο ο Σταύρος Παπασταύρου – ...".
+const PLACE_VISIT_START_RE = /^Στ(ην|ο|η|ον)\s+.{0,40}?\s(ο|η)\s[Α-ΩΆΈΉΊΌΎΏΪΫ][\p{L}'-]+\s+[Α-ΩΆΈΉΊΌΎΏΪΫ][\p{L}'-]+/u;
+// A title that is only a «…» quote, optionally prefixed by "Name: ".
+const QUOTE_ONLY_TITLE_RE = /^(?:[^:«»\n]{1,60}:\s*)?«[^»]+»\s*$/u;
+
+function isVisitStyleTitle(title = "") {
+  const trimmed = String(title ?? "").trim();
+  return NAME_VISIT_START_RE.test(trimmed) || PLACE_VISIT_START_RE.test(trimmed) || QUOTE_ONLY_TITLE_RE.test(trimmed);
+}
+
+/**
+ * sources-spec round-5 agenda rule. Agenda OVERRIDES a tier-1 action word
+ * (e.g. a ministerial visit that also happens to mention a νομοσχέδιο is
+ * still a visit) EXCEPT when the action word is the source's own formal
+ * act, approximated as the title STARTING WITH the action-word phrase (e.g.
+ * "Δημόσια Διαβούλευση …", "Πρόσκληση …", "Απόφαση …") — that framing wins
+ * over an agenda-shaped rest of the title.
+ */
+export function isAgendaItem(title = "") {
+  if (!matchesAnyTerm(title, AGENDA_TERMS) && !isVisitStyleTitle(title)) return false;
+  return !startsWithAnyTerm(title, TIER1_ACTION_WORD_TERMS);
+}
+
+/** round-5: an agenda item's score is capped at 39 regardless of any other bonus. */
+export function agendaScoreCap(score, title) {
+  return isAgendaItem(title) ? Math.min(score, 39) : score;
 }
