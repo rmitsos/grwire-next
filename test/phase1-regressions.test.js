@@ -349,6 +349,18 @@ test("buildHomepageSections never repeats a URL and keeps each article in its pr
   }
 });
 
+test("buildHomepageSections([]) returns empty sections so the empty-DB build path cannot crash", async () => {
+  const buildHomepageSections = await loadBuildHomepageSections();
+  const { PUBLIC_CATEGORIES } = await import("../src/public-data.js");
+  const sections = buildHomepageSections([]);
+
+  assert.equal(sections.lead, null);
+  assert.deepEqual(sections.recent, []);
+  for (const slug of Object.keys(PUBLIC_CATEGORIES)) {
+    assert.deepEqual(sections.columns[slug], []);
+  }
+});
+
 // --- 5. Sources config ----------------------------------------------------
 
 test("eett source config uses the working press-release RSS feed", () => {

@@ -44,7 +44,7 @@ export default async function PublicHomepage() {
         {Object.entries(PUBLIC_CATEGORIES).map(([slug, category]) => (
           <article className="category-column" key={slug}>
             <div className="section-heading"><div><span className="section-label">{slug}</span><h2>{category.name}</h2></div><Link href={`/${slug}`}>View all →</Link></div>
-            <ArticleList articles={data.categories[slug]} empty={`No ${category.name.toLowerCase()} items yet.`} />
+            <ArticleList articles={data.columns[slug] ?? []} empty={`No ${category.name.toLowerCase()} items yet.`} />
           </article>
         ))}
       </section>
