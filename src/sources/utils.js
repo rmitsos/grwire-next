@@ -1,5 +1,27 @@
+// sources-spec.md §5 canonical_url.strip_params: "utm_*", "fbclid", "gclid",
+// "mc_cid", "mc_eid", "amp", "outputType=amp" (value-gated, handled below).
+// "ref" is kept from the pre-spec behaviour (not in the spec list, but
+// relied on by existing stored links/tests).
 const TRACKING_PARAM_PREFIXES = ["utm_", "mc_"];
-const TRACKING_PARAM_EXACT = new Set(["fbclid", "gclid", "ref"]);
+const TRACKING_PARAM_EXACT = new Set(["fbclid", "gclid", "ref", "amp"]);
+
+function stripTrackingParams(url) {
+  for (const key of [...url.searchParams.keys()]) {
+    const lower = key.toLowerCase();
+    if (TRACKING_PARAM_EXACT.has(lower) || TRACKING_PARAM_PREFIXES.some((prefix) => lower.startsWith(prefix))) {
+      url.searchParams.delete(key);
+      continue;
+    }
+    if (lower === "outputtype" && url.searchParams.get(key).toLowerCase() === "amp") url.searchParams.delete(key);
+  }
+}
+
+// Strips a trailing "/amp" or "/amp/" path suffix (sources-spec.md §5
+// canonical_url.strip_path_suffix), independent of any other trailing-slash
+// normalisation the caller applies.
+function stripAmpPathSuffix(pathname) {
+  return pathname.replace(/\/amp\/?$/i, "") || "/";
+}
 
 /**
  * Produces a stable identity URL for dedupe/storage: lowercase host, no
@@ -13,13 +35,8 @@ export function canonicalizeUrl(value) {
     const url = new URL(decoded);
     url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
     url.hash = "";
-    for (const key of [...url.searchParams.keys()]) {
-      const lower = key.toLowerCase();
-      if (TRACKING_PARAM_EXACT.has(lower) || TRACKING_PARAM_PREFIXES.some((prefix) => lower.startsWith(prefix))) {
-        url.searchParams.delete(key);
-      }
-    }
-    let pathname = url.pathname.replace(/\/amp$/i, "");
+    stripTrackingParams(url);
+    let pathname = stripAmpPathSuffix(url.pathname);
     if (pathname.length > 1) pathname = pathname.replace(/\/+$/, "") || "/";
     url.pathname = pathname || "/";
     return url.href;
@@ -42,12 +59,8 @@ export function cleanUrl(value) {
     const url = new URL(decoded);
     url.hostname = url.hostname.toLowerCase();
     url.hash = "";
-    for (const key of [...url.searchParams.keys()]) {
-      const lower = key.toLowerCase();
-      if (TRACKING_PARAM_EXACT.has(lower) || TRACKING_PARAM_PREFIXES.some((prefix) => lower.startsWith(prefix))) {
-        url.searchParams.delete(key);
-      }
-    }
+    stripTrackingParams(url);
+    url.pathname = stripAmpPathSuffix(url.pathname);
     return url.href;
   } catch {
     return value;

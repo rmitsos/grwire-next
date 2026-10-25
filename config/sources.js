@@ -53,14 +53,75 @@ export const SOURCES = [
   {
     // The HTML listing page loads its list via admin-ajax (search-filter
     // plugin), so the HTML adapter only ever saw 2 nav links. The site-wide
-    // /feed/ only contains two 2022 "Τεστ" posts; the WP REST API needs auth
-    // (401/403). This post-type feed is the working public feed (verified 25
-    // Oct 2026, latest item 20 Oct 2026). Low volume (a few per month).
-    id: "eett-announcements",
+    // /feed/ only contains two 2022 "Τεστ" posts (sources-spec.md §8: do not
+    // use); the WP REST API needs auth (401/403). This post-type feed is the
+    // working public feed (verified 25 Oct 2026, latest item 20 Oct 2026).
+    // Low volume (a few per month).
+    // Renamed from "eett-announcements" to "eett-press" per sources-spec.md
+    // §2.1 (same feed URL, id: replaces eett-announcements). Rows ingested
+    // before this change carry source_id "eett-announcements" in the DB.
+    id: "eett-press",
+    name: "ΕΕΤΤ – Δελτία Τύπου",
     type: "rss",
     url: "https://www.eett.gr/feed/?post_type=deltia_tipou",
     excludeTitlePatterns: ["^Τεστ"],
+    sections: ["regulators-policy", "telecom-fibre"],
+    weight: 1.0,
+    dayCap: 8,
+    homeCap: 2,
+    pollMin: 60,
     limit: 100,
+  },
+  {
+    id: "infocom-telecoms",
+    name: "InfoCom – Telecoms",
+    type: "rss",
+    url: "https://infocom.gr/telecoms/feed/",
+    sections: ["telecom-fibre", "deals-companies"],
+    weight: 0.8,
+    dayCap: 8,
+    homeCap: 2,
+    pollMin: 60,
+  },
+  {
+    id: "fibernews",
+    name: "Fibernews",
+    type: "rss",
+    url: "https://fibernews.gr/feed/",
+    sections: ["telecom-fibre"],
+    weight: 0.8,
+    dayCap: 6,
+    homeCap: 2,
+    pollMin: 60,
+  },
+  {
+    id: "united-fiber",
+    name: "United Fiber",
+    type: "rss",
+    url: "https://www.unitedfiber.gr/feed/",
+    sections: ["telecom-fibre"],
+    weight: 0.9,
+    dayCap: 4,
+    homeCap: 1,
+    pollMin: 1440,
+  },
+  {
+    // sources-spec.md §2.2 ppc-press: only October's Latin month slug is
+    // confirmed; other months are deliberately left unmapped (do not guess)
+    // until confirmed against the site's month menu (spec §7 item 5).
+    id: "ppc-press",
+    name: "ΔΕΗ – Δελτία Τύπου (μηνιαία σελίδα)",
+    type: "html-scrape",
+    urlTemplate: "https://www.ppcgroup.com/el/omilos-dei/grafeio-typou/deltia-typou/prosfata/deltia-tipou-{yyyy}/{month_el_latin}-{yyyy}/",
+    monthElLatin: { 10: "oktovrios" },
+    sections: ["energy-grids", "telecom-fibre", "deals-companies"],
+    weight: 0.9,
+    dayCap: 4,
+    homeCap: 1,
+    pollMin: 180,
+    prefilter: true,
+    linkPattern: "/deltia-tipou-\\d{4}/[a-z]+-\\d{4}/[a-z0-9-]+/$",
+    dateRegex: "(\\d{2})\\.(\\d{2})\\.(20\\d\\d)",
   },
   {
     // The HTML page https://www.raaey.gr/energeia/anakinoseis/ returns HTTP
@@ -123,7 +184,7 @@ export const SOURCES = [
     // Disabled per sources-spec.md §8 (verified 25 Oct 2026): the tag page
     // loads but has no article links in the static HTML, and the tag feed
     // (https://www.dnews.gr/site/tag/ΕΕΤΤ/feed) returns the HTML page, not
-    // RSS. The ΕΕΤΤ feeds above (eett-announcements) cover the same ground.
+    // RSS. The ΕΕΤΤ feed above (eett-press) covers the same ground.
     id: "dnews-eett",
     type: "html",
     enabled: false,

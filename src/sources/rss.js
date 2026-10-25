@@ -27,12 +27,16 @@ export class RssSourceAdapter {
       if (!link) return [];
       const title = firstTag(body, "title");
       if (excludeTitlePatterns.some((pattern) => pattern.test(title || ""))) return [];
+      // RSS <source url="...">Publisher</source>: used by Google News to name
+      // the original publisher (sources-spec.md §2 "Google News handling").
+      const publisher = firstTag(body, "source");
       return [normalizeItem({
         id: firstTag(body, kind.toLowerCase() === "entry" ? "id" : "guid") || link,
         url: link,
         title,
         summary: firstTag(body, "description") || firstTag(body, "summary") || firstTag(body, "content"),
-        publishedAt: firstTag(body, "pubDate") || firstTag(body, "published") || firstTag(body, "updated")
+        publishedAt: firstTag(body, "pubDate") || firstTag(body, "published") || firstTag(body, "updated"),
+        metadata: publisher ? { publisher } : undefined,
       }, sourceUrl)];
     });
   }
