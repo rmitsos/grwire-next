@@ -364,8 +364,8 @@ test("buildHomepageSections([]) returns empty sections so the empty-DB build pat
 // --- 5. Sources config ----------------------------------------------------
 
 test("eett source config uses the working press-release RSS feed", () => {
-  const eett = SOURCES.find((source) => source.id === "eett-announcements");
-  assert.ok(eett, "expected the eett-announcements source");
+  const eett = SOURCES.find((source) => source.id === "eett-press");
+  assert.ok(eett, "expected the eett-press source");
   assert.equal(eett.type, "rss");
   assert.equal(eett.url, "https://www.eett.gr/feed/?post_type=deltia_tipou");
 });

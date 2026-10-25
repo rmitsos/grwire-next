@@ -1,6 +1,6 @@
 /** Shared article-quality helpers used before storage and at presentation time. */
 
-import { canonicalizeUrl } from "./sources/utils.js";
+import { canonicalizeUrl, decodeEntities } from "./sources/utils.js";
 
 const RAW_STOP_WORDS = [
   "the", "and", "for", "with", "from", "that", "this", "news", "about", "new",
@@ -21,7 +21,9 @@ const STEM_SUFFIXES = [
   "α", "ε", "η", "ι", "ο", "υ", "σ",
 ];
 
-export function stripTrailingSiteSuffix(title = "") {
+// Finds the last " - "/" | "/dash-variant separator in a title and returns
+// the text on each side, or null if there is no such separator.
+function splitTrailingSegment(title = "") {
   const text = String(title ?? "");
   const separators = [" - ", " – ", " — ", " | "];
   let bestIndex = -1;
@@ -33,10 +35,14 @@ export function stripTrailingSiteSuffix(title = "") {
       bestLength = separator.length;
     }
   }
-  if (bestIndex === -1) return text;
-  const suffix = text.slice(bestIndex + bestLength).trim();
-  if (!looksLikeSiteSuffix(suffix)) return text;
-  return text.slice(0, bestIndex).trim();
+  if (bestIndex === -1) return null;
+  return { head: text.slice(0, bestIndex).trim(), tail: text.slice(bestIndex + bestLength).trim() };
+}
+
+export function stripTrailingSiteSuffix(title = "") {
+  const split = splitTrailingSegment(title);
+  if (!split || !looksLikeSiteSuffix(split.tail)) return String(title ?? "");
+  return split.head;
 }
 
 function looksLikeSiteSuffix(segment) {
@@ -45,6 +51,27 @@ function looksLikeSiteSuffix(segment) {
   // "Ypodomes.com" or "marketingweek.gr". Real title clauses ("Στα 196
   // εκατ. ευρώ το κόστος") never end in a dot-domain, so this stays safe.
   return /\.[a-z]{2,6}\s*$/i.test(segment);
+}
+
+// sources-spec.md §5 title_clean: strip the trailing " - Publisher" / " | Publisher"
+// segment only when it matches one of the item's own source candidates
+// (source name, host label, or a Google News <source> publisher) — unlike
+// stripTrailingSiteSuffix above, this never guesses from a domain-looking
+// suffix alone, so real title clauses are never cut by mistake.
+export function cleanTitleForSource(title = "", candidates = []) {
+  const decoded = decodeEntities(String(title ?? ""));
+  const split = splitTrailingSegment(decoded);
+  if (!split) return decoded;
+  const normalizedTail = normalise(split.tail);
+  if (!normalizedTail) return decoded;
+  const matchesSource = candidates.filter(Boolean).some((candidate) => {
+    const normalizedCandidate = normalise(candidate);
+    return normalizedCandidate
+      && (normalizedTail === normalizedCandidate
+        || normalizedTail.includes(normalizedCandidate)
+        || normalizedCandidate.includes(normalizedTail));
+  });
+  return matchesSource ? split.head : decoded;
 }
 
 function stemToken(token, minStemLength = 4) {
@@ -79,6 +106,11 @@ export function collapseDuplicateArticles(items = [], { titleThreshold = 0.9, da
       duplicate.metadata = {
         ...(duplicate.metadata || {}),
         duplicateSources: [...new Set([...(duplicate.metadata?.duplicateSources || []), item.sourceId || item.source_id].filter(Boolean))],
+        // sources-spec.md §2 "Google News handling" (1): a dropped Google
+        // News duplicate's publisher is attached to the surviving item.
+        ...(isGoogleNews(item) && item.metadata?.publisher
+          ? { relatedPublishers: [...new Set([...(duplicate.metadata?.relatedPublishers || []), item.metadata.publisher])] }
+          : {}),
       };
       continue;
     }

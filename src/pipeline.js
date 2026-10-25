@@ -3,7 +3,9 @@ import { canonicalizeUrl, cleanUrl } from "./sources/utils.js";
 import { DEFAULT_WATCH_RULES, rankItems } from "./watch-rules.js";
 import { inspectArticle, validateArticleLink } from "./agents/source-guardian.js";
 import { readArticles } from "./agents/article-reader.js";
-import { collapseDuplicateArticles } from "./article-quality.js";
+import { collapseDuplicateArticles, cleanTitleForSource } from "./article-quality.js";
+import { DEFAULT_DAY_CAP_PER_SOURCE, athensDayKey, noiseRejectReason } from "./feed-rules.js";
+import { resolveGoogleNewsItems } from "./google-news.js";
 
 export async function scanMarket({
   sources,
@@ -16,6 +18,7 @@ export async function scanMarket({
   articleReadLimit = 30,
   maxRelevantItems = 60,
   maxPerSource = 12,
+  now = Date.now(),
 }) {
   if (!Array.isArray(sources) || !sources.length) throw new TypeError("At least one source is required");
   const outcomes = [];
@@ -91,7 +94,17 @@ export async function scanMarket({
     });
   }
 
-  const inspected = collapseDuplicateArticles(discoveredItems)
+  // sources-spec.md §5 noise_hard_reject: dropped before ranking, with the
+  // reason counted per source in the scan report.
+  const noiseRejectedBySource = new Map();
+  const noiseFiltered = discoveredItems.filter((item) => {
+    const reason = noiseRejectReason(item);
+    if (!reason) return true;
+    noiseRejectedBySource.set(item.sourceId, (noiseRejectedBySource.get(item.sourceId) || 0) + 1);
+    return false;
+  });
+
+  const inspected = collapseDuplicateArticles(noiseFiltered)
     .map((item) => ({ ...item, validation: inspectArticle(item, { rules }) }))
   const candidates = inspected.filter((item) => item.validation.accepted);
 
@@ -118,17 +131,29 @@ export async function scanMarket({
   // evergreen items. Keep relevance as the tie-breaker within the same news
   // cycle so the homepage and daily story do not stagnate on old coverage.
   const rankedAll = rankItems(finalCandidates, rules);
-  const perSourceCapped = capPerSource(rankedAll, { sources: activeSources, maxPerSource });
-  const ranked = perSourceCapped
+  const perSourceCapped = capPerSource(rankedAll, { sources: activeSources, maxPerSource, now });
+  let ranked = perSourceCapped
     .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0) || b.score - a.score)
     .slice(0, maxRelevantItems)
-    .map((item) => ({
-    ...item,
-    metadata: {
-      ...(item.metadata || {}),
-      validation: item.validation,
-    },
-  }));
+    .map((item) => {
+      const source = activeSources.find((candidate) => candidate.id === item.sourceId);
+      let hostname;
+      try { hostname = new URL(item.url).hostname.replace(/^www\./, ""); } catch { hostname = undefined; }
+      return {
+        ...item,
+        title: cleanTitleForSource(item.title, [source?.name, hostname, item.metadata?.publisher]),
+        metadata: {
+          ...(item.metadata || {}),
+          validation: item.validation,
+        },
+      };
+    });
+
+  // sources-spec.md §2 "Google News handling": dedupe against direct-source
+  // items, or resolve to the publisher URL (bounded to the items that
+  // already survived relevance + both caps above).
+  ranked = await resolveGoogleNewsItems(ranked, { fetch: fetch || globalThis.fetch });
+
   const acceptedBySource = new Map();
   const readFailedBySource = new Map();
   const validationBySource = new Map();
@@ -150,6 +175,7 @@ export async function scanMarket({
     source.accepted = acceptedBySource.get(source.id) || 0;
     source.rejected = Math.max(0, source.fetched - source.accepted);
     source.readFailed = readFailedBySource.get(source.id) || 0;
+    source.noiseRejected = noiseRejectedBySource.get(source.id) || 0;
     Object.assign(source, validationBySource.get(source.id) || {});
   }
   return {
@@ -163,22 +189,38 @@ export async function scanMarket({
 
 // Applied after relevance scoring so a prolific source (ypodomes publishes
 // ~100/week) cannot crowd out everything else before the global cap runs.
-// `items` is already sorted highest-score-first (then freshest), so taking
-// the first N per source keeps each source's strongest coverage.
-function capPerSource(items, { sources = [], maxPerSource = 12 } = {}) {
-  const limitBySource = new Map();
+// `items` is already sorted highest-score-first (then freshest). Two caps
+// apply in sequence: sources-spec.md §5/§2 day_cap per source per Europe/
+// Athens calendar day (items with no publishedAt count toward the scan
+// day), then the existing maxPerSource/maxItems limit as an overall
+// per-run ceiling. Both keep each source's highest-ranked items.
+function capPerSource(items, { sources = [], maxPerSource = 12, now = Date.now() } = {}) {
+  const dayCapBySource = new Map();
+  const runLimitBySource = new Map();
   for (const source of sources) {
     if (!source.id) continue;
+    dayCapBySource.set(source.id, source.dayCap ?? DEFAULT_DAY_CAP_PER_SOURCE);
     const limit = source.maxPerSource ?? source.maxItems;
-    if (limit !== undefined) limitBySource.set(source.id, limit);
+    if (limit !== undefined) runLimitBySource.set(source.id, limit);
   }
-  const counts = new Map();
+
+  const dayCounts = new Map();
+  const afterDayCap = items.filter((item) => {
+    const key = `${item.sourceId}|${athensDayKey(item.publishedAt, now)}`;
+    const cap = dayCapBySource.get(item.sourceId) ?? DEFAULT_DAY_CAP_PER_SOURCE;
+    const count = dayCounts.get(key) || 0;
+    if (count >= cap) return false;
+    dayCounts.set(key, count + 1);
+    return true;
+  });
+
+  const runCounts = new Map();
   const kept = [];
-  for (const item of items) {
-    const limit = limitBySource.get(item.sourceId) ?? maxPerSource;
-    const count = counts.get(item.sourceId) || 0;
+  for (const item of afterDayCap) {
+    const limit = runLimitBySource.get(item.sourceId) ?? maxPerSource;
+    const count = runCounts.get(item.sourceId) || 0;
     if (count >= limit) continue;
-    counts.set(item.sourceId, count + 1);
+    runCounts.set(item.sourceId, count + 1);
     kept.push(item);
   }
   return kept;
