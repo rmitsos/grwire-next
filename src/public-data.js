@@ -495,11 +495,14 @@ function reclassifyRow(row) {
   const override = rulesOverrideCategory({ title: row.title, summary: row.summary, categories });
   let finalCategories = override ? [override, ...categories.filter((category) => category !== override)] : categories;
   // round-5 agenda rule: applies to every tier, not just the tier-1 forced
-  // routing above, so an agenda item from a source with no regulators-policy
-  // match otherwise (e.g. a plain operator press release that reads as a
-  // ministerial-style diary piece) still always lists on /regulators.
-  if (isAgendaItem(row.title) && !finalCategories.includes("regulators")) {
-    finalCategories = [...finalCategories, "regulators"];
+  // routing above. Agenda items belong on /regulators ONLY — never on their
+  // topical section (e.g. /infrastructure, /energy) or the homepage — so the
+  // category list is replaced outright, not appended to. This runs last and
+  // produces the row's final categories, so it survives the later
+  // dropTelcoWithoutNetworkAngle/dropDealsWithoutCompany gates unaffected
+  // (neither "telco" nor "deals" remains for them to act on).
+  if (isAgendaItem(row.title)) {
+    finalCategories = ["regulators"];
   }
   return {
     ...row,

@@ -241,7 +241,7 @@ test("buildHomepageSections: agenda items never appear on the homepage (agenda_i
   }
 });
 
-test("selectArticles: an agenda item keeps its topical categories on section pages and gains regulators", () => {
+test("selectArticles: an agenda item (Patmos/Leros) is regulators-only, not infrastructure, on section pages", () => {
   const rows = [row({
     url: "https://ypen.test/visit-1",
     title: "Σταύρος Παπασταύρου σε Πάτμο και Λέρο: «Με έργα που δίνουν λύσεις, στηρίζουμε έμπρακτα τα νησιά μας»",
@@ -249,9 +249,31 @@ test("selectArticles: an agenda item keeps its topical categories on section pag
   })];
   const [article] = selectArticles(rows, {});
   assert.ok(article, "expected the agenda item to survive selection");
-  assert.ok(article.categories.includes("regulators"), `expected regulators, got ${article.categories}`);
-  assert.ok(article.categories.includes("infrastructure"), `expected infrastructure kept, got ${article.categories}`);
+  assert.deepEqual(article.categories, ["regulators"], `expected regulators only, got ${article.categories}`);
   assert.ok(article.score <= 39, `expected score capped at 39, got ${article.score}`);
+
+  const regulatorsSelection = selectArticles(rows, { category: "regulators" });
+  assert.equal(regulatorsSelection.length, 1, "expected the item on /regulators");
+  const infrastructureSelection = selectArticles(rows, { category: "infrastructure" });
+  assert.equal(infrastructureSelection.length, 0, "expected the item dropped from /infrastructure");
+  const energySelection = selectArticles(rows, { category: "energy" });
+  assert.equal(energySelection.length, 0, "expected the item dropped from /energy");
+});
+
+test("selectArticles: an agenda item (ΓΓΤΤ ITU participation) is regulators-only, not telco, on section pages", () => {
+  const rows = [row({
+    url: "https://ggtt.test/visit-3",
+    title: "Συμμετοχή του Γενικού Γραμματέα Τηλεπικοινωνιών και Ταχυδρομείων, Κωνσταντίνου Καράντζαλου, στο συνέδριο της ITU",
+    sourceId: "ggtt-telecom-announcements", publishedAt: new Date().toISOString(),
+  })];
+  const [article] = selectArticles(rows, {});
+  assert.ok(article, "expected the agenda item to survive selection");
+  assert.deepEqual(article.categories, ["regulators"], `expected regulators only, got ${article.categories}`);
+
+  const regulatorsSelection = selectArticles(rows, { category: "regulators" });
+  assert.equal(regulatorsSelection.length, 1, "expected the item on /regulators");
+  const telcoSelection = selectArticles(rows, { category: "telco" });
+  assert.equal(telcoSelection.length, 0, "expected the item dropped from /telco");
 });
 
 test("buildHomepageSections: a non-action ΕΕΤΤ item is section-only (tier1_no_action), not homepage", () => {
