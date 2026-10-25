@@ -4,7 +4,7 @@ import { buildLandingMetadata, siteBase } from "../src/landing/metadata.js";
 import { LANDING_COPY, NAV_SECTIONS } from "../src/landing/copy.js";
 import { LANDING_ROUTES, otherLang } from "../src/landing/routes.js";
 
-const FORBIDDEN_SUBSTRINGS = ["/tenders", "/regulators", "hello@grwire.com"];
+const FORBIDDEN_SUBSTRINGS = ["hello@grwire.com"];
 
 test("buildLandingMetadata: EL canonical, hreflang alternates (incl. x-default), og locale", () => {
   const base = siteBase();
@@ -86,9 +86,9 @@ test("LANDING_ROUTES: EL has no prefix, EN is prefixed with /en, routeKeys match
   }
 });
 
-test("NAV_SECTIONS only link to public routes that actually exist (no /regulators or /tenders)", () => {
+test("NAV_SECTIONS only link to public routes that actually exist", () => {
   const paths = NAV_SECTIONS.map((section) => section.path);
-  assert.deepEqual(paths.sort(), ["/deals-companies", "/energy", "/infrastructure", "/telco"]);
+  assert.deepEqual(paths.sort(), ["/deals", "/energy", "/infrastructure", "/regulators", "/telco", "/tenders"]);
   assert.equal(NAV_SECTIONS.filter((section) => section.primary).length, 1);
 });
 
@@ -119,7 +119,7 @@ test("LANDING_COPY: lang field matches each language's own key", () => {
   assert.equal(LANDING_COPY.en.lang, "en");
 });
 
-test("Landing copy and routes never reference /tenders, /regulators or hello@grwire.com", () => {
+test("Landing copy and routes never reference hello@grwire.com", () => {
   const serialized = JSON.stringify({ LANDING_COPY, NAV_SECTIONS, LANDING_ROUTES });
   for (const forbidden of FORBIDDEN_SUBSTRINGS) {
     assert.ok(!serialized.includes(forbidden), `found forbidden reference: ${forbidden}`);

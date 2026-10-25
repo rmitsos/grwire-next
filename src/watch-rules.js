@@ -231,23 +231,29 @@ export function scoreItem(item, rawRule) {
   };
 }
 
-// sources-spec.md §2.2 ppc-press: ΔΕΗ press releases are source-routed to
-// energy (spec id energy-grids) unconditionally, and additionally to telco
-// (spec id telecom-fibre) when they mention ΔΕΗ Fiber/FTTH/fibre terms. This
-// bypasses the generic entity/topic keyword-relevance gate above, so a ΔΕΗ
-// sponsorship or CSR release isn't dropped as irrelevant just for lacking
-// energy keywords — feed-rules.js noiseRejectReason (noise_hard_reject)
-// still runs upstream of this, in pipeline.js and public-data.js.
-const PPC_FIBRE_TERMS = ["ΔΕΗ Fiber", "DEI Fiber", "PPC Fiber", "FTTH", "οπτικ* ιν*"];
+// sources-spec.md §2.2 ppc-press, narrowed per the content owner's round-3
+// answer: ΔΕΗ press releases are source-routed to energy only when they are
+// about the grid/network or sector business (not every release lacking
+// energy keywords, as before) — sponsorship/CSR/events and retail
+// tariffs/programmes are dropped outright by feed-rules.js noiseRejectReason
+// (group "ppc_non_network"), which runs upstream of this in both pipeline.js
+// (scan) and public-data.js (read), so drop always wins over this keep
+// list. A release matching neither list here is not forced at all; it falls
+// back to the generic entity/topic keyword-relevance gate above.
+const PPC_NETWORK_BUSINESS_TERMS = ["δικτυ*", "υποσταθμ*", "διασυνδεσ*", "απε", "αποθηκευσ*", "επενδυσ*", "εργ*", "αποτελεσματ*", "εξαγορ*"];
+const PPC_FIBRE_TERMS = ["fiber", "fibre", "ftth", "οπτικ* ιν*", "δεη fiber"];
 
 export function sourceForcedCategories(item = {}) {
   if (item.sourceId !== "ppc-press") return [];
+  const text = `${item.title || ""} ${item.summary || ""}`;
+  const isFibre = matchesAnyTerm(text, PPC_FIBRE_TERMS);
+  const isNetworkOrBusiness = isFibre || matchesAnyTerm(text, PPC_NETWORK_BUSINESS_TERMS);
+  if (!isNetworkOrBusiness) return [];
   const forced = [{
     ruleId: "ppc-press-source-routing", label: "ΔΕΗ press releases", category: "energy",
-    score: 20, accepted: true, reasons: ["source-level routing: ΔΕΗ press release"],
+    score: 20, accepted: true, reasons: ["source-level routing: ΔΕΗ network/business release"],
   }];
-  const text = `${item.title || ""} ${item.summary || ""}`;
-  if (matchesAnyTerm(text, PPC_FIBRE_TERMS)) {
+  if (isFibre) {
     forced.push({
       ruleId: "ppc-press-source-routing-fibre", label: "ΔΕΗ Fiber", category: "telco",
       score: 15, accepted: true, reasons: ["source-level routing: ΔΕΗ Fiber/FTTH mention"],
@@ -275,7 +281,7 @@ export function rankItems(items, rules) {
 
 // Fixed order used only to break ties when two rules score an item equally;
 // keeps the homepage's single-column placement deterministic.
-const CATEGORY_ORDER = ["energy", "telco", "infrastructure", "deals-companies"];
+const CATEGORY_ORDER = ["energy", "telco", "infrastructure", "deals"];
 
 export function primarySector(item, rules = DEFAULT_WATCH_RULES) {
   const [ranked] = rankItems([item], rules);
@@ -332,7 +338,7 @@ export const DEFAULT_WATCH_RULES = Object.freeze([
     // news has no other section, so it is no longer shown anywhere.
     id: "deals-companies",
     label: "Greek sector deals and companies",
-    category: "deals-companies",
+    category: "deals",
     entities: SECTOR_ORGANIZATIONS,
     topics: DEALS_TOPICS,
     strongTopics: DEALS_TOPICS,

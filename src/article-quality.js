@@ -94,7 +94,7 @@ export function normalizeTitle(title = "", { minStemLength = 4 } = {}) {
   return tokens.join(" ");
 }
 
-export function collapseDuplicateArticles(items = [], { titleThreshold = 0.9, days = 7, crossLanguage = false } = {}) {
+export function collapseDuplicateArticles(items = [], { titleThreshold = 0.9, days = 7, crossLanguage = false, onDrop } = {}) {
   const kept = [];
   const ordered = [...items].sort((a, b) =>
     Number(b.score || 0) - Number(a.score || 0)
@@ -103,6 +103,7 @@ export function collapseDuplicateArticles(items = [], { titleThreshold = 0.9, da
   for (const item of ordered) {
     const duplicate = kept.find((candidate) => areNearDuplicates(candidate, item, { titleThreshold, days, crossLanguage }));
     if (duplicate) {
+      onDrop?.(item);
       duplicate.metadata = {
         ...(duplicate.metadata || {}),
         duplicateSources: [...new Set([...(duplicate.metadata?.duplicateSources || []), item.sourceId || item.source_id].filter(Boolean))],

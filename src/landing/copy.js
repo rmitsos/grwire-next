@@ -6,21 +6,22 @@
 // the landing page and the stored consent record must never drift apart.
 import { CONSENT_TEXT } from "../newsletter/service.js";
 
-// Only sections that map to an existing public route are linkable (no /regulators or /tenders
-// page exists yet), so "Ρυθμιστές & Πολιτική" and "Διαγωνισμοί & Συμβάσεις" are left out of nav
-// and footer entirely rather than linking nowhere.
 export const NAV_SECTIONS = [
   { slug: "telco", path: "/telco", color: "var(--sec-telecom-fibre)", primary: true },
   { slug: "energy", path: "/energy", color: "var(--sec-energy-grids)" },
   { slug: "infrastructure", path: "/infrastructure", color: "var(--sec-infrastructure-works)" },
-  { slug: "deals-companies", path: "/deals-companies", color: "var(--sec-deals-companies)" },
+  { slug: "tenders", path: "/tenders", color: "var(--sec-tenders-contracts)" },
+  { slug: "regulators", path: "/regulators", color: "var(--sec-regulators-policy)" },
+  { slug: "deals", path: "/deals", color: "var(--sec-deals-companies)" },
 ];
 
 const SECTION_LABELS = {
   telco: { el: "Τηλεπικοινωνίες & Οπτικές Ίνες", en: "Telecom & fibre" },
   energy: { el: "Ενέργεια & Δίκτυα", en: "Energy & grids" },
   infrastructure: { el: "Υποδομές & Έργα", en: "Infrastructure & works" },
-  "deals-companies": { el: "Συμφωνίες & Εταιρείες", en: "Deals & companies" },
+  tenders: { el: "Διαγωνισμοί & Συμβάσεις", en: "Tenders & contracts" },
+  regulators: { el: "Ρυθμιστές & Πολιτική", en: "Regulators & policy" },
+  deals: { el: "Συμφωνίες & Εταιρείες", en: "Deals & companies" },
 };
 
 // Statuses the newsletter API can redirect back with via ?status=. check-inbox / invalid-email /

@@ -96,34 +96,34 @@ test("5-star hotel lifestyle story is rejected by every watch rule", () => {
   assert.equal(ranked.length, 0);
 });
 
-test("Decathlon retail dividend/store story does not qualify as deals-companies", () => {
+test("Decathlon retail dividend/store story does not qualify as deals", () => {
   const [ranked] = rankItems([byTitle(DECATHLON_TITLE)], DEFAULT_WATCH_RULES);
   const categories = ranked?.relevance.map((match) => match.category) || [];
-  assert.ok(!categories.includes("deals-companies"), `expected no deals-companies match, got ${categories}`);
+  assert.ok(!categories.includes("deals"), `expected no deals match, got ${categories}`);
 });
 
-test("ad-campaign story does not qualify as deals-companies just because its source name contains 'market'", () => {
+test("ad-campaign story does not qualify as deals just because its source name contains 'market'", () => {
   const [ranked] = rankItems([byTitle(AD_CAMPAIGN_TITLE)], DEFAULT_WATCH_RULES);
   const categories = ranked?.relevance.map((match) => match.category) || [];
-  assert.ok(!categories.includes("deals-companies"), `expected no deals-companies match, got ${categories}`);
+  assert.ok(!categories.includes("deals"), `expected no deals match, got ${categories}`);
 });
 
-test("synthetic Papoutsanis dividend story is rejected for deals-companies (not a sector organization)", () => {
+test("synthetic Papoutsanis dividend story is rejected for deals (not a sector organization)", () => {
   const [ranked] = rankItems([papoutsanisDividend], DEFAULT_WATCH_RULES);
   const categories = ranked?.relevance.map((match) => match.category) || [];
-  assert.ok(!categories.includes("deals-companies"), `expected no deals-companies match, got ${categories}`);
+  assert.ok(!categories.includes("deals"), `expected no deals match, got ${categories}`);
 });
 
-test("a systemic bank's dividend story never qualifies as deals-companies, even with a strong deals topic", () => {
+test("a systemic bank's dividend story never qualifies as deals, even with a strong deals topic", () => {
   const [ranked] = rankItems([nbgDividend], DEFAULT_WATCH_RULES);
   const categories = ranked?.relevance.map((match) => match.category) || [];
-  assert.ok(!categories.includes("deals-companies"), `expected no deals-companies match for a bank dividend story, got ${categories}`);
+  assert.ok(!categories.includes("deals"), `expected no deals match for a bank dividend story, got ${categories}`);
 });
 
-test("a sector-company acquisition is accepted as deals-companies", () => {
+test("a sector-company acquisition is accepted as deals", () => {
   const [ranked] = rankItems([sectorAcquisition], DEFAULT_WATCH_RULES);
   const categories = ranked?.relevance.map((match) => match.category) || [];
-  assert.ok(categories.includes("deals-companies"), `expected a deals-companies match, got ${categories}`);
+  assert.ok(categories.includes("deals"), `expected a deals match, got ${categories}`);
 });
 
 test("Greece-Italy electrical interconnection stories are energy, not telecom", () => {
@@ -478,18 +478,20 @@ test("spec section ids map onto existing PUBLIC_CATEGORIES slugs, and redirects 
   const { SECTION_REDIRECTS } = await import("../config/section-redirects.js");
 
   const existingSlugs = new Set(Object.keys(PUBLIC_CATEGORIES));
-  assert.deepEqual(existingSlugs, new Set(["deals-companies", "telco", "energy", "infrastructure"]));
+  assert.deepEqual(existingSlugs, new Set(["deals", "telco", "energy", "infrastructure", "tenders", "regulators"]));
 
   for (const [slug, config] of Object.entries(PUBLIC_CATEGORIES)) {
     assert.ok(config.specId, `expected a specId for '${slug}'`);
     assert.equal(SECTION_SLUG_BY_SPEC_ID[config.specId], slug);
   }
 
-  // deals-companies' specId equals its slug, so it has no specId->slug
-  // redirect; the other three have a dedicated spec-id redirect each, plus
-  // one legacy-slug redirect for the retired /finance path.
+  // Every public category now has a spec id that differs from its slug (no
+  // exception left, unlike before the deals-companies rename), so each gets
+  // a dedicated spec-id redirect, plus one legacy-slug redirect for the
+  // retired /finance path — all pointing straight at the live slug, never
+  // at each other.
   const specIdRedirects = SECTION_REDIRECTS.filter((r) => r.source !== "/finance");
-  assert.equal(specIdRedirects.length, Object.keys(PUBLIC_CATEGORIES).length - 1);
+  assert.equal(specIdRedirects.length, Object.keys(PUBLIC_CATEGORIES).length);
   for (const redirect of specIdRedirects) {
     assert.equal(redirect.permanent, true);
     assert.ok(redirect.source.startsWith("/"));
@@ -501,18 +503,20 @@ test("spec section ids map onto existing PUBLIC_CATEGORIES slugs, and redirects 
 
   const financeRedirect = SECTION_REDIRECTS.find((r) => r.source === "/finance");
   assert.ok(financeRedirect, "expected a legacy /finance redirect");
-  assert.equal(financeRedirect.destination, "/deals-companies");
+  assert.equal(financeRedirect.destination, "/deals");
   assert.equal(financeRedirect.permanent, true);
 
-  assert.ok(!SECTION_REDIRECTS.some((r) => r.source === "/tenders" || r.source === "/regulators"),
-    "no /tenders or /regulators redirect should exist yet (Phase 2)");
+  for (const redirect of SECTION_REDIRECTS) {
+    assert.ok(!SECTION_REDIRECTS.some((other) => other.source === redirect.destination),
+      `redirect chain: ${redirect.source} -> ${redirect.destination} -> ...`);
+  }
 });
 
 test("PublicHeader and sitemap only link to existing public section slugs", () => {
   const headerSrc = readFileSync(fileURLToPath(new URL("../src/components/PublicHeader.js", import.meta.url)), "utf8");
   const sitemapSrc = readFileSync(fileURLToPath(new URL("../src/app/sitemap.js", import.meta.url)), "utf8");
-  const existingSlugs = ["deals-companies", "telco", "energy", "infrastructure"];
-  const forbidden = ["tenders", "regulators", "telecom-fibre", "energy-grids", "infrastructure-works", "finance"];
+  const existingSlugs = ["deals", "telco", "energy", "infrastructure", "tenders", "regulators"];
+  const forbidden = ["deals-companies", "telecom-fibre", "energy-grids", "infrastructure-works", "tenders-contracts", "regulators-policy", "finance"];
   for (const slug of forbidden) {
     assert.ok(!headerSrc.includes(`/${slug}`), `PublicHeader should not link to /${slug}`);
     assert.ok(!sitemapSrc.includes(`/${slug}`), `sitemap should not link to /${slug}`);

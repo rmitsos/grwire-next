@@ -16,7 +16,9 @@ export async function scanMarket({
   validationLimit = 40,
   readArticlePages = false,
   articleReadLimit = 30,
-  maxRelevantItems = 60,
+  // A deployment can override this via the SOURCE_MAX_RELEVANT env var (see
+  // src/ingest-service.js), without changing this default.
+  maxRelevantItems = 150,
   maxPerSource = 12,
   now = Date.now(),
 }) {
@@ -134,7 +136,13 @@ export async function scanMarket({
   // evergreen items. Keep relevance as the tie-breaker within the same news
   // cycle so the homepage and daily story do not stagnate on old coverage.
   const rankedAll = rankItems(finalCandidates, rules);
-  const perSourceCapped = capPerSource(rankedAll, { sources: activeSources, maxPerSource, now });
+  const dayCappedBySource = new Map();
+  const perSourceCapped = capPerSource(rankedAll, {
+    sources: activeSources,
+    maxPerSource,
+    now,
+    onDayCapDrop: (item) => dayCappedBySource.set(item.sourceId, (dayCappedBySource.get(item.sourceId) || 0) + 1),
+  });
   let ranked = perSourceCapped
     .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0) || b.score - a.score)
     .slice(0, maxRelevantItems)
@@ -179,6 +187,7 @@ export async function scanMarket({
     source.rejected = Math.max(0, source.fetched - source.accepted);
     source.readFailed = readFailedBySource.get(source.id) || 0;
     source.noiseRejected = noiseRejectedBySource.get(source.id) || 0;
+    source.dayCapped = dayCappedBySource.get(source.id) || 0;
     Object.assign(source, validationBySource.get(source.id) || {});
   }
   return {
@@ -197,7 +206,7 @@ export async function scanMarket({
 // Athens calendar day (items with no publishedAt count toward the scan
 // day), then the existing maxPerSource/maxItems limit as an overall
 // per-run ceiling. Both keep each source's highest-ranked items.
-function capPerSource(items, { sources = [], maxPerSource = 12, now = Date.now() } = {}) {
+function capPerSource(items, { sources = [], maxPerSource = 12, now = Date.now(), onDayCapDrop } = {}) {
   const dayCapBySource = new Map();
   const runLimitBySource = new Map();
   for (const source of sources) {
@@ -212,7 +221,7 @@ function capPerSource(items, { sources = [], maxPerSource = 12, now = Date.now()
     const key = `${item.sourceId}|${athensDayKey(item.publishedAt, now)}`;
     const cap = dayCapBySource.get(item.sourceId) ?? DEFAULT_DAY_CAP_PER_SOURCE;
     const count = dayCounts.get(key) || 0;
-    if (count >= cap) return false;
+    if (count >= cap) { onDayCapDrop?.(item); return false; }
     dayCounts.set(key, count + 1);
     return true;
   });

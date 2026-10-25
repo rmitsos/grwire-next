@@ -288,8 +288,10 @@ button { cursor: pointer; }
 .category-hero, .search-hero { padding: 64px 0 46px; border-bottom: 4px solid var(--ink); }
 .category-hero h1, .search-hero h1 { margin-top: 15px; }
 .category-hero p { max-width: 700px; margin: 24px 0 0; color: var(--muted); font-size: 18px; line-height: 1.5; }
-.category-hero.deals-companies { --green: #315f7a; }
+.category-hero.deals { --green: #315f7a; }
 .category-hero.energy { --green: #8a5b13; }
+.category-hero.tenders { --green: #6b4a1f; }
+.category-hero.regulators { --green: #3a4a7e; }
 .search-form { display: grid; grid-template-columns: 1fr 220px auto; gap: 8px; margin-top: 34px; }
 .search-form input, .search-form select { padding: 14px; border: 1px solid #b9c1b9; border-radius: 8px; background: white; }
 .search-form button { padding: 14px 22px; border: 0; border-radius: 8px; background: var(--ink); color: white; font-weight: 800; }

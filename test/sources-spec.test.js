@@ -121,29 +121,75 @@ test("ppc-press html-scrape adapter extracts the 5 October releases with the rig
 });
 
 // --- 1b. ΔΕΗ source-level routing -----------------------------------------
+// Round-3 owner answer: sponsorship/CSR/events and retail tariffs/
+// programmes are dropped outright (noiseRejectReason group
+// "ppc_non_network"); the remaining releases are forced to energy only when
+// they're about the grid/network or sector business, and to energy+telco
+// when they mention fibre — a release matching neither keep list is simply
+// not forced (sourceForcedCategories returns []).
 
-test("sourceForcedCategories routes every ppc-press item to energy, regardless of generic keyword relevance", () => {
+test("a ΔΕΗ sponsorship release is dropped as ppc_non_network, not routed to energy", () => {
   const sponsorship = { sourceId: "ppc-press", url: "https://ppcgroup.com/sponsorship", title: "Η ΔΕΗ χορηγός στο φεστιβάλ πολιτισμού", summary: "Ανακοίνωση χορηγίας." };
-  assert.deepEqual(sourceForcedCategories(sponsorship).map((m) => m.category), ["energy"]);
-  const [ranked] = rankItems([sponsorship], DEFAULT_WATCH_RULES);
-  assert.ok(ranked, "a ΔΕΗ release with no energy keywords must not be dropped as irrelevant");
+  assert.deepEqual(noiseRejectReason(sponsorship), { group: "ppc_non_network", term: null });
+  assert.deepEqual(sourceForcedCategories(sponsorship), []);
+});
+
+test("sourceForcedCategories routes a ΔΕΗ network/business release to energy", () => {
+  const investment = { sourceId: "ppc-press", url: "https://ppcgroup.com/investment", title: "ΔΕΗ: επενδύσεις 1 δισ. σε δίκτυα διανομής", summary: "" };
+  assert.equal(noiseRejectReason(investment), null);
+  assert.deepEqual(sourceForcedCategories(investment).map((m) => m.category), ["energy"]);
+  const [ranked] = rankItems([investment], DEFAULT_WATCH_RULES);
+  assert.ok(ranked, "a ΔΕΗ network/business release must not be dropped as irrelevant");
   assert.ok(ranked.relevance.map((m) => m.category).includes("energy"));
 });
 
 test("sourceForcedCategories additionally routes to telco when fibre terms are present", () => {
-  const fibreRelease = { sourceId: "ppc-press", title: "Η ΔΕΗ Fiber έφτασε 1,5 εκατ. σπίτια", summary: "Επέκταση δικτύου FTTH." };
+  const fibreRelease = { sourceId: "ppc-press", title: "ΔΕΗ Fiber: νέες περιοχές FTTH", summary: "" };
+  assert.equal(noiseRejectReason(fibreRelease), null);
   const categories = sourceForcedCategories(fibreRelease).map((m) => m.category);
   assert.deepEqual(categories, ["energy", "telco"]);
 });
 
 test("sourceForcedCategories does not add telco without a fibre term", () => {
-  const nonFibre = { sourceId: "ppc-press", title: "Η ΔΕΗ ανακοίνωσε τα αποτελέσματα εννεαμήνου", summary: "Οικονομικά αποτελέσματα ομίλου." };
+  const nonFibre = { sourceId: "ppc-press", title: "ΔΕΗ: επενδύσεις 1 δισ. σε δίκτυα διανομής", summary: "" };
   assert.deepEqual(sourceForcedCategories(nonFibre).map((m) => m.category), ["energy"]);
 });
 
 test("sourceForcedCategories is a no-op for other sources", () => {
   assert.deepEqual(sourceForcedCategories({ sourceId: "admie-press", title: "ΔΕΗ Fiber FTTH" }), []);
 });
+
+test("sourceForcedCategories is not forced for a ΔΕΗ release matching neither the drop nor the keep list", () => {
+  const unrelated = { sourceId: "ppc-press", title: "Η ΔΕΗ στην 90η ΔΕΘ χωρίς άλλο αντικείμενο", summary: "" };
+  assert.equal(noiseRejectReason(unrelated), null);
+  assert.deepEqual(sourceForcedCategories(unrelated), []);
+});
+
+// Real titles from the last scan (sources-spec.md round-3 owner answers).
+const PPC_SCAN_TITLES = [
+  { title: "ΔΕΗ - WE4ALL: Συνεργασία για την ολιστική αναγέννηση σχολικών προαυλίων", drop: true },
+  // "αθλητ*"/"γηπεδ*"/"ποδοσφαιρ*" would already hit the generic off_topic
+  // noise reject; this title avoids them so the test exercises the
+  // ppc-specific "basketball"/"3x3" terms added for this exact story.
+  { title: "ΔΕΗ 3x3 Street Basketball: δράση κοινωνικής προσφοράς της ΔΕΗ", drop: true },
+  { title: "ΔΕΗ: Χρυσός Χορηγός του 32ου Διεθνούς Φεστιβάλ Κινηματογράφου", drop: true },
+  { title: "ΔΕΗ: Νέα ακόμη χαμηλότερη τιμή στο φοιτητικό προϊόν ρεύματος", drop: true },
+  { title: "ΔΕΗ Fiber: νέες περιοχές FTTH", drop: false, categories: ["energy", "telco"] },
+  { title: "ΔΕΗ: επενδύσεις 1 δισ. σε δίκτυα διανομής", drop: false, categories: ["energy"] },
+];
+
+for (const { title, drop, categories } of PPC_SCAN_TITLES) {
+  test(`ppc-press "${title}" is ${drop ? "dropped (ppc_non_network)" : `forced to ${categories}`}`, () => {
+    const item = { sourceId: "ppc-press", title, summary: "" };
+    if (drop) {
+      assert.deepEqual(noiseRejectReason(item), { group: "ppc_non_network", term: null });
+      assert.deepEqual(sourceForcedCategories(item), []);
+    } else {
+      assert.equal(noiseRejectReason(item), null);
+      assert.deepEqual(sourceForcedCategories(item).map((m) => m.category), categories);
+    }
+  });
+}
 
 const PPC_MONTH_EL_LATIN = {
   1: "ianouarios", 2: "fevrouarios", 3: "martios", 4: "aprilios",
@@ -292,18 +338,18 @@ test("SECTION_HOMEPAGE_CAPS (§1 homepage_cap) sums to homepage.max_items (20)",
   assert.equal(total, HOMEPAGE_MAX_ITEMS);
 });
 
-test("buildHomepageSections caps deals-companies at SECTION_HOMEPAGE_CAPS['deals-companies']=2: 6 fresh items -> 2 on homepage", () => {
+test("buildHomepageSections caps deals at SECTION_HOMEPAGE_CAPS['deals-companies']=2: 6 fresh items -> 2 on homepage", () => {
   const now = new Date("2026-10-25T12:00:00Z").getTime();
   const articles = Array.from({ length: 6 }, (_, i) => ({
     url: `https://x.test/deal-${i}`,
     title: `Εξαγορά εταιρείας αρ. ${i} στην Ελλάδα`,
-    categories: ["deals-companies"],
+    categories: ["deals"],
     sourceId: `deal-source-${i}`,
     publishedAt: new Date(now - i * 3_600_000).toISOString(),
   }));
   const sections = buildHomepageSections(articles, { now });
-  const total = (sections.lead ? 1 : 0) + sections.recent.length + sections.columns["deals-companies"].length;
-  assert.equal(total, 2, `expected exactly 2 deals-companies items on the homepage, got ${total}`);
+  const total = (sections.lead ? 1 : 0) + sections.recent.length + sections.columns["deals"].length;
+  assert.equal(total, 2, `expected exactly 2 deals items on the homepage, got ${total}`);
 });
 
 test("buildHomepageSections total converges to exactly homepage.max_items (20) when every §1 section is oversupplied", () => {
@@ -319,7 +365,7 @@ test("buildHomepageSections total converges to exactly homepage.max_items (20) w
     ...Array.from({ length: 10 }, (_, i) => mk("telco", `Η Cosmote επεκτείνει δίκτυο FTTH οπτικών ινών gigabit αρ. ${i}`)),
     ...Array.from({ length: 10 }, (_, i) => mk("energy", `Υποσταθμός υψηλής τάσης και διασύνδεση ΑΔΜΗΕ αρ. ${i}`)),
     ...Array.from({ length: 10 }, (_, i) => mk("infrastructure", `Έργο σήραγγας και γέφυρας αυτοκινητόδρομου αρ. ${i}`)),
-    ...Array.from({ length: 10 }, (_, i) => mk("deals-companies", `Εξαγορά και συγχώνευση εταιρείας αρ. ${i}`)),
+    ...Array.from({ length: 10 }, (_, i) => mk("deals", `Εξαγορά και συγχώνευση εταιρείας αρ. ${i}`)),
     // mapped=infrastructure-works (0 hits), overridden to tenders-contracts (5 hits)
     ...Array.from({ length: 10 }, (_, i) => mk("infrastructure", `Διαγωνισμός κατακύρωση ανάθεση σύμβασης προκήρυξης αρ. ${i}`)),
     // mapped=telecom-fibre (0 hits), overridden to regulators-policy (5 hits)
@@ -338,7 +384,7 @@ test("homepageSectionOf maps a public category to its §1 spec section", () => {
   assert.equal(homepageSectionOf({ categories: ["telco"], title: "x", summary: "" }), "telecom-fibre");
   assert.equal(homepageSectionOf({ categories: ["energy"], title: "x", summary: "" }), "energy-grids");
   assert.equal(homepageSectionOf({ categories: ["infrastructure"], title: "x", summary: "" }), "infrastructure-works");
-  assert.equal(homepageSectionOf({ categories: ["deals-companies"], title: "x", summary: "" }), "deals-companies");
+  assert.equal(homepageSectionOf({ categories: ["deals"], title: "x", summary: "" }), "deals-companies");
   assert.equal(homepageSectionOf({ categories: [], title: "x", summary: "" }), null);
 });
 

@@ -29,14 +29,18 @@ export const SECTION_HOMEPAGE_CAPS = Object.freeze({
 });
 
 // Public category (src/public-data.js PUBLIC_CATEGORIES key) -> its mapped
-// §1 spec section id. regulators-policy and tenders-contracts have no public
-// category/page yet, so they are never the *mapped* section — only ever a
-// rules-based override (see homepageSectionOf).
+// §1 spec section id. tenders/regulators map onto their own spec section
+// too (see RULES_ONLY_CATEGORY_BY_SPEC_SECTION below for how an article ever
+// gets one of those two categories in the first place), but the override
+// branch in homepageSectionOf recomputes the same result either way, so
+// leaving them out here would not change behaviour.
 export const CATEGORY_TO_SPEC_SECTION = Object.freeze({
   telco: "telecom-fibre",
   energy: "energy-grids",
   infrastructure: "infrastructure-works",
-  "deals-companies": "deals-companies",
+  deals: "deals-companies",
+  tenders: "tenders-contracts",
+  regulators: "regulators-policy",
 });
 
 // §1 keywords_el/keywords_en (+ negative), transcribed verbatim, for the two
@@ -105,6 +109,24 @@ export const SPEC_SECTION_KEYWORDS = Object.freeze({
     negative: ["χρηματιστηρι* κλεισιμο", "μερισμα", "τραπεζ*"],
   },
 });
+
+// round-3 owner answer (sources-spec.md §2.2 ppc-press): the source-level
+// energy routing in watch-rules.js sourceForcedCategories is narrowed to
+// network/business and fibre releases only; sponsorship/CSR/events and
+// retail tariffs/programmes aimed at households or students are dropped
+// outright, scoped to this one source. Checked here (rather than in
+// watch-rules.js) so it runs through noiseRejectReason, which both
+// pipeline.js (scan) and public-data.js (read) already call upstream of any
+// forced-category routing — drop wins over keep for free.
+const PPC_SPONSORSHIP_EVENT_TERMS = ["χορηγ*", "φεστιβαλ*", "εκδηλωσ*", "we4all", "τουρνουα*", "basketball", "3x3"];
+const PPC_RETAIL_SUBJECT_TERMS = ["τιμολογ*", "προγραμμα*", "προιον*", "τιμη*"];
+const PPC_RETAIL_AUDIENCE_TERMS = ["νοικοκυρι*", "οικιακ*", "φοιτητ*", "καταναλωτ*", "πελατ*"];
+
+function isPpcNonNetwork(item, text) {
+  if ((item.sourceId || item.source_id) !== "ppc-press") return false;
+  if (matchesAnyTerm(text, PPC_SPONSORSHIP_EVENT_TERMS)) return true;
+  return matchesAnyTerm(text, PPC_RETAIL_SUBJECT_TERMS) && matchesAnyTerm(text, PPC_RETAIL_AUDIENCE_TERMS);
+}
 
 // §5 max_age_hours.news
 export const MAX_AGE_HOURS_NEWS = 72;
@@ -176,6 +198,22 @@ export function homepageSectionOf(article = {}) {
     .filter((candidate) => candidate.hits >= 2 && candidate.hits > mappedHits)
     .sort((a, b) => b.hits - a.hits)[0];
   return override?.section || mapped;
+}
+
+// tenders-contracts/regulators-policy have no rule in watch-rules.js
+// DEFAULT_WATCH_RULES (no "AI" equivalent in this codebase), so the rules
+// override above is the only way an article ever gets the "tenders" or
+// "regulators" public category — reusing homepageSectionOf keeps the
+// category an article is filed under and the section it counts against for
+// homepage capping (SECTION_HOMEPAGE_CAPS) always in agreement.
+const RULES_ONLY_CATEGORY_BY_SPEC_SECTION = Object.freeze({
+  "tenders-contracts": "tenders",
+  "regulators-policy": "regulators",
+});
+
+/** Returns "tenders"/"regulators" when the §1 rules override qualifies for one of them, else null. */
+export function rulesOverrideCategory(article = {}) {
+  return RULES_ONLY_CATEGORY_BY_SPEC_SECTION[homepageSectionOf(article)] || null;
 }
 
 // §5 noise_hard_reject. Parenthetical notes in the spec ("(gadget)",
@@ -262,6 +300,7 @@ export function noiseRejectReason(item = {}) {
       return { group, term };
     }
   }
+  if (isPpcNonNetwork(item, text)) return { group: "ppc_non_network", term: null };
   if (isPoliticalQuoteWithNoDecision(text)) return { group: "political_quote_no_decision", term: null };
   return null;
 }

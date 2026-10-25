@@ -48,7 +48,7 @@ export function buildInsightSitemapEntries(base, elInsights, enInsights) {
 
 export default function sitemap() {
   const base = process.env.NEXT_PUBLIC_SITE_URL || "https://grwire.com";
-  const pages = ["", "/deals-companies", "/telco", "/energy", "/infrastructure", "/search"].map((path) => ({
+  const pages = ["", "/deals", "/telco", "/energy", "/infrastructure", "/tenders", "/regulators", "/search"].map((path) => ({
     url: `${base}${path}`,
     changeFrequency: "daily",
     priority: path ? 0.8 : 1,

@@ -15,6 +15,7 @@ import {
   homepageSectionOf,
   isFresh,
   noiseRejectReason,
+  rulesOverrideCategory,
   splitByFreshness,
 } from "./feed-rules.js";
 
@@ -23,14 +24,14 @@ const SOURCE_BY_ID = new Map(SOURCES.map((source) => [source.id, source]));
 // Ingest runs repeatedly and the day cap (sources-spec.md §5/§2) must also
 // hold for rows already written earlier that day, so it is re-applied here
 // on read without touching the DB schema or writing back to it.
-export function applyDayCap(rows, { now = Date.now() } = {}) {
+export function applyDayCap(rows, { now = Date.now(), onDrop } = {}) {
   const dayCounts = new Map();
   const kept = [];
   for (const row of rows) {
     const cap = SOURCE_BY_ID.get(row.source_id)?.dayCap ?? DEFAULT_DAY_CAP_PER_SOURCE;
     const key = `${row.source_id}|${athensDayKey(row.published_at, now)}`;
     const count = dayCounts.get(key) || 0;
-    if (count >= cap) continue;
+    if (count >= cap) { onDrop?.(row); continue; }
     dayCounts.set(key, count + 1);
     kept.push(row);
   }
@@ -38,7 +39,7 @@ export function applyDayCap(rows, { now = Date.now() } = {}) {
 }
 
 export const PUBLIC_CATEGORIES = {
-  "deals-companies": {
+  deals: {
     name: "Deals & companies",
     deck: "Operators, utilities, tower, fibre, grid and infrastructure companies: deals, results, M&A and investment.",
     specId: "deals-companies",
@@ -58,11 +59,46 @@ export const PUBLIC_CATEGORIES = {
     deck: "Construction, concessions, transport, data centres and strategic projects.",
     specId: "infrastructure-works",
   },
+  tenders: {
+    name: "Tenders & contracts",
+    deck: "ΚΗΜΔΗΣ/Διαύγεια tenders and contracts, and press coverage of a specific tender.",
+    specId: "tenders-contracts",
+  },
+  regulators: {
+    name: "Regulators & policy",
+    deck: "ΕΕΤΤ, ΡΑΑΕΥ and ministry decisions, consultations, regulation and spectrum policy.",
+    specId: "regulators-policy",
+  },
 };
 
 export const SECTION_SLUG_BY_SPEC_ID = Object.fromEntries(
   Object.entries(PUBLIC_CATEGORIES).map(([slug, config]) => [config.specId, slug]),
 );
+
+/**
+ * Pure selection pipeline shared by getLatestArticles (reads from the DB)
+ * and scripts/review-dump.js (reads from a fresh, DB-less scan): noise/
+ * ppc_non_network/political drop, the per-source day cap, dedupe, rules
+ * reclassification (including the tenders/regulators rules-only override),
+ * category filter, then conversion to the public article shape.
+ * `onDrop(row, reason)` is called, where easy, for every row that does not
+ * survive a stage — `reason` is `{ stage, group, term }` for the noise
+ * stage (same shape as feed-rules.js noiseRejectReason) or `{ stage }` for
+ * day_cap/duplicate.
+ */
+export function selectArticles(rows, { category, limit = 80, now = Date.now(), onDrop } = {}) {
+  const withoutNoise = rows.filter((row) => {
+    const reason = noiseRejectReason(row);
+    if (!reason) return true;
+    onDrop?.(row, { stage: "noise", ...reason });
+    return false;
+  });
+  const dayCapped = applyDayCap(withoutNoise, { now, onDrop: (row) => onDrop?.(row, { stage: "day_cap" }) });
+  const deduped = collapseDuplicateArticles(dayCapped, { onDrop: (row) => onDrop?.(row, { stage: "duplicate" }) });
+  let cleaned = deduped.map(reclassifyRow);
+  if (category) cleaned = cleaned.filter((row) => row.categories.includes(category));
+  return cleaned.slice(0, limit).map(toArticle);
+}
 
 export async function getLatestArticles({ category, query, limit = 80 } = {}) {
   const sql = getSql();
@@ -70,19 +106,7 @@ export async function getLatestArticles({ category, query, limit = 80 } = {}) {
   try {
     let rows;
     const queryLimit = Math.min(Math.max(limit * 3, limit), 300);
-    if (category && query) {
-      const pattern = `%${query}%`;
-      rows = await sql`
-        SELECT * FROM articles
-        WHERE title ILIKE ${pattern} OR summary ILIKE ${pattern}
-        ORDER BY COALESCE(published_at, updated_at) DESC NULLS LAST LIMIT ${queryLimit}
-      `;
-    } else if (category) {
-      rows = await sql`
-        SELECT * FROM articles
-        ORDER BY COALESCE(published_at, updated_at) DESC NULLS LAST LIMIT ${queryLimit}
-      `;
-    } else if (query) {
+    if (query) {
       const pattern = `%${query}%`;
       rows = await sql`
         SELECT * FROM articles
@@ -99,11 +123,7 @@ export async function getLatestArticles({ category, query, limit = 80 } = {}) {
     // apply at read time too, so previously-stored rows that predate these
     // rules (or that ingest keeps re-upserting) disappear from the pages
     // without a DB migration or write.
-    const withoutNoise = rows.filter((row) => !noiseRejectReason(row));
-    const dayCapped = applyDayCap(withoutNoise);
-    let cleaned = collapseDuplicateArticles(dayCapped).map(reclassifyRow);
-    if (category) cleaned = cleaned.filter((row) => row.categories.includes(category));
-    return cleaned.slice(0, limit).map(toArticle);
+    return selectArticles(rows, { category, limit });
   } catch (error) {
     // Rethrow so a cached page keeps its last good copy instead of caching an empty one.
     console.error("[public] article read failed:", error?.message || error);
@@ -137,7 +157,7 @@ export async function getHomepageData() {
  * Skipped items are never replaced with padding: a slot that runs out of
  * eligible articles is just left shorter than its usual capacity.
  */
-export function buildHomepageSections(articles = [], { now = Date.now() } = {}) {
+export function buildHomepageSections(articles = [], { now = Date.now(), onDrop } = {}) {
   const { fresh } = splitByFreshness(articles, { now });
 
   const shown = new Set();
@@ -146,15 +166,15 @@ export function buildHomepageSections(articles = [], { now = Date.now() } = {}) 
   let totalCount = 0;
 
   const eligible = (article) => {
-    if (totalCount >= HOMEPAGE_MAX_ITEMS) return false;
-    if (article.metadata?.sectionOnly) return false;
+    if (totalCount >= HOMEPAGE_MAX_ITEMS) { onDrop?.(article, { stage: "total_cap" }); return false; }
+    if (article.metadata?.sectionOnly) { onDrop?.(article, { stage: "section_only" }); return false; }
     if (shown.has(canonicalizeUrl(article.url))) return false;
     const homeCap = SOURCE_BY_ID.get(article.sourceId)?.homeCap ?? DEFAULT_HOME_CAP_PER_SOURCE;
-    if ((perSourceCount.get(article.sourceId) || 0) >= homeCap) return false;
+    if ((perSourceCount.get(article.sourceId) || 0) >= homeCap) { onDrop?.(article, { stage: "home_cap" }); return false; }
     const specSection = homepageSectionOf(article);
     if (specSection) {
       const sectionCap = Math.min(SECTION_HOMEPAGE_CAPS[specSection] ?? Infinity, SECTION_SHARE_CAP);
-      if ((perSpecSectionCount.get(specSection) || 0) >= sectionCap) return false;
+      if ((perSpecSectionCount.get(specSection) || 0) >= sectionCap) { onDrop?.(article, { stage: "section_cap", specSection }); return false; }
     }
     return true;
   };
@@ -276,9 +296,16 @@ function reclassifyRow(row) {
     sourceId: row.source_id,
     metadata: row.metadata || {},
   }], DEFAULT_WATCH_RULES);
+  const categories = ranked?.relevance?.map((match) => match.category) || [];
+  // sources-spec.md §1: "If the AI section and the rules section disagree,
+  // use the rules section when it has >=2 keyword hits." tenders-contracts/
+  // regulators-policy have no rule above, so this is the only way an
+  // article gets the "tenders"/"regulators" category — promoted to primary
+  // (categories[0]) when it qualifies, keeping the rest of the categories.
+  const override = rulesOverrideCategory({ title: row.title, summary: row.summary, categories });
   return {
     ...row,
-    categories: ranked?.relevance?.map((match) => match.category) || [],
+    categories: override ? [override, ...categories.filter((category) => category !== override)] : categories,
     relevance: ranked?.relevance || [],
     score: ranked?.score || 0,
   };

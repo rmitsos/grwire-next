@@ -12,6 +12,8 @@
   --sec-energy-grids: #9a5b00;
   --sec-infrastructure-works: #4a5761;
   --sec-deals-companies: #7e3a5e;
+  --sec-tenders-contracts: #6b4a1f;
+  --sec-regulators-policy: #3a4a7e;
   --sans: var(--font-sans), system-ui, sans-serif;
   --serif: var(--font-serif), Georgia, serif;
   --mono: var(--font-mono), ui-monospace, monospace;
