@@ -76,7 +76,7 @@ nPerf measured an average fixed download speed of **115.89 Mbps** in Q3 2026, ag
 5. Vodafone Greece, fibre-to-the-home plans, checked 25/10/2026. https://www.vodafone.gr/statheri-internet-programmata/fiber-to-the-home
 6. Nova, fixed internet plans, checked 25/10/2026. https://nova.gr/statheri-tilefonia/programmata/stathero-internet
 7. Telekom (OTE), fibre plans checked 25/10/2026; VDSL prices from the February 2026 price list.
-8. EETT, broadband report (end-2025 data), posted August 2026.
+8. EETT, broadband report (end-2025 data), posted August 2026. https://www.eett.gr/wp-content/uploads/2026/08/Πορεία-της-ευρυζωνικότητας-στην-Ελλάδα-Β-εξάμηνο-2025.pdf
 9. nPerf, via InfoCom.gr, 20/10/2026. https://infocom.gr/2026/10/20/nperf-11589-mbps-i-mesi-tachytita-lipsis-sto-stathero-diadiktyo-stin-ellada/109616/
 
 *Method: figures as reported by the sources above. "About one in three" is a GR Wire calculation from EETT active lines and operator homes-passed figures; operators count homes passed differently and networks overlap, so it is an approximation. GR Wire did not run its own survey.*

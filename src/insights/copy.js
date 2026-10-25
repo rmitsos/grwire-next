@@ -10,6 +10,7 @@ export const INSIGHTS_COPY = {
     readMore: "Διαβάστε την ανάλυση →",
     backToIndex: "← Όλα τα Insights",
     langSwitchLabel: "Γλώσσα",
+    draftLabel: "Προσχέδιο",
   },
   en: {
     lang: "en",
@@ -20,6 +21,7 @@ export const INSIGHTS_COPY = {
     readMore: "Read the analysis →",
     backToIndex: "← All insights",
     langSwitchLabel: "Language",
+    draftLabel: "Draft",
   },
 };
 

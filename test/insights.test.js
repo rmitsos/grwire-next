@@ -14,7 +14,8 @@ import {
 } from "../src/insights/content.js";
 import { buildAlternatesMetadata, siteBase } from "../src/landing/metadata.js";
 import { LANDING_COPY } from "../src/landing/copy.js";
-import sitemap from "../src/app/sitemap.js";
+import sitemap, { buildInsightSitemapEntries } from "../src/app/sitemap.js";
+import { getInsightsCopy } from "../src/insights/copy.js";
 
 const REPO_ROOT = path.join(import.meta.dirname, "..");
 const KNOWLEDGE_DIR = "/workspace/knowledge/grwire/insights";
@@ -91,11 +92,12 @@ for (const [key, expected] of Object.entries(EXPECTED)) {
   });
 }
 
-test("loader: fibre-switch sources #7 and #8 have url null (both languages)", () => {
+test("loader: fibre-switch source #7 has url null, source #8 has a url (both languages)", () => {
   for (const lang of ["en", "el"]) {
     const insight = getInsight("fibre-switch", lang);
     assert.equal(insight.sources[6].url, null);
-    assert.equal(insight.sources[7].url, null);
+    assert.ok(insight.sources[7].url);
+    assert.match(insight.sources[7].url, /^https:\/\/www\.eett\.gr\//);
   }
 });
 
@@ -203,6 +205,111 @@ test("parseInsight: draft detection from the first HTML comment only", () => {
   assert.equal(parseInsight(greekDraftMd, { slug: "s", lang: "en" }).draft, true);
 });
 
+// ---- draft label copy + wiring --------------------------------------------------------------
+
+test("getInsightsCopy: draftLabel is 'Draft' (en) / 'Προσχέδιο' (el)", () => {
+  assert.equal(getInsightsCopy("en").draftLabel, "Draft");
+  assert.equal(getInsightsCopy("el").draftLabel, "Προσχέδιο");
+});
+
+test("draft label: parsed fixture with DRAFT comment renders the label, without it does not", () => {
+  const draftMd = `<!-- DRAFT -->\n\n**K**\n\n# T\n\nStandfirst.\n\n## Sources\n\n1. S\n`;
+  const notDraftMd = `<!-- checked -->\n\n**K**\n\n# T\n\nStandfirst.\n\n## Sources\n\n1. S\n`;
+  const draftInsight = parseInsight(draftMd, { slug: "s", lang: "en" });
+  const liveInsight = parseInsight(notDraftMd, { slug: "s", lang: "en" });
+
+  // The components only ever gate the label on insight.draft — exercise that exact condition
+  // rather than re-implementing JSX rendering (this repo's test runner has no JSX transform).
+  assert.equal(draftInsight.draft && getInsightsCopy("en").draftLabel, "Draft");
+  assert.equal(liveInsight.draft && getInsightsCopy("en").draftLabel, false);
+});
+
+test("components wire the draft label to insight.draft and INSIGHTS_COPY.draftLabel", () => {
+  const files = [
+    "src/components/insights/InsightArticlePage.js",
+    "src/components/insights/InsightIndexPage.js",
+    "src/app/(site)/(public)/page.js",
+  ];
+  for (const relativePath of files) {
+    const content = readFileSync(path.join(REPO_ROOT, relativePath), "utf8");
+    assert.ok(content.includes("insight.draft"), `${relativePath} should gate on insight.draft`);
+    assert.ok(content.includes("insight-draft-label"), `${relativePath} should render the draft label class`);
+    assert.ok(content.includes("draftLabel"), `${relativePath} should use the draftLabel copy string`);
+  }
+});
+
+test("insight CSS: .insight-draft-label is styled in both landing.css and globals.css", () => {
+  const landingCss = readFileSync(path.join(REPO_ROOT, "src/app/landing.css"), "utf8");
+  const globalsCss = readFileSync(path.join(REPO_ROOT, "src/app/globals.css"), "utf8");
+  assert.ok(landingCss.includes(".insight-draft-label"));
+  assert.ok(globalsCss.includes(".insight-draft-label"));
+});
+
+// ---- robots / noindex for drafts -------------------------------------------------------------
+
+test("buildAlternatesMetadata: noindex follows the parsed draft flag (set for draft, absent for non-draft)", () => {
+  const draftMd = `<!-- DRAFT -->\n\n**K**\n\n# T\n\nStandfirst.\n\n## Sources\n\n1. S\n`;
+  const notDraftMd = `<!-- checked -->\n\n**K**\n\n# T\n\nStandfirst.\n\n## Sources\n\n1. S\n`;
+  const draftInsight = parseInsight(draftMd, { slug: "s", lang: "en" });
+  const liveInsight = parseInsight(notDraftMd, { slug: "s", lang: "en" });
+
+  const draftMetadata = buildAlternatesMetadata({
+    lang: "en",
+    elPath: "/insights/s",
+    enPath: "/en/insights/s",
+    title: "T",
+    description: "D",
+    type: "article",
+    noindex: draftInsight.draft,
+  });
+  assert.deepEqual(draftMetadata.robots, { index: false, follow: false });
+
+  const liveMetadata = buildAlternatesMetadata({
+    lang: "en",
+    elPath: "/insights/s",
+    enPath: "/en/insights/s",
+    title: "T",
+    description: "D",
+    type: "article",
+    noindex: liveInsight.draft,
+  });
+  assert.equal(liveMetadata.robots, undefined);
+
+  // alternates/hreflang must survive regardless of robots — the language switch still works.
+  assert.deepEqual(draftMetadata.alternates.languages, liveMetadata.alternates.languages);
+});
+
+test("insight article pages set generateMetadata's noindex from insight.draft", () => {
+  const files = [
+    "src/app/(landing-el)/insights/[slug]/page.js",
+    "src/app/(landing-en)/en/insights/[slug]/page.js",
+  ];
+  for (const relativePath of files) {
+    const content = readFileSync(path.join(REPO_ROOT, relativePath), "utf8");
+    assert.ok(content.includes("noindex: insight.draft"), `${relativePath} should pass noindex: insight.draft`);
+  }
+});
+
+test("insight index pages are noindexed only when every listed article is draft", () => {
+  const files = [
+    "src/app/(landing-el)/insights/page.js",
+    "src/app/(landing-en)/en/insights/page.js",
+  ];
+  for (const relativePath of files) {
+    const content = readFileSync(path.join(REPO_ROOT, relativePath), "utf8");
+    assert.ok(content.includes("!insights.some((insight) => !insight.draft)"));
+    assert.ok(content.includes("noindex: allDraft"));
+  }
+
+  // Current real content has both articles as drafts in both languages, so both index pages
+  // are noindexed right now — this is the state generateMetadata would actually produce.
+  for (const lang of ["el", "en"]) {
+    const insights = listInsights(lang);
+    const allDraft = !insights.some((insight) => !insight.draft);
+    assert.equal(allDraft, true);
+  }
+});
+
 // ---- metadata -----------------------------------------------------------------------------
 
 test("buildAlternatesMetadata: article canonical/hreflang/x-default/og for an explicit path pair", () => {
@@ -241,34 +348,59 @@ test("buildAlternatesMetadata: article canonical/hreflang/x-default/og for an ex
 
 // ---- sitemap -----------------------------------------------------------------------------
 
-test("sitemap includes the insights index and articles in both languages, with alternates", () => {
+test("sitemap: real content/insights articles are currently all draft, so no insight URLs appear", () => {
   const base = siteBase();
   const entries = sitemap();
+  const urls = entries.map((entry) => entry.url);
+  assert.ok(!urls.includes(`${base}/insights`));
+  assert.ok(!urls.includes(`${base}/en/insights`));
+  assert.ok(!urls.includes(`${base}/insights/fibre-switch`));
+  assert.ok(!urls.includes(`${base}/en/insights/fibre-switch`));
+});
+
+function makeInsight(slug, draft) {
+  return { slug, draft };
+}
+
+test("buildInsightSitemapEntries: excludes draft articles, includes non-draft articles, with alternates", () => {
+  const base = siteBase();
+  const el = [makeInsight("a", false), makeInsight("b", true)];
+  const en = [makeInsight("a", false), makeInsight("b", true)];
+  const entries = buildInsightSitemapEntries(base, el, en);
   const byUrl = Object.fromEntries(entries.map((entry) => [entry.url, entry]));
 
-  assert.ok(byUrl[`${base}/insights`]);
-  assert.deepEqual(byUrl[`${base}/insights`].alternates.languages, {
-    el: `${base}/insights`,
-    en: `${base}/en/insights`,
+  assert.ok(byUrl[`${base}/insights/a`]);
+  assert.ok(byUrl[`${base}/en/insights/a`]);
+  assert.equal(byUrl[`${base}/insights/b`], undefined);
+  assert.equal(byUrl[`${base}/en/insights/b`], undefined);
+  assert.deepEqual(byUrl[`${base}/insights/a`].alternates.languages, {
+    el: `${base}/insights/a`,
+    en: `${base}/en/insights/a`,
   });
+});
 
-  assert.ok(byUrl[`${base}/en/insights`]);
-  assert.deepEqual(byUrl[`${base}/en/insights`].alternates.languages, {
-    el: `${base}/insights`,
-    en: `${base}/en/insights`,
-  });
+test("buildInsightSitemapEntries: index is included while at least one listed article is non-draft", () => {
+  const base = siteBase();
+  const entries = buildInsightSitemapEntries(base, [makeInsight("a", false), makeInsight("b", true)], []);
+  const urls = entries.map((entry) => entry.url);
+  assert.ok(urls.includes(`${base}/insights`));
+  assert.ok(!urls.includes(`${base}/en/insights`));
+});
 
-  assert.ok(byUrl[`${base}/insights/fibre-switch`]);
-  assert.deepEqual(byUrl[`${base}/insights/fibre-switch`].alternates.languages, {
-    el: `${base}/insights/fibre-switch`,
-    en: `${base}/en/insights/fibre-switch`,
-  });
+test("buildInsightSitemapEntries: index is excluded when every listed article is draft", () => {
+  const base = siteBase();
+  const entries = buildInsightSitemapEntries(base, [makeInsight("a", true)], [makeInsight("a", true)]);
+  const urls = entries.map((entry) => entry.url);
+  assert.ok(!urls.includes(`${base}/insights`));
+  assert.ok(!urls.includes(`${base}/en/insights`));
+  assert.ok(!urls.includes(`${base}/insights/a`));
+  assert.ok(!urls.includes(`${base}/en/insights/a`));
+});
 
-  assert.ok(byUrl[`${base}/en/insights/fibre-switch`]);
-  assert.deepEqual(byUrl[`${base}/en/insights/fibre-switch`].alternates.languages, {
-    el: `${base}/insights/fibre-switch`,
-    en: `${base}/en/insights/fibre-switch`,
-  });
+test("buildInsightSitemapEntries: index is excluded when there are no articles at all", () => {
+  const base = siteBase();
+  const entries = buildInsightSitemapEntries(base, [], []);
+  assert.deepEqual(entries, []);
 });
 
 // ---- landing copy --------------------------------------------------------------------------

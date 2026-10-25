@@ -3,6 +3,7 @@ import { ArticleList, dateLabel } from "@/components/ArticleList";
 import { DailyStory } from "@/components/DailyStory";
 import { getHomepageData, PUBLIC_CATEGORIES } from "@/public-data";
 import { getInsight, insightPath, insightsIndexPath } from "@/insights/content";
+import { getInsightsCopy } from "@/insights/copy";
 
 // Served from the cache and rebuilt at most once an hour, or straight after an
 // ingest (see /api/ingest). Rendering per request kept Neon awake around the clock.
@@ -42,6 +43,9 @@ export default async function PublicHomepage() {
         <section className="insight-promo">
           <div>
             <span className="section-label">INSIGHT</span>
+            {insight.draft && (
+              <span className="insight-draft-label">{getInsightsCopy("en").draftLabel}</span>
+            )}
             <h2>{insight.title}</h2>
             {insight.standfirst.map((line, index) => (
               <p key={index}>{line}</p>

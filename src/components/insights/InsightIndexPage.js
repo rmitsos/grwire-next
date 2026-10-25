@@ -40,7 +40,10 @@ export function InsightIndexPage({ lang, insights }) {
 function InsightCard({ insight, lang, copy, featured = false }) {
   return (
     <article className={featured ? "insight-card insight-card-featured" : "insight-card"}>
-      <p className="insight-kicker">{renderInlineNodes(insight.kicker)}</p>
+      <p className="insight-kicker">
+        {renderInlineNodes(insight.kicker)}
+        {insight.draft && <span className="insight-draft-label">{copy.draftLabel}</span>}
+      </p>
       <h2>
         <a href={insightPath(insight.slug, lang)}>{insight.title}</a>
       </h2>

@@ -30,7 +30,10 @@ export function InsightArticlePage({ lang, insight }) {
       <main>
         <article className="insight-article">
           <div className="wrap insight-article-wrap">
-            <p className="insight-kicker">{renderInlineNodes(insight.kicker)}</p>
+            <p className="insight-kicker">
+              {renderInlineNodes(insight.kicker)}
+              {insight.draft && <span className="insight-draft-label">{copy.draftLabel}</span>}
+            </p>
             <h1>{insight.title}</h1>
             {insight.standfirst.map((line, index) => (
               <p className="insight-standfirst" key={index}>

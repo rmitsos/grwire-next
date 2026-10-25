@@ -24,6 +24,7 @@ export async function generateMetadata({ params }) {
     description: insight.description,
     image,
     type: "article",
+    noindex: insight.draft,
   });
 }
 
