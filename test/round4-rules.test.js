@@ -130,6 +130,16 @@ test("isEventPiece matches Summit/forum/ημερίδα/εκδήλωση/ΔΕΘ/�
   assert.ok(!isEventPiece("Η Cosmote επεκτείνει το δίκτυο FTTH σε νέους δήμους"));
 });
 
+test("isEventPiece matches συνέδριο/συνέδριου/συνέδρια/συνεδρίων but not συνεδρίαση/συνεδριάζει (board meeting, not a conference)", () => {
+  for (const title of ["Στο 11ο Συνέδριο Ενέργειας", "στο συνέδριο του ΣΕΒ"]) {
+    assert.ok(isEventPiece(title), `expected "${title}" to be an event piece`);
+  }
+  assert.ok(
+    !isEventPiece("Αποτελέσματα της 68ης Συνεδρίασης της Ολομέλειας του BEREC"),
+    "a board/plenary meeting (συνεδρίαση) is not a conference"
+  );
+});
+
 test("hasFigureOrDecisionSignal detects a euro amount, a power figure, a νοικοκυριά count, a numbered γραμμή, or a decision word", () => {
   assert.ok(hasFigureOrDecisionSignal("επένδυση €50 εκατ. στο δίκτυο"));
   assert.ok(hasFigureOrDecisionSignal("νέος σταθμός αποθήκευσης 100 MW"));

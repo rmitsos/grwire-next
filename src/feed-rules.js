@@ -371,7 +371,13 @@ export function countWithinNavWindow(articles = [], { now = Date.now() } = {}) {
 
 // round-4 event-piece rule: title matches (case/accent-insensitive, Greek
 // inflections handled by matchesAnyTerm's stemming).
-const EVENT_TERMS = ["summit", "συνεδρι*", "forum", "φορουμ*", "ημεριδ*", "εκδηλωσ*", "δεθ", "βραβευσ*"];
+// "συνέδριο" (conference) uses its exact closed-class inflections rather
+// than a "συνεδρι*" stem, because that stem also catches "συνεδρίαση" /
+// "συνεδριάζει" etc. — a board/plenary MEETING, not a conference.
+const EVENT_TERMS = [
+  "summit", "συνεδριο", "συνεδριου", "συνεδρια", "συνεδριων",
+  "forum", "φορουμ*", "ημεριδ*", "εκδηλωσ*", "δεθ", "βραβευσ*",
+];
 
 /** Whether an article's title reads as an event/conference piece (sources-spec round-4 event rule). */
 export function isEventPiece(title = "") {
