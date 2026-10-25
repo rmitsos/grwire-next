@@ -1,4 +1,4 @@
-import { getSql } from "./database";
+import { getSql } from "./database.js";
 import { collapseDuplicateArticles } from "./article-quality.js";
 import { DEFAULT_WATCH_RULES, rankItems } from "./watch-rules.js";
 import { storyDateToIso } from "./story-date.js";
@@ -65,18 +65,40 @@ export async function getLatestArticles({ category, query, limit = 80 } = {}) {
 
 export async function getHomepageData() {
   const [articles, story] = await Promise.all([getLatestArticles({ limit: 100 }), getLatestStory()]);
-  return {
-    articles,
-    story,
-    lead: articles[0] || null,
-    recent: articles.slice(1, 13),
-    categories: Object.fromEntries(
-      Object.keys(PUBLIC_CATEGORIES).map((category) => [
-        category,
-        articles.filter((article) => article.categories.includes(category)).slice(0, 5),
-      ]),
-    ),
+  return { articles, story, ...buildHomepageSections(articles) };
+}
+
+/**
+ * Lays out the homepage without repeating an article across sections. Each
+ * article is placed once: as the lead, in "recent", or in the column for its
+ * single highest-scoring category (categories[0], already rank-ordered by
+ * rankItems). Section pages still list every matching article separately.
+ */
+export function buildHomepageSections(articles = []) {
+  const shown = new Set();
+  const take = (article) => {
+    shown.add(article.url);
+    return article;
   };
+
+  const lead = articles[0] ? take(articles[0]) : null;
+  const recent = [];
+  for (const article of articles.slice(1)) {
+    if (recent.length >= 12) break;
+    if (shown.has(article.url)) continue;
+    recent.push(take(article));
+  }
+
+  const columns = Object.fromEntries(Object.keys(PUBLIC_CATEGORIES).map((category) => [category, []]));
+  for (const article of articles) {
+    if (shown.has(article.url)) continue;
+    const primaryCategory = article.categories?.[0];
+    if (!primaryCategory || !columns[primaryCategory]) continue;
+    if (columns[primaryCategory].length >= 5) continue;
+    columns[primaryCategory].push(take(article));
+  }
+
+  return { lead, recent, columns };
 }
 
 export async function getLatestStory() {

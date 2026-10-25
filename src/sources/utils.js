@@ -1,3 +1,33 @@
+const TRACKING_PARAM_PREFIXES = ["utm_", "mc_"];
+const TRACKING_PARAM_EXACT = new Set(["fbclid", "gclid", "ref"]);
+
+/**
+ * Produces a stable identity URL for dedupe/storage: lowercase host, no
+ * `www.`, no tracking params, no fragment, no `/amp` suffix or trailing
+ * slash. Returns the input unchanged if it cannot be parsed as a URL.
+ */
+export function canonicalizeUrl(value) {
+  if (value === undefined || value === null) return value;
+  try {
+    const decoded = String(value).replace(/&amp;/g, "&");
+    const url = new URL(decoded);
+    url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+    url.hash = "";
+    for (const key of [...url.searchParams.keys()]) {
+      const lower = key.toLowerCase();
+      if (TRACKING_PARAM_EXACT.has(lower) || TRACKING_PARAM_PREFIXES.some((prefix) => lower.startsWith(prefix))) {
+        url.searchParams.delete(key);
+      }
+    }
+    let pathname = url.pathname.replace(/\/amp$/i, "");
+    if (pathname.length > 1) pathname = pathname.replace(/\/+$/, "") || "/";
+    url.pathname = pathname || "/";
+    return url.href;
+  } catch {
+    return value;
+  }
+}
+
 export function decodeEntities(value = "") {
   return value
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")

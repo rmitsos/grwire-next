@@ -1,7 +1,7 @@
 import { SOURCES } from "../config/sources";
 import { scanMarket } from "./pipeline";
 import { detectArticleOrganizations } from "./article-organizations";
-import { ensureDatabase } from "./database";
+import { ensureDatabase } from "./database.js";
 import { buildDailyIntelligence } from "./agents/correlation-trends.js";
 import { buildDailyStory, buildFallbackDailyStory } from "./agents/story-builder.js";
 import { discoverSourceCandidates } from "./agents/source-guardian.js";

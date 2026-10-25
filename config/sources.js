@@ -40,6 +40,9 @@ export const SOURCES = [
     limit: 125,
   },
   {
+    // Redundant: superseded by the "ot-gr" WordPress source below, which
+    // targets the Business/Ενέργεια/Τηλεπικοινωνίες/Κατασκευές categories
+    // directly instead of pulling the whole site.
     id: "ot-wordpress",
     type: "wordpress",
     enabled: false,
@@ -48,18 +51,28 @@ export const SOURCES = [
     limit: 100,
   },
   {
+    // The HTML listing page loads its list via admin-ajax (search-filter
+    // plugin), so the HTML adapter only ever saw 2 nav links. The site-wide
+    // /feed/ only contains two 2022 "Τεστ" posts; the WP REST API needs auth
+    // (401/403). This post-type feed is the working public feed (verified 25
+    // Oct 2026, latest item 20 Oct 2026). Low volume (a few per month).
     id: "eett-announcements",
-    type: "html",
-    url: "https://www.eett.gr/mme-ekdoseis/deltia-typou-anakoinoseis/",
-    linkPatterns: ["anakoin", "deltio", "decision"],
+    type: "rss",
+    url: "https://www.eett.gr/feed/?post_type=deltia_tipou",
+    excludeTitlePatterns: ["^Τεστ"],
     limit: 100,
   },
   {
+    // The HTML page https://www.raaey.gr/energeia/anakinoseis/ returns HTTP
+    // 500; WP REST works (200). Categories 16/28 (Αδειοδοτήσεις/Αποφάσεις)
+    // are excluded because they are thousands of boilerplate licensing
+    // decisions ("ΑΠΟΦΑΣΗ ΑΝΤΙΠΡΟΕΔΡΟΥ ... ΥΠ' ΑΡΙΘΜ.").
     id: "raaey-energy-announcements",
-    type: "html",
-    url: "https://www.raaey.gr/energeia/anakinoseis/",
-    linkPatterns: ["anakoin", "αδει", "storage", "energy"],
-    limit: 100,
+    type: "wordpress",
+    url: "https://www.raaey.gr/energeia",
+    categories: [17, 20, 110],
+    lookbackDays: 21,
+    limit: 30,
   },
   {
     id: "ypen-energy-announcements",
@@ -76,8 +89,12 @@ export const SOURCES = [
     limit: 100,
   },
   {
+    // 0 accepted of 35 fetched in the 25 Oct 2026 live scan (titles only, no
+    // summary, rarely reach the relevance threshold). Covered by the "ot-gr"
+    // WordPress source's category 294 (Τηλεπικοινωνίες), which has excerpts.
     id: "ot-telecoms",
     type: "html",
+    enabled: false,
     url: "https://www.ot.gr/category/epixeiriseis/tilepikoinonies/",
     linkPatterns: ["tilepikoin", "ote", "cosmote", "vodafone", "nova", "ftth", "fiber", "fibre", "5g", "network", "telekom"],
     minimumTitleLength: 16,
@@ -145,9 +162,14 @@ export const SOURCES = [
     url: "https://www.naftemporiki.gr/feed/",
   },
   {
+    // The general /feed/ is dominated by world/politics/lifestyle (1 of 35
+    // relevant in the 25 Oct 2026 scan); WP REST answers 200 with excerpts.
     id: "ot-gr",
-    type: "rss",
-    url: "https://www.ot.gr/feed/",
+    type: "wordpress",
+    url: "https://www.ot.gr",
+    categories: [7, 21, 294, 295],
+    lookbackDays: 7,
+    limit: 60,
   },
   {
     id: "google-news-greek-telco",

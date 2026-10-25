@@ -1,13 +1,32 @@
+import { stripTrailingSiteSuffix } from "./article-quality.js";
+import { ORGANIZATIONS } from "./organizations.js";
+
 function normalise(value = "") {
   return String(value ?? "")
     .toLocaleLowerCase("el")
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(/[̀-ͯ]/g, "");
 }
 
 function includesAny(text, terms = []) {
   return terms.some((term) => text.includes(normalise(term)));
 }
+
+// Checked against every rule, regardless of topic/entity matches: lifestyle,
+// rental/residential-for-living and ad-campaign stories keep clearing the
+// infrastructure/finance thresholds on geography + preferred-source bonuses
+// alone, so they are rejected before any rule-specific scoring runs.
+const GLOBAL_EXCLUSIONS = ["ενοικιαστ", "κατοικ", "οικιστικ", "decathlon", "πιτσα φαν", "καμπανι"];
+
+// Large-cap/systemic Greek listed companies and regulated utilities. Finance
+// stories must mention one of these to qualify; generic market words
+// ("χρηματιστήριο", "μέρισμα") or a small-cap name alone are not enough.
+const MONITORED_COMPANIES = [
+  ...ORGANIZATIONS.flatMap((organization) => [organization.name, ...(organization.aliases || [])]),
+  "GEK TERNA", "ΓΕΚ ΤΕΡΝΑ", "Mytilineos", "Metlen", "AKTOR", "Intrakat", "AVAX", "ΑΒΑΞ",
+  "Ellaktor", "Ελλάκτωρ", "Jumbo", "ΟΠΑΠ", "OPAP", "Motor Oil", "Titan Cement", "ΤΙΤΑΝ",
+  "Aegean Airlines", "Coca-Cola HBC", "Cenergy", "Intralot", "Autohellas", "Lamda Development",
+];
 
 export function validateWatchRule(rule) {
   if (!rule?.id || !rule?.label) throw new TypeError("Watch rules require id and label");
@@ -23,6 +42,7 @@ export function validateWatchRule(rule) {
     geography: [],
     exclusions: [],
     requiredTopics: [],
+    requiredEntities: [],
     minimumStrongTopics: 0,
     preferredDomains: [],
     ...rule,
@@ -31,13 +51,17 @@ export function validateWatchRule(rule) {
 
 export function scoreItem(item, rawRule) {
   const rule = validateWatchRule(rawRule);
-  const title = normalise(item.title);
+  const title = normalise(stripTrailingSiteSuffix(item.title || ""));
   const summary = normalise(item.summary);
   const body = normalise(item.metadata?.articleBody);
   const combined = `${title} ${summary} ${body}`;
   const domain = new URL(item.url).hostname.replace(/^www\./, "");
   const reasons = [];
   let score = 0;
+
+  if (includesAny(combined, GLOBAL_EXCLUSIONS)) {
+    return { ruleId: rule.id, label: rule.label, category: rule.category, score: 0, accepted: false, reasons: ["excluded lifestyle/rental/retail content"] };
+  }
 
   if (includesAny(title, rule.entities)) {
     score += 5;
@@ -97,6 +121,10 @@ export function scoreItem(item, rawRule) {
     score = 0;
     reasons.push("insufficient high-signal subject detail");
   }
+  if (rule.requiredEntities.length && !includesAny(combined, rule.requiredEntities)) {
+    score = 0;
+    reasons.push("no monitored company match");
+  }
 
   return {
     ruleId: rule.id,
@@ -122,17 +150,31 @@ export function rankItems(items, rules) {
     .sort((a, b) => b.score - a.score || Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0));
 }
 
+// Fixed order used only to break ties when two rules score an item equally;
+// keeps the homepage's single-column placement deterministic.
+const CATEGORY_ORDER = ["energy", "telco", "infrastructure", "finance"];
+
+export function primarySector(item, rules = DEFAULT_WATCH_RULES) {
+  const [ranked] = rankItems([item], rules);
+  if (!ranked || !ranked.relevance.length) return null;
+  const topScore = ranked.relevance[0].score;
+  const tied = ranked.relevance.filter((match) => match.score === topScore);
+  if (tied.length === 1) return tied[0].category;
+  tied.sort((a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category));
+  return tied[0].category;
+}
+
 export const DEFAULT_WATCH_RULES = Object.freeze([
   {
     id: "greek-telco-infrastructure",
     label: "Greek telecom market",
     category: "telco",
     entities: ["ΟΤΕ", "OTE", "Cosmote", "COSMOTE", "Vodafone", "Nova", "United Group", "Intracom Telecom", "Intracom", "ΔΕΗ Fiber", "PPC Fiber", "ΕΕΤΤ", "EETT"],
-    topics: ["telecom", "telecommunications", "electronic communications", "network", "broadband", "κινητή", "τηλεπικοινων", "ηλεκτρονικες επικοινωνιες", "roaming", "περιαγωγ", "numbering", "αριθμοδοτ", "interconnection", "διασυνδεσ", "carrier billing", "mobile billing", "mobile-billed", "telecom bill", "χρεωσ", "συνδρομητ"],
-    strongTopics: ["FTTH", "fiber", "fibre", "5G", "οπτική ίνα", "ευρυζων", "telecom", "τηλεπικοινων", "spectrum", "data center", "subsea cable", "network deployment", "carrier billing", "mobile billing", "mobile-billed", "electronic communications", "telecommunications bill", "Code of Conduct", "κώδικας δεοντολογίας", "υπηρεσίες αυξημένης χρέωσης", "χρεώσεις κινητής", "ΕΕΤΤ", "EETT", "Intracom Telecom", "roaming", "περιαγωγ", "numbering", "αριθμοδοτ", "interconnection", "διασυνδεσ"],
+    topics: ["telecom", "telecommunications", "electronic communications", "network", "broadband", "κινητή", "τηλεπικοινων", "ηλεκτρονικες επικοινωνιες", "roaming", "περιαγωγ", "numbering", "αριθμοδοτ", "carrier billing", "mobile billing", "mobile-billed", "telecom bill", "χρεωσ", "συνδρομητ"],
+    strongTopics: ["FTTH", "fiber", "fibre", "5G", "οπτική ίνα", "ευρυζων", "telecom", "τηλεπικοινων", "spectrum", "data center", "subsea cable", "network deployment", "carrier billing", "mobile billing", "mobile-billed", "electronic communications", "telecommunications bill", "Code of Conduct", "κώδικας δεοντολογίας", "υπηρεσίες αυξημένης χρέωσης", "χρεώσεις κινητής", "ΕΕΤΤ", "EETT", "Intracom Telecom", "roaming", "περιαγωγ", "numbering", "αριθμοδοτ"],
     geography: ["Greece", "Greek", "Ελλάδα", "ελλην"],
-    exclusions: ["smartphone review", "consumer offer"],
-    requiredTopics: ["FTTH", "fiber", "fibre", "οπτική ίνα", "5G", "spectrum", "data center", "subsea cable", "network deployment", "δικτυακή ανάπτυξη", "telecom", "telecommunications", "τηλεπικοινων", "electronic communications", "carrier billing", "mobile billing", "mobile-billed", "telecommunications bill", "Code of Conduct", "κώδικας δεοντολογίας", "υπηρεσίες αυξημένης χρέωσης", "χρεώσεις κινητής", "Intracom Telecom", "roaming", "περιαγωγ", "numbering", "αριθμοδοτ", "interconnection", "διασυνδεσ"],
+    exclusions: ["smartphone review", "consumer offer", "ηλεκτρικ", "electricity", "ΑΔΜΗΕ", "IPTO", "ΔΕΔΔΗΕ", "δίκτυο μεταφοράς", "καλώδιο ρεύματος"],
+    requiredTopics: ["FTTH", "fiber", "fibre", "οπτική ίνα", "5G", "spectrum", "data center", "subsea cable", "network deployment", "δικτυακή ανάπτυξη", "telecom", "telecommunications", "τηλεπικοινων", "electronic communications", "carrier billing", "mobile billing", "mobile-billed", "telecommunications bill", "Code of Conduct", "κώδικας δεοντολογίας", "υπηρεσίες αυξημένης χρέωσης", "χρεώσεις κινητής", "Intracom Telecom", "roaming", "περιαγωγ", "numbering", "αριθμοδοτ"],
     minimumStrongTopics: 1,
     preferredDomains: ["eett.gr", "cosmote.gr", "vodafone.gr", "nova.gr", "ot.gr", "intracom-telecom.com", "dei.gr"],
     threshold: 4,
@@ -159,6 +201,7 @@ export const DEFAULT_WATCH_RULES = Object.freeze([
     strongTopics: ["results", "earnings", "dividend", "acquisition", "merger", "bond", "κερδ", "μέρισμα", "εξαγορά", "συγχώνευση", "ομόλογ"],
     geography: ["Greece", "Greek", "Ελλάδα", "ελλην"],
     preferredDomains: ["athexgroup.gr", "bankofgreece.gr"],
+    requiredEntities: MONITORED_COMPANIES,
     threshold: 4,
   },
   {
@@ -167,9 +210,11 @@ export const DEFAULT_WATCH_RULES = Object.freeze([
     category: "infrastructure",
     entities: ["AKTOR", "Intrakat", "GEK TERNA", "ΓΕΚ ΤΕΡΝΑ", "AVAX", "ΑΒΑΞ", "Metlen", "Ellaktor", "Ελλάκτωρ", "Circet"],
     topics: ["infrastructure", "construction", "project", "παραχώρηση", "κατασκευ", "έργο"],
-    strongTopics: ["data center", "subsea cable", "railway", "motorway", "concession", "σιδηρόδρομ", "αυτοκινητόδρομ"],
+    strongTopics: ["data center", "subsea cable", "railway", "motorway", "metro", "port", "airport", "σιδηρόδρομ", "αυτοκινητόδρομ", "μετρό", "λιμάν", "αεροδρόμ", "ΣΔΙΤ", "PPP", "concession"],
     geography: ["Greece", "Greek", "Ελλάδα", "ελλην"],
     preferredDomains: ["ypodomes.com", "ered.gr"],
+    requiredTopics: ["data center", "subsea cable", "railway", "motorway", "metro", "port", "airport", "σιδηρόδρομ", "αυτοκινητόδρομ", "μετρό", "λιμάν", "αεροδρόμ", "ΣΔΙΤ", "PPP", "concession", "διαγωνισμ", "σύμβαση", "έργο ύψους"],
+    minimumStrongTopics: 1,
     threshold: 4,
   },
 ]);

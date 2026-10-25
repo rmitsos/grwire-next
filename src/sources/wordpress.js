@@ -35,7 +35,10 @@ export class WordPressSourceAdapter {
       if (!response.ok) throw new Error(`WordPress request failed (${response.status})`);
       const rows = await response.json();
       if (!Array.isArray(rows)) throw new Error("WordPress returned an unexpected payload");
-      return rows.map((post) =>
+      const excludeTitlePatterns = (source.excludeTitlePatterns || []).map((pattern) => new RegExp(pattern, "iu"));
+      return rows
+        .filter((post) => !excludeTitlePatterns.some((pattern) => pattern.test(post.title?.rendered || "")))
+        .map((post) =>
         normalizeItem(
           {
             id: String(post.id),

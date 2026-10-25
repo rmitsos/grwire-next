@@ -1,5 +1,5 @@
 import { neon } from "@neondatabase/serverless";
-import { ORGANIZATIONS } from "./organizations";
+import { ORGANIZATIONS } from "./organizations.js";
 
 let schemaPromise;
 

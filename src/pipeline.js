@@ -1,4 +1,5 @@
 import { createSourceAdapter } from "./sources/index.js";
+import { canonicalizeUrl } from "./sources/utils.js";
 import { DEFAULT_WATCH_RULES, rankItems } from "./watch-rules.js";
 import { inspectArticle, validateArticleLink } from "./agents/source-guardian.js";
 import { readArticles } from "./agents/article-reader.js";
@@ -14,6 +15,7 @@ export async function scanMarket({
   readArticlePages = false,
   articleReadLimit = 30,
   maxRelevantItems = 60,
+  maxPerSource = 12,
 }) {
   if (!Array.isArray(sources) || !sources.length) throw new TypeError("At least one source is required");
   const outcomes = [];
@@ -49,8 +51,13 @@ export async function scanMarket({
       invalidLinks: 0,
     });
     for (const item of result.value.items) {
-      const url = canonicalUrl(item.url);
-      if (!byUrl.has(url)) byUrl.set(url, { ...item, sourceId: source.id || source.url });
+      // Identity/storage use the canonical URL (lowercase host, no www.,
+      // no tracking params); the original is kept so fetches that depend
+      // on the publisher's exact host/query still work.
+      const canonical = canonicalizeUrl(item.url);
+      if (!byUrl.has(canonical)) {
+        byUrl.set(canonical, { ...item, sourceId: source.id || source.url, url: canonical, originalUrl: item.url });
+      }
     }
   }
 
@@ -68,12 +75,19 @@ export async function scanMarket({
       .sort((a, b) => b.validation.subject.score - a.validation.subject.score)
       .slice(0, articleReadLimit)
       .map(({ item }) => item);
-    const readItems = await readArticles(preselected, {
+    // Fetch the publisher's original link (canonical hosts can 404 on sites
+    // that require the www. prefix), then restore the canonical identity.
+    const readTargets = preselected.map((item) => ({ ...item, url: item.originalUrl || item.url }));
+    const readItems = await readArticles(readTargets, {
       fetch: fetch || globalThis.fetch,
       limit: articleReadLimit,
     });
     const readByUrl = new Map(readItems.map((item, index) => [preselected[index].url, item]));
-    discoveredItems = discoveredItems.map((item) => readByUrl.get(item.url) || item);
+    discoveredItems = discoveredItems.map((item) => {
+      const read = readByUrl.get(item.url);
+      if (!read) return item;
+      return { ...read, url: item.url, originalUrl: item.originalUrl };
+    });
   }
 
   const inspected = collapseDuplicateArticles(discoveredItems)
@@ -86,7 +100,7 @@ export async function scanMarket({
       .slice(0, validationLimit);
     const checked = await Promise.all(candidatesToCheck.map(async (item) => ({
       item,
-      link: await validateArticleLink(item, { fetch: fetch || globalThis.fetch }),
+      link: await validateArticleLink({ ...item, url: item.originalUrl || item.url }, { fetch: fetch || globalThis.fetch }),
     })));
     const checksByUrl = new Map(checked.map(({ item, link }) => [item.url, link]));
     for (const item of candidates) {
@@ -102,7 +116,9 @@ export async function scanMarket({
   // Fresh market coverage must reach storage before older, higher-scoring
   // evergreen items. Keep relevance as the tie-breaker within the same news
   // cycle so the homepage and daily story do not stagnate on old coverage.
-  const ranked = rankItems(finalCandidates, rules)
+  const rankedAll = rankItems(finalCandidates, rules);
+  const perSourceCapped = capPerSource(rankedAll, { sources: activeSources, maxPerSource });
+  const ranked = perSourceCapped
     .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0) || b.score - a.score)
     .slice(0, maxRelevantItems)
     .map((item) => ({
@@ -144,11 +160,25 @@ export async function scanMarket({
   };
 }
 
-function canonicalUrl(value) {
-  const url = new URL(value);
-  url.hash = "";
-  for (const key of [...url.searchParams.keys()]) {
-    if (/^(utm_|fbclid|gclid)/i.test(key)) url.searchParams.delete(key);
+// Applied after relevance scoring so a prolific source (ypodomes publishes
+// ~100/week) cannot crowd out everything else before the global cap runs.
+// `items` is already sorted highest-score-first (then freshest), so taking
+// the first N per source keeps each source's strongest coverage.
+function capPerSource(items, { sources = [], maxPerSource = 12 } = {}) {
+  const limitBySource = new Map();
+  for (const source of sources) {
+    if (!source.id) continue;
+    const limit = source.maxPerSource ?? source.maxItems;
+    if (limit !== undefined) limitBySource.set(source.id, limit);
   }
-  return url.href;
+  const counts = new Map();
+  const kept = [];
+  for (const item of items) {
+    const limit = limitBySource.get(item.sourceId) ?? maxPerSource;
+    const count = counts.get(item.sourceId) || 0;
+    if (count >= limit) continue;
+    counts.set(item.sourceId, count + 1);
+    kept.push(item);
+  }
+  return kept;
 }
