@@ -1,5 +1,5 @@
 import { createSourceAdapter } from "./sources/index.js";
-import { canonicalizeUrl } from "./sources/utils.js";
+import { canonicalizeUrl, cleanUrl } from "./sources/utils.js";
 import { DEFAULT_WATCH_RULES, rankItems } from "./watch-rules.js";
 import { inspectArticle, validateArticleLink } from "./agents/source-guardian.js";
 import { readArticles } from "./agents/article-reader.js";
@@ -51,12 +51,13 @@ export async function scanMarket({
       invalidLinks: 0,
     });
     for (const item of result.value.items) {
-      // Identity/storage use the canonical URL (lowercase host, no www.,
-      // no tracking params); the original is kept so fetches that depend
-      // on the publisher's exact host/query still work.
+      // Dedupe identity uses the fully canonical URL (lowercase host, no
+      // www., no tracking params); the stored URL only lowercases the host
+      // and strips tracking params, keeping www./path/trailing slash as
+      // published so links keep working on hosts that require them.
       const canonical = canonicalizeUrl(item.url);
       if (!byUrl.has(canonical)) {
-        byUrl.set(canonical, { ...item, sourceId: source.id || source.url, url: canonical, originalUrl: item.url });
+        byUrl.set(canonical, { ...item, sourceId: source.id || source.url, url: cleanUrl(item.url), originalUrl: item.url });
       }
     }
   }

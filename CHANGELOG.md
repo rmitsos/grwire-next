@@ -6,7 +6,10 @@
 - Articles are now deduplicated by a canonical URL (lowercase host, no `www.`, no tracking
   parameters, no `/amp` suffix) and by a Greek-accent- and inflection-tolerant title comparison, so
   the same story arriving via a tracked RSS link and a clean link, or with and without a trailing
-  " - Sitename.com" credit, is stored once instead of twice.
+  " - Sitename.com" credit, is stored once instead of twice. The stored/displayed link itself keeps
+  the publisher's host as published (`www.` included or not, trailing slash as-is) and only
+  lowercases the host and strips tracking params (`utm_*`, `mc_*`, `fbclid`, `gclid`, `ref`) and the
+  fragment — only the dedupe *key* is the fully canonical, `www.`-stripped form.
 - The homepage no longer repeats an article across the lead slot, "Latest" and the sector columns.
   Each article now has a single primary sector (its highest-scoring watch rule, with a fixed
   tie-break order) and only appears in that one column; section pages still list every match.
@@ -26,10 +29,23 @@
   WordPress API instead of an HTML page that returns HTTP 500; `ot-gr` now reads ot.gr's WordPress
   API with excerpts instead of its noisy general RSS feed. The redundant `ot-telecoms` HTML source
   is disabled (0 accepted articles; covered by the new `ot-gr` telecom category).
+- `raaey-energy-announcements` now pulls all five ΡΑΑΕΥ categories listed in sources-spec.md §2.1
+  (δελτία τύπου, ανακοινώσεις, διαβουλεύσεις, αποφάσεις ηλεκτρισμού, αποφάσεις φυσικού αερίου)
+  instead of three; the boilerplate licensing categories (16, 28, 112, 122) stay excluded.
+- `energypress` is re-enabled as a plain RSS source reading `energypress.gr/rss` (its `/feed`
+  endpoint 404s); the old wp-json-based `energypress-wordpress` source stays disabled.
+- `intracom-telecom-press` (press URL redirects to a 404 page), `dnews-eett` (no article links in
+  the static HTML, and its tag feed returns an HTML page instead of RSS) and
+  `google-news-greek-telco` (the query now returns TV listings, not telecom news) are disabled.
+- The spec's `telecom-fibre`, `energy-grids`, `infrastructure-works` and `deals-companies` section
+  ids now redirect permanently to the existing `/telco`, `/energy`, `/infrastructure` and
+  `/finance` routes respectively.
 
 ### Fixed
 - Rows already stored in the database keep their old `?utm_source=...` canonical URLs until a
-  follow-up migration recomputes them; only newly ingested articles use the cleaned-up URL.
+  follow-up migration recomputes them; only newly ingested articles use the cleaned-up URL. The
+  cleaned-up URL now keeps `www.` (existing rows already have it), so new and old rows for the
+  same publisher no longer disagree on host.
 - Homepage and section pages are now cached and rebuilt at most once an hour, or right after a
   scan, instead of querying the database on every visit. Lets the Neon database sleep when idle
   and cuts Vercel CPU. If the database fails during a rebuild, the last good page stays up instead

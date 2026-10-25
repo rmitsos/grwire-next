@@ -64,13 +64,15 @@ export const SOURCES = [
   },
   {
     // The HTML page https://www.raaey.gr/energeia/anakinoseis/ returns HTTP
-    // 500; WP REST works (200). Categories 16/28 (Αδειοδοτήσεις/Αποφάσεις)
-    // are excluded because they are thousands of boilerplate licensing
-    // decisions ("ΑΠΟΦΑΣΗ ΑΝΤΙΠΡΟΕΔΡΟΥ ... ΥΠ' ΑΡΙΘΜ.").
+    // 500; WP REST works (200). Categories per sources-spec.md §2.1 (verified
+    // 25 Oct 2026): 17 δελτία τύπου, 110 ανακοινώσεις, 109 διαβουλεύσεις,
+    // 108 αποφάσεις ηλεκτρισμού, 111 αποφάσεις φυσικού αερίου. 16/28/112/122
+    // are excluded per spec (thousands of boilerplate licensing decisions,
+    // e.g. "ΑΠΟΦΑΣΗ ΑΝΤΙΠΡΟΕΔΡΟΥ ... ΥΠ' ΑΡΙΘΜ.").
     id: "raaey-energy-announcements",
     type: "wordpress",
     url: "https://www.raaey.gr/energeia",
-    categories: [17, 20, 110],
+    categories: [17, 110, 109, 108, 111],
     lookbackDays: 21,
     limit: 30,
   },
@@ -118,20 +120,37 @@ export const SOURCES = [
     limit: 120,
   },
   {
+    // Disabled per sources-spec.md §8 (verified 25 Oct 2026): the tag page
+    // loads but has no article links in the static HTML, and the tag feed
+    // (https://www.dnews.gr/site/tag/ΕΕΤΤ/feed) returns the HTML page, not
+    // RSS. The ΕΕΤΤ feeds above (eett-announcements) cover the same ground.
     id: "dnews-eett",
     type: "html",
+    enabled: false,
     url: "https://www.dnews.gr/site/tag/%CE%95%CE%95%CE%A4%CE%A4",
     linkPatterns: ["eett", "%CE%95%CE%95%CE%A4%CE%A4", "eidhseis", "tilepikoin", "telecom", "mobile", "χρεω"],
     minimumTitleLength: 16,
     limit: 100,
   },
   {
+    // Disabled per sources-spec.md §8 (verified 25 Oct 2026): the press URL
+    // redirects to /404.html.
     id: "intracom-telecom-press",
     type: "html",
+    enabled: false,
     url: "https://www.intracom-telecom.com/en/news/press.htm",
     linkPatterns: ["/en/news/press/"],
     minimumTitleLength: 16,
     limit: 100,
+  },
+  {
+    // Re-enabled per sources-spec.md §2.3 (verified 25 Oct 2026): /feed
+    // returns 404, but /rss returns 200 with 100 items (the previous
+    // wp-json "energypress-wordpress" source stays disabled below in
+    // favour of this feed).
+    id: "energypress",
+    type: "rss",
+    url: "https://energypress.gr/rss",
   },
   {
     id: "energypress-wordpress",
@@ -164,6 +183,10 @@ export const SOURCES = [
   {
     // The general /feed/ is dominated by world/politics/lifestyle (1 of 35
     // relevant in the 25 Oct 2026 scan); WP REST answers 200 with excerpts.
+    // Deliberate divergence from sources-spec.md §2.3, which suggests the
+    // main https://www.ot.gr/feed/ RSS with a prefilter: that feed was
+    // re-verified 25 Oct 2026 with the same world/politics noise this
+    // WP REST category query (verified 200, with excerpts) already avoids.
     id: "ot-gr",
     type: "wordpress",
     url: "https://www.ot.gr",
@@ -172,8 +195,13 @@ export const SOURCES = [
     limit: 60,
   },
   {
+    // Disabled per sources-spec.md §8 (verified 25 Oct 2026): this query
+    // returns TV listings (e.g. "Πρόγραμμα καναλιών"), not telecom news.
+    // To be replaced by a narrower FTTH query later (see spec §2.3
+    // gnews-fibre).
     id: "google-news-greek-telco",
     type: "rss",
+    enabled: false,
     url: "https://news.google.com/rss/search?q=%28OTE%20OR%20Cosmote%20OR%20Vodafone%20OR%20Nova%20OR%20Intracom%20OR%20FTTH%20OR%205G%20OR%20telecom%20OR%20%CF%84%CE%B7%CE%BB%CE%B5%CF%80%CE%B9%CE%BA%CE%BF%CE%B9%CE%BD%CF%89%CE%BD%CE%AF%CE%B5%CF%82%20OR%20%CE%95%CE%95%CE%A4%CE%A4%29%20Greece&hl=el&gl=GR&ceid=GR%3Ael",
     limit: 60,
   },

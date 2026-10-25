@@ -28,6 +28,32 @@ export function canonicalizeUrl(value) {
   }
 }
 
+/**
+ * Produces the URL stored for display/links: lowercase host, decoded
+ * `&amp;`, no tracking params, no fragment. Unlike canonicalizeUrl, this
+ * keeps `www.`, the path and any trailing slash as published, so stored
+ * links keep working on hosts that require (or omit) the www. prefix.
+ * Returns the input unchanged if it cannot be parsed as a URL.
+ */
+export function cleanUrl(value) {
+  if (value === undefined || value === null) return value;
+  try {
+    const decoded = String(value).replace(/&amp;/g, "&");
+    const url = new URL(decoded);
+    url.hostname = url.hostname.toLowerCase();
+    url.hash = "";
+    for (const key of [...url.searchParams.keys()]) {
+      const lower = key.toLowerCase();
+      if (TRACKING_PARAM_EXACT.has(lower) || TRACKING_PARAM_PREFIXES.some((prefix) => lower.startsWith(prefix))) {
+        url.searchParams.delete(key);
+      }
+    }
+    return url.href;
+  } catch {
+    return value;
+  }
+}
+
 export function decodeEntities(value = "") {
   return value
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")

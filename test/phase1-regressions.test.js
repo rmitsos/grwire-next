@@ -11,7 +11,7 @@ import {
   normalizeTitle,
   RssSourceAdapter,
 } from "../src/index.js";
-import { canonicalizeUrl } from "../src/sources/utils.js";
+import { canonicalizeUrl, cleanUrl } from "../src/sources/utils.js";
 import { SOURCES } from "../config/sources.js";
 
 // public-data.js imports "./database" without a ".js" extension, which Next's
@@ -186,6 +186,12 @@ test("canonicalizeUrl lowercases only the host and drops www.", () => {
   );
 });
 
+test("cleanUrl keeps www., path and trailing slash but strips tracking params, and still dedupes with the bare-host form via canonicalizeUrl", () => {
+  const stored = cleanUrl("https://www.ot.gr/a/b/?utm_source=x");
+  assert.equal(stored, "https://www.ot.gr/a/b/");
+  assert.equal(canonicalizeUrl(stored), canonicalizeUrl("https://ot.gr/a/b"));
+});
+
 test("normalizeTitle strips trailing site-name suffixes", () => {
   const normalized = normalizeTitle(AD_CAMPAIGN_TITLE);
   assert.ok(!/marketingweek/i.test(normalized), `expected site suffix to be stripped, got "${normalized}"`);
@@ -352,12 +358,12 @@ test("eett source config uses the working press-release RSS feed", () => {
   assert.equal(eett.url, "https://www.eett.gr/feed/?post_type=deltia_tipou");
 });
 
-test("raaey source config uses the working WordPress REST endpoint", () => {
+test("raaey source config uses the working WordPress REST endpoint with the spec's category list", () => {
   const raaey = SOURCES.find((source) => source.id === "raaey-energy-announcements");
   assert.ok(raaey, "expected the raaey-energy-announcements source");
   assert.equal(raaey.type, "wordpress");
   assert.equal(raaey.url, "https://www.raaey.gr/energeia");
-  assert.ok(Array.isArray(raaey.categories) && raaey.categories.length > 0, "expected a non-empty categories list");
+  assert.deepEqual([...raaey.categories].sort((a, b) => a - b), [17, 108, 109, 110, 111]);
 });
 
 test("ot-gr source config switches to the WordPress REST endpoint with excerpts", () => {
@@ -366,6 +372,51 @@ test("ot-gr source config switches to the WordPress REST endpoint with excerpts"
   assert.equal(otGr.type, "wordpress");
   assert.equal(otGr.url, "https://www.ot.gr");
   assert.ok(Array.isArray(otGr.categories) && otGr.categories.length > 0, "expected a non-empty categories list");
+});
+
+test("energypress source config is enabled and uses the working /rss feed", () => {
+  const energypress = SOURCES.find((source) => source.id === "energypress");
+  assert.ok(energypress, "expected an 'energypress' source");
+  assert.equal(energypress.type, "rss");
+  assert.equal(energypress.url, "https://energypress.gr/rss");
+  assert.notEqual(energypress.enabled, false);
+});
+
+test("intracom-telecom-press, dnews-eett and google-news-greek-telco are disabled", () => {
+  for (const id of ["intracom-telecom-press", "dnews-eett", "google-news-greek-telco"]) {
+    const source = SOURCES.find((candidate) => candidate.id === id);
+    assert.ok(source, `expected a source with id '${id}'`);
+    assert.equal(source.enabled, false, `expected '${id}' to be disabled`);
+  }
+});
+
+test("google-news-greek-energy stays enabled", () => {
+  const source = SOURCES.find((candidate) => candidate.id === "google-news-greek-energy");
+  assert.ok(source, "expected a source with id 'google-news-greek-energy'");
+  assert.notEqual(source.enabled, false);
+});
+
+test("scanMarket never fetches a disabled source", async () => {
+  const calledUrls = [];
+  const fetch = async (url) => {
+    calledUrls.push(String(url));
+    return {
+      ok: true,
+      url: String(url),
+      headers: { get: () => "application/rss+xml" },
+      text: async () => "<rss><channel></channel></rss>",
+    };
+  };
+  await scanMarket({
+    fetch,
+    sources: [
+      { id: "enabled-source", type: "rss", url: "https://enabled.test/feed" },
+      { id: "disabled-source", type: "rss", url: "https://disabled.test/feed", enabled: false },
+    ],
+    rules: DEFAULT_WATCH_RULES,
+  });
+  assert.ok(calledUrls.some((url) => url.includes("enabled.test")), "expected the enabled source to be fetched");
+  assert.ok(!calledUrls.some((url) => url.includes("disabled.test")), "expected the disabled source not to be fetched");
 });
 
 test("RSS adapter drops EETT test posts via excludeTitlePatterns", async () => {
@@ -387,4 +438,47 @@ test("RSS adapter drops EETT test posts via excludeTitlePatterns", async () => {
   });
   assert.equal(items.length, 1);
   assert.equal(items[0].title, "Απόφαση ΕΕΤΤ για αριθμοδότηση");
+});
+
+// --- 6. Sections / URLs --------------------------------------------------
+
+test("spec section ids map onto existing PUBLIC_CATEGORIES slugs, and redirects agree", async () => {
+  const { PUBLIC_CATEGORIES, SECTION_SLUG_BY_SPEC_ID } = await import("../src/public-data.js");
+  const { SECTION_REDIRECTS } = await import("../config/section-redirects.js");
+
+  const existingSlugs = new Set(Object.keys(PUBLIC_CATEGORIES));
+  assert.deepEqual(existingSlugs, new Set(["finance", "telco", "energy", "infrastructure"]));
+
+  for (const [slug, config] of Object.entries(PUBLIC_CATEGORIES)) {
+    assert.ok(config.specId, `expected a specId for '${slug}'`);
+    assert.equal(SECTION_SLUG_BY_SPEC_ID[config.specId], slug);
+  }
+
+  assert.equal(SECTION_REDIRECTS.length, Object.keys(PUBLIC_CATEGORIES).length);
+  for (const redirect of SECTION_REDIRECTS) {
+    assert.equal(redirect.permanent, true);
+    assert.ok(redirect.source.startsWith("/"));
+    const destinationSlug = redirect.destination.replace(/^\//, "");
+    assert.ok(existingSlugs.has(destinationSlug), `redirect destination '${redirect.destination}' must be an existing slug`);
+    const specId = redirect.source.replace(/^\//, "");
+    assert.equal(SECTION_SLUG_BY_SPEC_ID[specId], destinationSlug);
+  }
+
+  assert.ok(!SECTION_REDIRECTS.some((r) => r.source === "/tenders" || r.source === "/regulators"),
+    "no /tenders or /regulators redirect should exist yet (Phase 2)");
+});
+
+test("PublicHeader and sitemap only link to existing public section slugs", () => {
+  const headerSrc = readFileSync(fileURLToPath(new URL("../src/components/PublicHeader.js", import.meta.url)), "utf8");
+  const sitemapSrc = readFileSync(fileURLToPath(new URL("../src/app/sitemap.js", import.meta.url)), "utf8");
+  const existingSlugs = ["finance", "telco", "energy", "infrastructure"];
+  const forbidden = ["tenders", "regulators", "telecom-fibre", "energy-grids", "infrastructure-works", "deals-companies"];
+  for (const slug of forbidden) {
+    assert.ok(!headerSrc.includes(`/${slug}`), `PublicHeader should not link to /${slug}`);
+    assert.ok(!sitemapSrc.includes(`/${slug}`), `sitemap should not link to /${slug}`);
+  }
+  for (const slug of existingSlugs) {
+    assert.ok(headerSrc.includes(`/${slug}`), `PublicHeader should link to /${slug}`);
+    assert.ok(sitemapSrc.includes(`/${slug}`), `sitemap should link to /${slug}`);
+  }
 });

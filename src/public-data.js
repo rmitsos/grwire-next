@@ -2,25 +2,37 @@ import { getSql } from "./database.js";
 import { collapseDuplicateArticles } from "./article-quality.js";
 import { DEFAULT_WATCH_RULES, rankItems } from "./watch-rules.js";
 import { storyDateToIso } from "./story-date.js";
+import { canonicalizeUrl } from "./sources/utils.js";
 
 export const PUBLIC_CATEGORIES = {
   finance: {
     name: "Finance",
     deck: "Banks, listed companies, capital markets and the Greek economy.",
+    // Closest match for sources-spec.md §1's deals-companies id. The spec
+    // section is narrower (operator/utility/infrastructure companies only);
+    // this slug covers all Greek finance news.
+    specId: "deals-companies",
   },
   telco: {
     name: "Telecom Infrastructure",
     deck: "Fibre, mobile networks, regulation and digital infrastructure.",
+    specId: "telecom-fibre",
   },
   energy: {
     name: "Energy Infrastructure",
     deck: "Power grids, storage, interconnections and energy investment.",
+    specId: "energy-grids",
   },
   infrastructure: {
     name: "Infrastructure",
     deck: "Construction, concessions, transport, data centres and strategic projects.",
+    specId: "infrastructure-works",
   },
 };
+
+export const SECTION_SLUG_BY_SPEC_ID = Object.fromEntries(
+  Object.entries(PUBLIC_CATEGORIES).map(([slug, config]) => [config.specId, slug]),
+);
 
 export async function getLatestArticles({ category, query, limit = 80 } = {}) {
   const sql = getSql();
@@ -77,7 +89,7 @@ export async function getHomepageData() {
 export function buildHomepageSections(articles = []) {
   const shown = new Set();
   const take = (article) => {
-    shown.add(article.url);
+    shown.add(canonicalizeUrl(article.url));
     return article;
   };
 
@@ -85,13 +97,13 @@ export function buildHomepageSections(articles = []) {
   const recent = [];
   for (const article of articles.slice(1)) {
     if (recent.length >= 12) break;
-    if (shown.has(article.url)) continue;
+    if (shown.has(canonicalizeUrl(article.url))) continue;
     recent.push(take(article));
   }
 
   const columns = Object.fromEntries(Object.keys(PUBLIC_CATEGORIES).map((category) => [category, []]));
   for (const article of articles) {
-    if (shown.has(article.url)) continue;
+    if (shown.has(canonicalizeUrl(article.url))) continue;
     const primaryCategory = article.categories?.[0];
     if (!primaryCategory || !columns[primaryCategory]) continue;
     if (columns[primaryCategory].length >= 5) continue;
