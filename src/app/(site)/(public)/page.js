@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { ArticleList, dateLabel } from "@/components/ArticleList";
-import { DailyStory } from "@/components/DailyStory";
 import { getHomepageData, PUBLIC_CATEGORIES } from "@/public-data";
 import { getInsight, insightPath, insightsIndexPath } from "@/insights/content";
 import { getInsightsCopy } from "@/insights/copy";
@@ -21,8 +20,6 @@ export default async function PublicHomepage() {
         <h1>The Greek infrastructure wire.</h1>
         <p>Finance, telecommunications and energy—filtered for what changes markets, investment and delivery.</p>
       </section>
-
-      <DailyStory story={data.story} />
 
       {data.lead ? (
         <section className="lead-story">
