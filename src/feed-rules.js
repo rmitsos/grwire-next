@@ -368,10 +368,11 @@ function isEnvironmentOnlyNoise(text) {
 //    αξιολόγησης): it only counts when no report cue is in the title, on top
 //    of the network/business exception (which already keeps ΡΑΑΕΥ/ΕΕΤΤ/ΑΔΜΗΕ…
 //    titles).
+const SPONSOR_TERMS = ["χορηγι*", "χορηγοσ", "χορηγοι", "χορηγοισ", "χορηγου", "χορηγουσ", "χορηγο", "χορηγων"];
 const CULTURE_CSR_TERMS = [
-  "εκθεση", "εκθεσεισ", "εκθεσεων",
+  "εκθεση", "εκθεσησ", "εκθεσεισ", "εκθεσεων",
   "τεχνη", "τεχνησ", "τεχνεσ", "τεχνων",
-  "πολιτισμ*", "χορηγι*", "χορηγοσ", "χορηγου", "χορηγουσ", "χορηγο", "χορηγων",
+  "πολιτισμ*", ...SPONSOR_TERMS,
   "φεστιβαλ*", "βραβευ*", "εθελοντ*",
 ];
 const REPORT_MEANING_TERMS = [
@@ -424,10 +425,24 @@ export function hasCultureCsrTerm(title = "") {
   return !(onlyExhibition && (matchesAnyTerm(title, REPORT_MEANING_TERMS) || isReportByAcronym(title)));
 }
 
-/** Whether a culture/CSR title is rescued by a network/business keyword or a € figure. */
+// round-6c: sponsorship and award words are never rescued by the exception.
+// Only the χορηγία/χορηγός families, βραβεύ* and εθελοντικ* count here
+// (εθελοντ* alone, e.g. "εθελοντές", still goes through the exception).
+const CULTURE_OVERRIDE_TERMS = [...SPONSOR_TERMS, "βραβευ*", "εθελοντικ*"];
+// round-6c: a € figure only rescues a culture/CSR title together with one of
+// these business words (inflected).
+const CULTURE_EURO_BUSINESS_TERMS = ["συμβασ*", "επενδυ*", "εξαγορ*", "διαγωνισμ*", "δικτυ*"];
+
+/** Sponsorship/award wording: dropped even when the title names an operator or a € figure. */
+export function hasCultureOverrideTerm(title = "") {
+  return matchesAnyTerm(title, CULTURE_OVERRIDE_TERMS);
+}
+
+/** Whether a culture/CSR title is rescued by a network/business keyword, or by a € figure plus a business word. */
 export function hasCultureExceptionSignal(title = "") {
-  if (hasEuroAmount(title)) return true;
+  if (hasCultureOverrideTerm(title)) return false;
   const stripped = normaliseText(title).replace(/δικτυωσ\S*/g, " ");
+  if (hasEuroAmount(title) && matchesAnyTerm(stripped, CULTURE_EURO_BUSINESS_TERMS)) return true;
   return matchesAnyTerm(stripped, getCultureExceptionTerms());
 }
 

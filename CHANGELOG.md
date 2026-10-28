@@ -13,6 +13,12 @@
 - Insights #1 (AI in Greek SMEs) and #2 (fibre switch), EL + EN, published: the DRAFT/ΠΡΟΣΧΕΔΙΟ marker is removed from each file's first comment, so the pages are indexable, drop the draft label and appear in the sitemap.
 
 ### Added
+- Round-6c (culture_csr exception, final): sponsorship and award words (χορηγία/χορηγός forms,
+  βραβεύ*, εθελοντικ*) override the network/business/operator-name exception entirely
+  (`hasCultureOverrideTerm`), so "Χορηγός του φεστιβάλ η Cosmote" is dropped. A € figure alone no
+  longer rescues a title; it does only together with σύμβαση, επένδυση, εξαγορά, διαγωνισμός or
+  δίκτυο (inflected). The έκθεση-as-report protections are unchanged. Also: έκθεσης (genitive
+  singular) and χορηγοί (plural) were missing from the term lists and are added.
 - Round-6b: (1) new `culture_csr` noise group in `noiseRejectReason` (title-only, all sources, so it
   drops at scan time and in every feed and section): έκθεση, Τέχνη, πολιτισμ*, χορηγία/χορηγός,
   φεστιβάλ*, βραβεύ*, εθελοντ*. Kept when the title has a network/business keyword (spec

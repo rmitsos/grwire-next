@@ -31,11 +31,10 @@ test("culture/CSR: each new term drops (case/accent-insensitive, inflected)", ()
 });
 
 test("culture/CSR exception: a network/business keyword or a € figure in the title keeps the item", () => {
-  assert.ok(!dropsAsCulture("Βραβεύτηκε ο ΑΔΜΗΕ για τη διασύνδεση"));
-  assert.ok(!dropsAsCulture("Χορηγός του φεστιβάλ η Cosmote"));
-  assert.ok(!dropsAsCulture("Η εταιρεία ανακοίνωσε χορηγία €2 εκατ. για τον πολιτισμό"));
+  assert.ok(!dropsAsCulture("Ο ΑΔΜΗΕ παρουσίασε το νέο δίκτυο στο πολιτιστικό κέντρο πολιτισμού"));
+  // (round 6c: sponsorship words and a lone € figure no longer rescue; see the r6c tests)
   assert.ok(!dropsAsCulture("Έκθεση για την επένδυση σε υποσταθμούς"));
-  assert.ok(hasCultureCsrTerm("Βραβεύτηκε ο ΑΔΜΗΕ") && hasCultureExceptionSignal("Βραβεύτηκε ο ΑΔΜΗΕ"));
+  assert.ok(hasCultureCsrTerm("Εθελοντές του ΑΔΜΗΕ") && hasCultureExceptionSignal("Εθελοντές του ΑΔΜΗΕ"));
 });
 
 test("culture/CSR: generic Greek words do not rescue a culture item (εργα = artworks, ιστορικός, δικτύωση)", () => {
@@ -101,4 +100,39 @@ test("review dump: header reports homepageFreshMinScore and a fresh item under i
   assert.equal(dump.header.rules.homepageFreshMinScore, 5);
   const shown = [dump.homepage.lead, ...dump.homepage.recent, ...Object.values(dump.homepage.columns).flat()].filter(Boolean);
   for (const a of shown) assert.ok(a.score >= 5 || a.homepageBackfill);
+});
+
+// ---- round 6c ----
+test("r6c: sponsorship/award/volunteer-ικ words override the operator-name exception", () => {
+  for (const title of [
+    "Χορηγός του φεστιβάλ η Cosmote", "Η Vodafone ανακοίνωσε χορηγία για το δίκτυο νέων", "Νέοι χορηγοί από τη Nova",
+    "Η Cosmote βράβευσε τους καλύτερους συνεργάτες δικτύου", "Βραβεύτηκε ο ΑΔΜΗΕ", "Βραβεύσεις της ΔΕΗ",
+    "Εθελοντική δράση της Cosmote", "Εθελοντικές δράσεις του ΑΔΜΗΕ για το δίκτυο",
+  ]) assert.ok(dropsAsCulture(title), title);
+  assert.equal(hasCultureExceptionSignal("Χορηγός του φεστιβάλ η Cosmote"), false);
+});
+
+test("r6c: a € figure alone no longer saves a culture/CSR title", () => {
+  assert.ok(dropsAsCulture("Φεστιβάλ με προϋπολογισμό €3 εκατ."));
+  assert.ok(dropsAsCulture("Η εταιρεία ανακοίνωσε χορηγία €2 εκατ. για τον πολιτισμό"));
+  assert.ok(dropsAsCulture("Έκθεση τέχνης με εισιτήριο 5 ευρώ"));
+});
+
+test("r6c: a € figure plus σύμβαση/επένδυση/εξαγορά/διαγωνισμός/δίκτυο (inflected) still saves it", () => {
+  for (const title of [
+    "Φεστιβάλ και σύμβαση €3 εκατ. για τον οργανισμό", "Πολιτισμός: επένδυση €10 εκατ. στην πόλη", "Φεστιβάλ μετά την εξαγορά €5 εκατ.",
+    "Έκθεση τέχνης: διαγωνισμού αξίας €1 εκατ.", "Φεστιβάλ και δίκτυο €2 εκατ. στην περιφέρεια", "Φεστιβάλ και συμβάσεις €2 εκατ.",
+  ]) assert.ok(!dropsAsCulture(title), title);
+});
+
+test("r6c: έκθεση-as-report protections are unchanged (BEREC item still kept)", () => {
+  for (const title of [
+    "Strand Consult: αριθμητικά λάθη στην έκθεση του BEREC", "Έκθεση της ΡΑΑΕΥ για την αγορά ενέργειας",
+    "Ετήσια έκθεση της Τράπεζας της Ελλάδος", "Έκθεση του ΟΟΣΑ για την Ελλάδα", "Έκθεσης της ΡΑΑΕΥ για τις ΑΠΕ",
+  ]) assert.ok(!dropsAsCulture(title), title);
+  assert.ok(dropsAsCulture("Η ΔΕΗ Συναντά την Τέχνη Vol. 2: Άνοιξε στο κοινό η έκθεση με 55 έργα"));
+});
+
+test("r6c: έκθεσης (genitive singular) is matched like the other inflections", () => {
+  assert.ok(dropsAsCulture("Εγκαίνια της έκθεσης φωτογραφίας"));
 });
