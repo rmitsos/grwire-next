@@ -164,6 +164,9 @@ function enforceEventCapPerSection(rows, onDrop) {
   return rows.filter((row) => !dropUrls.has(row.canonical_url));
 }
 
+const RECENT_ROWS_TTL_MS = 60 * 1000;
+const recentRows = new Map();
+
 async function readArticleRows({ query, limit }) {
   const sql = getSql();
   if (!sql) return [];
@@ -176,10 +179,18 @@ async function readArticleRows({ query, limit }) {
       ORDER BY COALESCE(published_at, updated_at) DESC NULLS LAST LIMIT ${queryLimit}
     `;
   }
-  return sql`
+  // Every public page reads the same newest rows (the page body and the shared nav both do), so
+  // share one in-flight/recent read per process instead of one 300-row query per page. A static
+  // build renders dozens of pages at once and otherwise stalls on that many identical queries.
+  const hit = recentRows.get(queryLimit);
+  if (hit && Date.now() - hit.at < RECENT_ROWS_TTL_MS) return hit.promise;
+  const promise = Promise.resolve(sql`
     SELECT * FROM articles
     ORDER BY COALESCE(published_at, updated_at) DESC NULLS LAST LIMIT ${queryLimit}
-  `;
+  `);
+  recentRows.set(queryLimit, { at: Date.now(), promise });
+  promise.catch(() => { if (recentRows.get(queryLimit)?.promise === promise) recentRows.delete(queryLimit); });
+  return promise;
 }
 
 export async function getLatestArticles({ category, query, limit = 80 } = {}) {
