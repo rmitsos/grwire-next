@@ -15,12 +15,12 @@ import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { SOURCES } from "../config/sources.js";
 import { scanMarket } from "../src/pipeline.js";
-import { selectArticles, buildHomepageSections, computeNavVisibility, PUBLIC_CATEGORIES } from "../src/public-data.js";
+import { selectArticles, buildHomepageSections, computeNavVisibility, homepageBackfillIneligibleReason, homepageBackfillWindowHours, PUBLIC_CATEGORIES } from "../src/public-data.js";
 import {
   HOMEPAGE_MAX_ITEMS,
   SECTION_HOMEPAGE_CAPS,
   MAX_AGE_HOURS_NEWS,
-  BACKFILL_MAX_AGE_HOURS,
+  HOMEPAGE_TARGET_ITEMS,
   DEFAULT_DAY_CAP_PER_SOURCE,
   DEFAULT_HOME_CAP_PER_SOURCE,
   hasFigureOrDecisionSignal,
@@ -80,11 +80,15 @@ function toOutputItem(article) {
 }
 
 // Homepage items (and only homepage items) additionally carry whether they
-// were filled in by the round-4 backfill rule — kept off the plain
+// were filled in by the backfill rule (homepageBackfillTier1: a 21-day tier-1 one) — kept off the plain
 // toOutputItem shape so the sections-page item key list (tested exactly in
 // review-dump.test.js) does not change.
 function toHomepageOutputItem(article) {
-  return { ...toOutputItem(article), homepageBackfill: Boolean(article.homepageBackfill) };
+  return {
+    ...toOutputItem(article),
+    homepageBackfill: Boolean(article.homepageBackfill),
+    homepageBackfillTier1: Boolean(article.homepageBackfillTier1),
+  };
 }
 
 // round-4: a short explanation of why the chosen lead won (tier preference,
@@ -101,6 +105,7 @@ function describeLeadReason(article) {
     preferredTier: tier === 1 || tier === 3,
     hasFigureOrDecisionSignal: hasFigureOrDecisionSignal(`${article.title || ""} ${article.summary || ""}`),
     homepageBackfill: Boolean(article.homepageBackfill),
+    homepageBackfillTier1: Boolean(article.homepageBackfillTier1),
     score: article.score,
   };
 }
@@ -170,13 +175,15 @@ export function buildReviewDump(report, { now = Date.now(), branch = null, commi
 
   // Pass 2: production-faithful reads, same calls/limits as
   // getHomepageData() and the [category] page. buildHomepageSections runs
-  // FIRST so a backfilled (>72h but <=7d old) article that does land on the
-  // homepage is never also recorded as dropped: only items that didn't make
-  // the homepage get a reason below, and "stale" is reserved for items
-  // outside even the 7-day backfill window (or with no date) — a non-shown
-  // item inside that window got either a specific cap/rule reason from
-  // buildHomepageSections' onDrop already, or (if the 12-item floor was
-  // reached without needing it) "backfill_not_needed".
+  // FIRST so a backfilled (>72h but <=7d old; <=21d for tier-1 action-word
+  // items) article that does land on the homepage is never also recorded as
+  // dropped: only items that didn't make the homepage get a reason below, and
+  // "stale" is reserved for items outside even their backfill window (or with
+  // no date) — a non-shown item inside that window got either a specific
+  // cap/rule reason from buildHomepageSections' onDrop already, or
+  // "backfill_ineligible" (an agenda/event item, or scored under its age
+  // band's backfill floor), or (if the 10-item target was reached without
+  // needing it) "backfill_not_needed".
   const homepageArticles = selectArticles(rows, { limit: 100, now });
   const homepage = buildHomepageSections(homepageArticles, { now, onDrop: recordDrop });
   const shownUrls = new Set(
@@ -185,10 +192,13 @@ export function buildReviewDump(report, { now = Date.now(), branch = null, commi
   );
   for (const article of homepageArticles) {
     if (shownUrls.has(article.url)) continue;
-    if (!isFresh(article, now, BACKFILL_MAX_AGE_HOURS)) {
+    if (!isFresh(article, now, homepageBackfillWindowHours(article))) {
       recordDrop(article, { stage: "stale" });
     } else if (!dropped.some((drop) => drop.url === article.url)) {
-      recordDrop(article, { stage: "backfill_not_needed" });
+      const ineligible = homepageBackfillIneligibleReason(article, now);
+      recordDrop(article, ineligible
+        ? { stage: "backfill_ineligible", reason: ineligible }
+        : { stage: "backfill_not_needed" });
     }
   }
 
@@ -214,6 +224,7 @@ export function buildReviewDump(report, { now = Date.now(), branch = null, commi
       commit,
       rules: {
         homepageMaxItems: HOMEPAGE_MAX_ITEMS,
+        homepageTargetItems: HOMEPAGE_TARGET_ITEMS,
         maxAgeHoursNews: MAX_AGE_HOURS_NEWS,
         sectionHomepageCaps: SECTION_HOMEPAGE_CAPS,
         defaultDayCapPerSource: DEFAULT_DAY_CAP_PER_SOURCE,

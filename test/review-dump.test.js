@@ -231,11 +231,13 @@ test("buildReviewDump: perSource carries a droppedByStage breakdown (keyed by re
   assert.equal(byId["ppc-press"].droppedByStage[ppcDrop.reason.stage], 1);
 });
 
-// round-4 fix: buildHomepageSections runs before the stale/backfill_not_needed
-// pass now, so a backfilled (>72h but <=7d old) article that does land on the
-// homepage must never also show up in `dropped`; a not-shown item inside the
-// 7-day backfill window with no other reason gets "backfill_not_needed"
-// instead of "stale"; "stale" is reserved for items outside that window.
+// round-4 fix: buildHomepageSections runs before the stale/backfill pass, so a
+// backfilled (>72h but <=7d old) article that does land on the homepage must
+// never also show up in `dropped`. Round 6: the backfill tops up to 10 but never
+// pads — a not-shown item inside the 7-day window that scores under the floor
+// of 10 (the fixture titles below are scored by the real rules, so several land
+// under it) is "backfill_ineligible" (reason below_backfill_floor), and "stale"
+// is reserved for items outside the window.
 const BACKFILL_OLDER_DEFS = [
   ["telco1", "Η Vodafone εγκαινίασε νέο δίκτυο 5G σε αγροτικές περιοχές της Ελλάδας"],
   ["telco2", "Η Nova ανακοίνωσε αναβάθμιση του δικτύου οπτικών ινών σε παραμεθόριες περιοχές της Ελλάδας"],
@@ -269,19 +271,24 @@ const BACKFILL_REPORT = {
 test("buildReviewDump: a backfilled homepage item is never also recorded as dropped", () => {
   const dump = buildReviewDump(BACKFILL_REPORT, { now: NOW });
   const shown = [dump.homepage.lead, ...dump.homepage.recent, ...Object.values(dump.homepage.columns).flat()].filter(Boolean);
-  assert.equal(shown.length, 12, `expected the 12-item backfill floor, got ${shown.length}`);
+  // 2 fresh + the 3 older fixtures that score >= 10 under the real rules; the
+  // remaining 8 older items score under the floor, so the page stays at 5
+  // instead of being padded towards the 10-item target.
+  assert.equal(shown.length, 5, `expected 5 items (no padding below the floors), got ${shown.length}`);
   const backfilled = shown.filter((a) => a.homepageBackfill);
-  assert.ok(backfilled.length >= 8, `expected most of the 12 to be backfilled, got ${backfilled.length}`);
+  assert.equal(backfilled.length, 3);
+  assert.ok(shown.every((a) => (a.score || 0) >= 10));
   for (const article of shown) {
     assert.ok(!dump.dropped.some((d) => d.url === article.url), `shown article ${article.url} must not appear in dropped`);
   }
 });
 
-test("buildReviewDump: a not-shown item inside the 7-day backfill window with no other reason is backfill_not_needed, not stale", () => {
+test("buildReviewDump: a not-shown item inside the 7-day backfill window under the score floor is backfill_ineligible, not stale", () => {
   const dump = buildReviewDump(BACKFILL_REPORT, { now: NOW });
   const leftover = dump.dropped.find((d) => d.url === "https://a.test/older-regulators2");
   assert.ok(leftover, "expected the unused backfill-window candidate to be recorded as dropped");
-  assert.equal(leftover.reason.stage, "backfill_not_needed");
+  assert.equal(leftover.reason.stage, "backfill_ineligible");
+  assert.equal(leftover.reason.reason, "below_backfill_floor");
 });
 
 test("buildReviewDump: an item outside the 7-day backfill window is stale even when buildHomepageSections runs first", () => {

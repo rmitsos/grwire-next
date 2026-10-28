@@ -414,11 +414,24 @@ export function splitByFreshness(articles = [], { now = Date.now(), maxAgeHours 
   return { fresh, older };
 }
 
-// round-4: homepage backfill fills up to 12 total items with older-but-
-// still-relevant coverage (up to this many hours old) when fewer than 12
-// items are <72h old.
+// round-6 homepage backfill (replaces round-4's "top up to 12"): when fewer
+// than HOMEPAGE_TARGET_ITEMS (10) items made the homepage from the <72h set,
+// older-but-relevant coverage tops it up, under two windows with their own
+// score floors (final rules from Telco News GR):
+//  - up to BACKFILL_MAX_AGE_HOURS (7 days) old: any item scoring at least
+//    BACKFILL_MIN_SCORE (10);
+//  - 8 to 21 days old (TIER1_BACKFILL_MAX_AGE_HOURS): only tier-1 items that
+//    pass the action-word gate (formal acts: consultation/invitation/
+//    decision, "still open" = published within 21 days), scoring at least
+//    TIER1_BACKFILL_MIN_SCORE (20) after the action-word boost.
+// Agenda items and event pieces never backfill, whatever their score. The
+// backfill never pads below those floors: if fewer than 10 qualify, the
+// remaining slots stay empty. Fresh items rank above backfilled ones.
 export const BACKFILL_MAX_AGE_HOURS = 24 * 7;
-export const HOMEPAGE_BACKFILL_MIN_ITEMS = 12;
+export const TIER1_BACKFILL_MAX_AGE_HOURS = 24 * 21;
+export const HOMEPAGE_TARGET_ITEMS = 10;
+export const BACKFILL_MIN_SCORE = 10;
+export const TIER1_BACKFILL_MIN_SCORE = 20;
 
 // round-4: the §7 nav-visibility window ("hide /tenders and /regulators
 // until each has >=3 items") is a separate, wider window than the 72h

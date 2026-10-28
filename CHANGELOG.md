@@ -13,6 +13,22 @@
 - Insights #1 (AI in Greek SMEs) and #2 (fibre switch), EL + EN, published: the DRAFT/ΠΡΟΣΧΕΔΙΟ marker is removed from each file's first comment, so the pages are indexable, drop the draft label and appear in the sitemap.
 
 ### Added
+- Round-6 homepage fill (replaces the round-4 "fill to 12" rule): the backfill now tops up to a
+  target of 10 (`HOMEPAGE_TARGET_ITEMS`) and never pads below its floors, so empty slots stay
+  empty. Items up to 7 days old backfill at score >= 10 (`BACKFILL_MIN_SCORE`); items 8-21 days
+  old (`TIER1_BACKFILL_MAX_AGE_HOURS`, "still open") backfill only when they come from a tier-1
+  source and the title is a formal act (action-word gate: Δημόσια Διαβούλευση, Πρόσκληση,
+  Απόφαση ...) at score >= 20 after the boost (`TIER1_BACKFILL_MIN_SCORE`); those are marked
+  `article.homepageBackfillTier1`. Agenda items and event pieces never backfill, whatever their
+  score. Fresh items always rank above backfilled ones and may still exceed 10
+  (`HOMEPAGE_MAX_ITEMS` 20); the pool is ordered score desc, then newest first.
+  `HOMEPAGE_BACKFILL_MIN_ITEMS` is removed. New helpers in `public-data.js`
+  (`homepageBackfillWindowHours`, `homepageBackfillIneligibleReason`) feed `review-dump.js`, which
+  gains the `backfill_ineligible` drop stage (reasons `agenda_item`, `event_piece`,
+  `below_backfill_floor`), `homepageBackfillTier1` on homepage items and
+  `header.rules.homepageTargetItems`. The r5 rules are unchanged (agenda beats action words unless
+  the title starts with the formal act; agenda detection on all sources; fuel-drop check on
+  headlines only; a company name alone qualifies for deals).
 - Round-4 feed rules: homepage backfill (fills to 12 items from up to 7-day-old coverage when
   fewer than 12 are <72h old, `article.homepageBackfill`); event/conference-piece suppression
   (`isEventPiece`/`hasFigureOrDecisionSignal` in `feed-rules.js`) with a homepage ban (never lead,

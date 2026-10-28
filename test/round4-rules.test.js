@@ -9,7 +9,6 @@ import {
   hasTelecomNetworkAngle,
   specSectionKeywordMatch,
   BACKFILL_MAX_AGE_HOURS,
-  HOMEPAGE_BACKFILL_MIN_ITEMS,
   SECTION_NAV_WINDOW_DAYS,
 } from "../src/feed-rules.js";
 import { selectArticles, buildHomepageSections, computeNavVisibility } from "../src/public-data.js";
@@ -27,7 +26,7 @@ function row({ url, title, summary = "", publishedAt, sourceId, metadata = {} })
 
 // --- 1. Homepage backfill ---------------------------------------------------
 
-test("buildHomepageSections backfills up to 12 items from up to 7 days old when fewer than 12 are <72h old", () => {
+test("buildHomepageSections backfills from up to 7 days old when fewer than the 10-item target are <72h old (round 6: floor 10, never padded)", () => {
   const now = Date.now();
   const fresh = [{
     url: "https://a.test/fresh", title: "Η Cosmote επεκτείνει το δίκτυο FTTH σε νέους δήμους", summary: "",
@@ -49,7 +48,7 @@ test("buildHomepageSections backfills up to 12 items from up to 7 days old when 
   assert.ok(!shown.some((a) => a.url === "https://a.test/too-old"), "an item older than the 7-day backfill window must stay excluded");
 });
 
-test("buildHomepageSections does not backfill when 12+ items are already <72h old", () => {
+test("buildHomepageSections does not backfill when the 10-item target is already met by <72h items", () => {
   const now = Date.now();
   // Spread across categories (4 telco + 4 energy + 3 infrastructure + 1
   // deals = 12) so SECTION_HOMEPAGE_CAPS lets all 12 actually show — a
@@ -67,14 +66,14 @@ test("buildHomepageSections does not backfill when 12+ items are already <72h ol
   };
   const result = buildHomepageSections([...freshItems, backfillCandidate], { now });
   const shown = [result.lead, ...result.recent, ...Object.values(result.columns).flat()].filter(Boolean);
-  assert.ok(!shown.some((a) => a.url === "https://a.test/backfill"), "no backfill once 12 fresh items already exist");
+  assert.ok(!shown.some((a) => a.url === "https://a.test/backfill"), "no backfill once 12 fresh items already exceed the 10-item target");
 });
 
-test("buildHomepageSections backfills to 12 when 20+ fresh items exist but home_cap leaves only a handful shown", () => {
+test("buildHomepageSections backfills to the 10-item target when 20+ fresh items exist but home_cap leaves only a handful shown", () => {
   const now = Date.now();
   // 10 fresh items each from 2 sources: home_cap (default 2) lets only 2 per
   // source through (lead + 1 recent each = 4 total), even though all 20 are
-  // individually <72h old and would otherwise count toward the 12 floor.
+  // individually <72h old and would otherwise count toward the 10-item target.
   const freshA = Array.from({ length: 10 }, (_, i) => ({
     url: `https://a.test/fresh-a-${i}`, title: `Η Cosmote ανακοινώνει επέκταση δικτύου FTTH αρ. ${i}`, summary: "",
     sourceId: "fresh-src-a", categories: ["telco"], score: 10 - i, publishedAt: new Date(now - 3_600_000).toISOString(), metadata: {},
@@ -88,14 +87,14 @@ test("buildHomepageSections backfills to 12 when 20+ fresh items exist but home_
   const olderCategories = ["infrastructure", "tenders", "regulators", "deals", "telco", "energy", "infrastructure", "tenders", "regulators", "deals"];
   const older = olderCategories.map((category, i) => ({
     url: `https://a.test/older-${i}`, title: `Ανακοίνωση έργου υποδομών αρ. ${i}`, summary: "",
-    sourceId: `older-src-${i}`, categories: [category], score: 5,
+    sourceId: `older-src-${i}`, categories: [category], score: 15,
     publishedAt: new Date(now - (4 + i * 0.25) * 24 * 3_600_000).toISOString(), metadata: {},
   }));
   const result = buildHomepageSections([...freshA, ...freshB, ...older], { now });
   const shown = [result.lead, ...result.recent, ...Object.values(result.columns).flat()].filter(Boolean);
-  assert.equal(shown.length, 12, `expected exactly 12 homepage items (the 12-item floor), got ${shown.length}`);
+  assert.equal(shown.length, 10, `expected exactly 10 homepage items (the target), got ${shown.length}`);
   const backfillItems = shown.filter((a) => a.homepageBackfill);
-  assert.equal(backfillItems.length, 8, "expected 8 items filled in from the backfill pool to reach the 12-item floor");
+  assert.equal(backfillItems.length, 6, "expected 6 items filled in from the backfill pool to reach the 10-item target");
   for (const item of backfillItems) assert.ok(item.url.startsWith("https://a.test/older-"), `expected only older-* items to be backfilled, got ${item.url}`);
 });
 
