@@ -184,10 +184,14 @@ async function readArticleRows({ query, limit }) {
   // build renders dozens of pages at once and otherwise stalls on that many identical queries.
   const hit = recentRows.get(queryLimit);
   if (hit && Date.now() - hit.at < RECENT_ROWS_TTL_MS) return hit.promise;
+  const startedAt = Date.now();
+  console.log("[public-diag] read start", queryLimit);
   const promise = Promise.resolve(sql`
     SELECT * FROM articles
     ORDER BY COALESCE(published_at, updated_at) DESC NULLS LAST LIMIT ${queryLimit}
   `);
+  promise.then((rows) => console.log("[public-diag] read done", Date.now() - startedAt, "ms", rows.length, "rows"),
+    (error) => console.log("[public-diag] read failed", Date.now() - startedAt, "ms", error?.message));
   recentRows.set(queryLimit, { at: Date.now(), promise });
   promise.catch(() => { if (recentRows.get(queryLimit)?.promise === promise) recentRows.delete(queryLimit); });
   return promise;
@@ -246,7 +250,12 @@ export function navVisibilityFromRows(rows, { now = Date.now() } = {}) {
 
 export async function getNavVisibility({ now = Date.now() } = {}) {
   try {
-    return navVisibilityFromRows(await readArticleRows({ limit: 100 }), { now });
+    const t0 = Date.now();
+    const rows = await readArticleRows({ limit: 100 });
+    const t1 = Date.now();
+    const out = navVisibilityFromRows(rows, { now });
+    console.log("[public-diag] nav", t1 - t0, "ms read,", Date.now() - t1, "ms compute");
+    return out;
   } catch {
     return computeNavVisibility([], { now });
   }
