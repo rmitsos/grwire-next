@@ -64,14 +64,14 @@ const EXPECTED = {
 for (const [key, expected] of Object.entries(EXPECTED)) {
   const [slug, lang] = key.split(":");
 
-  test(`loader: ${key} parses title, standfirst, sources, date, draft`, () => {
+  test(`loader: ${key} parses title, standfirst, sources, date, published (not draft)`, () => {
     const insight = getInsight(slug, lang);
     assert.ok(insight, `${key} should load`);
     assert.equal(insight.title, expected.title);
     assert.deepEqual(insight.standfirst, expected.standfirst);
     assert.equal(insight.sources.length, expected.sourcesCount);
     assert.equal(insight.date, null);
-    assert.equal(insight.draft, true);
+    assert.equal(insight.draft, false);
 
     const serialized = JSON.stringify(insight);
     assert.ok(!serialized.includes("<!--"));
@@ -132,9 +132,12 @@ test("content/insights files are byte-identical to /workspace/knowledge/grwire/i
   for (const name of readdirSync(contentDir)) {
     const knowledgePath = path.join(KNOWLEDGE_DIR, name);
     if (!existsSync(knowledgePath)) continue;
+    // The first line is the status comment (the draft marker lives there); it is the one line
+    // that legitimately differs once an article is published here, so compare from line 2 on.
+    const body = (file) => readFileSync(file).toString("utf8").split("\n").slice(1).join("\n");
     assert.equal(
-      readFileSync(path.join(contentDir, name)).toString("utf8"),
-      readFileSync(knowledgePath).toString("utf8"),
+      body(path.join(contentDir, name)),
+      body(knowledgePath),
       `${name} should be byte-identical to the knowledge copy`,
     );
   }
@@ -301,12 +304,12 @@ test("insight index pages are noindexed only when every listed article is draft"
     assert.ok(content.includes("noindex: allDraft"));
   }
 
-  // Current real content has both articles as drafts in both languages, so both index pages
-  // are noindexed right now — this is the state generateMetadata would actually produce.
+  // Current real content is published (no draft marker) in both languages, so both index
+  // pages are indexable — this is the state generateMetadata would actually produce.
   for (const lang of ["el", "en"]) {
     const insights = listInsights(lang);
     const allDraft = !insights.some((insight) => !insight.draft);
-    assert.equal(allDraft, true);
+    assert.equal(allDraft, false);
   }
 });
 
@@ -348,14 +351,17 @@ test("buildAlternatesMetadata: article canonical/hreflang/x-default/og for an ex
 
 // ---- sitemap -----------------------------------------------------------------------------
 
-test("sitemap: real content/insights articles are currently all draft, so no insight URLs appear", async () => {
+test("sitemap: real content/insights articles are published, so both indexes and all four article URLs appear", async () => {
   const base = siteBase();
   const entries = await sitemap();
   const urls = entries.map((entry) => entry.url);
-  assert.ok(!urls.includes(`${base}/insights`));
-  assert.ok(!urls.includes(`${base}/en/insights`));
-  assert.ok(!urls.includes(`${base}/insights/fibre-switch`));
-  assert.ok(!urls.includes(`${base}/en/insights/fibre-switch`));
+  for (const url of [
+    `${base}/insights`, `${base}/en/insights`,
+    `${base}/insights/fibre-switch`, `${base}/en/insights/fibre-switch`,
+    `${base}/insights/ai-greek-smes`, `${base}/en/insights/ai-greek-smes`,
+  ]) {
+    assert.ok(urls.includes(url), `${url} should be in the sitemap`);
+  }
 });
 
 function makeInsight(slug, draft) {

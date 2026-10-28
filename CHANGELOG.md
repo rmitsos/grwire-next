@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Changed
+- Insights #1 (AI in Greek SMEs) and #2 (fibre switch), EL + EN, published: the DRAFT/ΠΡΟΣΧΕΔΙΟ marker is removed from each file's first comment, so the pages are indexable, drop the draft label and appear in the sitemap.
+
 ### Added
 - Round-4 feed rules: homepage backfill (fills to 12 items from up to 7-day-old coverage when
   fewer than 12 are <72h old, `article.homepageBackfill`); event/conference-piece suppression

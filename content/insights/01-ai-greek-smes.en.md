@@ -1,4 +1,4 @@
-<!-- GR Wire · Insight #1 · short English version · DRAFT (not published). Figures re-checked 25 Oct 2026. -->
+<!-- GR Wire · Insight #1 · short English version. Figures re-checked 25 Oct 2026. -->
 
 **INSIGHT · DIGITAL TRANSFORMATION**
 

@@ -1,4 +1,4 @@
-<!-- GR Wire · Insight #2 · DRAFT (not published). Facts sourced as listed; prices checked 25/10/2026. Series "Fibre in Greece, in three questions", part 2 of 3 (with a short look back at part 1). -->
+<!-- GR Wire · Insight #2. Facts sourced as listed; prices checked 25/10/2026. Series "Fibre in Greece, in three questions", part 2 of 3 (with a short look back at part 1). -->
 
 **INSIGHT · TELECOM & FIBRE** · Series: Fibre in Greece, in three questions (2/3)
 
