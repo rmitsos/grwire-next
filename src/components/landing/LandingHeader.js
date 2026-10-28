@@ -1,26 +1,35 @@
 import Link from "next/link";
 import { getLandingCopy, NAV_SECTIONS } from "@/landing/copy";
-import { LANDING_ROUTES } from "@/landing/routes";
+import { LANDING_ROUTES, sectionPath } from "@/landing/routes";
+import { insightsIndexPath } from "@/insights/content";
+import { getNavVisibility } from "@/public-data";
 
-// elHref/enHref/subscribeHref let a page override the default subscribe-page hrefs — e.g. an
-// insight article wants its ΕΛ/EN switch to land on the same slug in the other language, and its
-// subscribe button to go to the subscribe page rather than "#subscribe" (there's no hero form on
-// that page to jump to).
-export function LandingHeader({ lang, elHref, enHref, subscribeHref }) {
+// elHref/enHref/subscribeHref let a page override the default subscribe-page hrefs — every page
+// passes the same page in the other language for its ΕΛ/EN switch, and its subscribe button goes
+// to the subscribe page (only the subscribe page itself has a hero form to jump to, "#subscribe").
+//
+// /tenders and /regulators stay out of the nav until their section has >=3 items (see
+// getNavVisibility); the pages themselves still resolve. Section links are language-aware
+// (/telco in EL, /en/telco in EN).
+export async function LandingHeader({ lang, elHref, enHref, subscribeHref }) {
   const copy = getLandingCopy(lang).header;
+  const navVisibility = await getNavVisibility();
+  const sections = NAV_SECTIONS.filter((section) => navVisibility[section.slug]?.shown !== false);
   return (
     <header className="site-header">
       <div className="wrap">
-        <a className="wordmark" href={LANDING_ROUTES[lang].subscribe}>
+        <a className="wordmark" href={LANDING_ROUTES[lang].home}>
           {copy.wordmark}
           <i />
         </a>
         <nav className="nav-sections" aria-label={lang === "el" ? "Ενότητες" : "Sections"}>
-          {NAV_SECTIONS.map((section) => (
-            <Link key={section.slug} href={section.path} className={section.primary ? "primary" : undefined}>
+          {sections.map((section) => (
+            <Link key={section.slug} href={sectionPath(lang, section.slug)} className={section.primary ? "primary" : undefined}>
               {copy.navSections[section.slug][lang]}
             </Link>
           ))}
+          <Link href={insightsIndexPath(lang)}>{copy.insightsLabel}</Link>
+          <Link href={LANDING_ROUTES[lang].search}>{copy.searchLabel}</Link>
         </nav>
         <LangToggle lang={lang} routeKey="subscribe" elHref={elHref} enHref={enHref} />
         <a className="btn small" href={subscribeHref ?? "#subscribe"}>

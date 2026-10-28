@@ -4,7 +4,7 @@ export default function robots() {
       userAgent: "*",
       allow: "/",
       // Search results run a database query per URL, so crawlers stay out of them.
-      disallow: ["/intelligence", "/api", "/search?"],
+      disallow: ["/intelligence", "/api", "/search?", "/en/search?"],
     },
   };
 }

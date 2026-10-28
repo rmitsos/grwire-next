@@ -231,7 +231,7 @@ test("components wire the draft label to insight.draft and INSIGHTS_COPY.draftLa
   const files = [
     "src/components/insights/InsightArticlePage.js",
     "src/components/insights/InsightIndexPage.js",
-    "src/app/(site)/(public)/page.js",
+    "src/components/public/HomePage.js",
   ];
   for (const relativePath of files) {
     const content = readFileSync(path.join(REPO_ROOT, relativePath), "utf8");

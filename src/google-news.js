@@ -1,5 +1,6 @@
 import { absoluteUrl } from "./sources/utils.js";
 import { areNearDuplicates } from "./article-quality.js";
+import { unwrapGoogleNewsUrl } from "./public-links.js";
 
 const GOOGLE_NEWS_HOST = "news.google.com";
 
@@ -76,6 +77,12 @@ export async function resolveGoogleNewsItems(items, { fetch } = {}) {
         relatedPublishers: [...new Set([...(match.metadata?.relatedPublishers || []), publisher].filter(Boolean))],
       };
       dropped.add(item.url);
+      continue;
+    }
+    // Offline unwrap first: a url=/q= parameter or a legacy plain-text token needs no round-trip.
+    const unwrapped = unwrapGoogleNewsUrl(item.url, item.metadata);
+    if (unwrapped) {
+      item.url = unwrapped;
       continue;
     }
     if (!fetch || resolutions >= MAX_GOOGLE_RESOLUTIONS_PER_SCAN) {

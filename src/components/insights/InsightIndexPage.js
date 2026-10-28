@@ -32,7 +32,7 @@ export function InsightIndexPage({ lang, insights }) {
           </div>
         </section>
       </main>
-      <LandingFooter lang={lang} />
+      <LandingFooter lang={lang} elHref={insightsIndexPath("el")} enHref={insightsIndexPath("en")} />
     </>
   );
 }

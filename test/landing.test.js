@@ -82,7 +82,7 @@ test("LANDING_ROUTES: EL has no prefix, EN is prefixed with /en, routeKeys match
     assert.ok(!path.startsWith("/en"), `EL route ${key} should not be prefixed: ${path}`);
   }
   for (const [key, path] of Object.entries(LANDING_ROUTES.en)) {
-    assert.ok(path.startsWith("/en/"), `EN route ${key} should be prefixed: ${path}`);
+    assert.ok(path === "/en" || path.startsWith("/en/"), `EN route ${key} should be prefixed: ${path}`);
   }
 });
 
