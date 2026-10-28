@@ -13,6 +13,7 @@ import {
   DEFAULT_DAY_CAP_PER_SOURCE,
   DEFAULT_HOME_CAP_PER_SOURCE,
   HOMEPAGE_TARGET_ITEMS,
+  HOMEPAGE_FRESH_MIN_SCORE,
   HOMEPAGE_MAX_ITEMS,
   SECTION_HOMEPAGE_CAPS,
   SECTION_NAV_WINDOW_DAYS,
@@ -295,6 +296,8 @@ export async function getNavVisibility({ now = Date.now() } = {}) {
  *    event pieces never backfill, and nothing pads below the floors: if
  *    fewer than 10 qualify the slots stay empty. Backfill items still go
  *    through every other rule/cap below.
+ *  - round-6b: a fresh item scoring under HOMEPAGE_FRESH_MIN_SCORE (5) is
+ *    dropped from the homepage ("below_fresh_floor"); other feeds keep it.
  *  - §2 home_cap per source (default DEFAULT_HOME_CAP_PER_SOURCE).
  *  - §1 homepage_cap per spec section (SECTION_HOMEPAGE_CAPS, keyed by
  *    homepageSectionOf(article) — the article's primary *spec* section,
@@ -353,6 +356,12 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop 
   const checkEligible = (article, { forLead = false } = {}) => {
     if (totalCount >= HOMEPAGE_MAX_ITEMS) return { ok: false, stage: "total_cap" };
     if (article.metadata?.sectionOnly) return { ok: false, stage: "section_only" };
+    // round-6b: a fresh (non-backfill) item under the floor never takes a
+    // homepage slot; section pages are unaffected. Backfill items have their
+    // own floors (isBackfillCandidate).
+    if (!article.homepageBackfill && (article.score || 0) < HOMEPAGE_FRESH_MIN_SCORE) {
+      return { ok: false, stage: "below_fresh_floor" };
+    }
     if (isCyprusOnly(article)) return { ok: false, stage: "cyprus_only" };
     // round-5: agenda items (any tier) are checked before the tier-1
     // action-word gate below — agenda overrides a tier-1 action word per

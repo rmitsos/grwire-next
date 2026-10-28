@@ -21,6 +21,7 @@ import {
   SECTION_HOMEPAGE_CAPS,
   MAX_AGE_HOURS_NEWS,
   HOMEPAGE_TARGET_ITEMS,
+  HOMEPAGE_FRESH_MIN_SCORE,
   DEFAULT_DAY_CAP_PER_SOURCE,
   DEFAULT_HOME_CAP_PER_SOURCE,
   hasFigureOrDecisionSignal,
@@ -225,6 +226,7 @@ export function buildReviewDump(report, { now = Date.now(), branch = null, commi
       rules: {
         homepageMaxItems: HOMEPAGE_MAX_ITEMS,
         homepageTargetItems: HOMEPAGE_TARGET_ITEMS,
+        homepageFreshMinScore: HOMEPAGE_FRESH_MIN_SCORE,
         maxAgeHoursNews: MAX_AGE_HOURS_NEWS,
         sectionHomepageCaps: SECTION_HOMEPAGE_CAPS,
         defaultDayCapPerSource: DEFAULT_DAY_CAP_PER_SOURCE,

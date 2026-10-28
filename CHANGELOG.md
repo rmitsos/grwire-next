@@ -13,6 +13,16 @@
 - Insights #1 (AI in Greek SMEs) and #2 (fibre switch), EL + EN, published: the DRAFT/ΠΡΟΣΧΕΔΙΟ marker is removed from each file's first comment, so the pages are indexable, drop the draft label and appear in the sitemap.
 
 ### Added
+- Round-6b: (1) new `culture_csr` noise group in `noiseRejectReason` (title-only, all sources, so it
+  drops at scan time and in every feed and section): έκθεση, Τέχνη, πολιτισμ*, χορηγία/χορηγός,
+  φεστιβάλ*, βραβεύ*, εθελοντ*. Kept when the title has a network/business keyword (spec
+  section lists + telco network-angle terms, minus the ambiguous εργ*, ιστο*, παροχ*, νοικοκυρι*;
+  "δικτύωση" is ignored) or a € figure. "Έκθεση" meaning "report" is kept when the only hit is
+  έκθεση and the title has a report cue (ετήσια, αξιολόγηση, BEREC, ΟΟΣΑ ...) or reads
+  "έκθεση του/της <ACRONYM>" (ΔΕΗ excluded). χορήγηση and τεχνητή are not matched.
+  (2) Homepage-only fresh-score floor `HOMEPAGE_FRESH_MIN_SCORE` = 5: non-backfill items under 5 are
+  dropped in `checkEligible` (stage `below_fresh_floor`); backfill keeps its own floors; section pages
+  and other feeds are unchanged. Review dump header gains `rules.homepageFreshMinScore`.
 - Round-6 homepage fill (replaces the round-4 "fill to 12" rule): the backfill now tops up to a
   target of 10 (`HOMEPAGE_TARGET_ITEMS`) and never pads below its floors, so empty slots stay
   empty. Items up to 7 days old backfill at score >= 10 (`BACKFILL_MIN_SCORE`); items 8-21 days

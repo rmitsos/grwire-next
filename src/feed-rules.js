@@ -354,6 +354,87 @@ function isEnvironmentOnlyNoise(text) {
   return matchesAnyTerm(text, ENVIRONMENT_ONLY_TERMS) && !matchesAnyTerm(text, GRID_WORKS_TERMS);
 }
 
+// round-6b culture/CSR rule, ALL sources (the ppc-press-only list above stays
+// as it is): an item whose TITLE carries an exhibition/arts/culture/
+// sponsorship/festival/award/volunteering term is noise (group "culture_csr",
+// so it is dropped at scan time and again at read time, in every feed and
+// section) UNLESS the title also names a network or business keyword or has
+// a € figure. Title-only on purpose: those words are common inside bodies.
+//  - "τεχνη" is listed by its exact inflections; a "τεχνη*" prefix would
+//    also catch τεχνητή (artificial) in "τεχνητή νοημοσύνη".
+//  - "χορηγια/χορηγος" families only: a "χορηγ*" prefix would also catch
+//    χορήγηση (granting a licence/loan), which is regulatory news.
+//  - "εκθεση" also means "report" (έκθεση ΡΑΑΕΥ / ετήσια έκθεση / έκθεση
+//    αξιολόγησης): it only counts when no report cue is in the title, on top
+//    of the network/business exception (which already keeps ΡΑΑΕΥ/ΕΕΤΤ/ΑΔΜΗΕ…
+//    titles).
+const CULTURE_CSR_TERMS = [
+  "εκθεση", "εκθεσεισ", "εκθεσεων",
+  "τεχνη", "τεχνησ", "τεχνεσ", "τεχνων",
+  "πολιτισμ*", "χορηγι*", "χορηγοσ", "χορηγου", "χορηγουσ", "χορηγο", "χορηγων",
+  "φεστιβαλ*", "βραβευ*", "εθελοντ*",
+];
+const REPORT_MEANING_TERMS = [
+  "ετησι*", "τριμηνιαι*", "εξαμηνιαι*", "πεπραγμεν*", "ελεγχου", "ελεγκτικ*", "αξιολογησ*",
+  "αναλυσ*", "προοδου", "παρακολουθησ*", "κομισιον", "επιτροπ*", "οοσα", "διμνη", "εκτ", "bank",
+  "επισκοπησ*", "πορισμα*", "ετοιμοτητα*",
+  "berec", "itu", "ocde", "oecd", "imf", "ευρωπαικ*", "ευρωπαϊκ*",
+];
+// "έκθεση του/της/των <ACRONYM>" (έκθεση του BEREC, της ΡΑΑΕΥ, του ΟΟΣΑ…): a
+// report by a named body, read off the original-case title since the
+// normaliser lowercases.
+function isReportByAcronym(title) {
+  const plain = String(title ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const match = plain.match(/εκθεση\s+(?:του|της|των)\s+([^\s,.:;«»"')]+)/i);
+  if (!match) return false;
+  const token = match[1];
+  const letters = token.replace(/[^\p{L}]/gu, "");
+  if (letters.toUpperCase() === "ΔΕΗ") return false; // a company, not a reporting body
+  return letters.length >= 3 && letters === letters.toUpperCase() && letters !== letters.toLowerCase();
+}
+// Keyword lists reused from the existing rules: the §1 spec sections for
+// telecom, energy, deals, tenders and regulators, the telco network-angle
+// terms and the ΔΕΗ network/business terms — minus the generic ones that
+// also read as ordinary Greek ("εργ*" = έργα τέχνης / works of art, "ιστο*" =
+// ιστορία, "παροχ*" = παροχές, plain "δικτυ*" is kept but "δικτυωσ*"
+// (networking) is stripped before matching).
+const CULTURE_EXCEPTION_AMBIGUOUS = new Set(["εργ*", "ιστο*", "παροχ*", "νοικοκυρι*"]);
+// (Built lazily: TELCO_NETWORK_ANGLE_TERMS is declared further down. The ΔΕΗ
+// network/business list lives in watch-rules.js, which imports this module;
+// its terms are all covered by the lists above except "αποθηκευσ*".)
+let cultureExceptionTerms = null;
+function getCultureExceptionTerms() {
+  cultureExceptionTerms ||= [...new Set([
+    ...["telecom-fibre", "energy-grids", "deals-companies", "tenders-contracts", "regulators-policy"]
+      .flatMap((section) => SPEC_SECTION_KEYWORDS[section].keywords),
+    ...TELCO_NETWORK_ANGLE_TERMS,
+    "αποθηκευσ*",
+    // the §1 lists spell ΡΑΑΕΥ "ραα*υ", which the prefix-only wildcard matcher
+    // cannot match, so name the regulator explicitly here.
+    "ραα*",
+  ])].filter((term) => !CULTURE_EXCEPTION_AMBIGUOUS.has(term));
+  return cultureExceptionTerms;
+}
+
+/** Culture/CSR title (round-6b), before the network/business/€ exception. */
+export function hasCultureCsrTerm(title = "") {
+  const cultureHits = CULTURE_CSR_TERMS.filter((term) => matchesAnyTerm(title, [term]));
+  if (!cultureHits.length) return false;
+  const onlyExhibition = cultureHits.every((term) => term.startsWith("εκθεσ"));
+  return !(onlyExhibition && (matchesAnyTerm(title, REPORT_MEANING_TERMS) || isReportByAcronym(title)));
+}
+
+/** Whether a culture/CSR title is rescued by a network/business keyword or a € figure. */
+export function hasCultureExceptionSignal(title = "") {
+  if (hasEuroAmount(title)) return true;
+  const stripped = normaliseText(title).replace(/δικτυωσ\S*/g, " ");
+  return matchesAnyTerm(stripped, getCultureExceptionTerms());
+}
+
+function isCultureCsrNoise(title) {
+  return hasCultureCsrTerm(title) && !hasCultureExceptionSignal(title);
+}
+
 // round-5 follow-up: consumer_fuel measures are identified by the HEADLINE,
 // not the summary — a price-index story (e.g. construction materials) whose
 // summary merely lists diesel/heating oil among its components is sector
@@ -387,6 +468,7 @@ export function noiseRejectReason(item = {}) {
   if (isPpcNonNetwork(item, text)) return { group: "ppc_non_network", term: null };
   if (isPoliticalQuoteWithNoDecision(text)) return { group: "political_quote_no_decision", term: null };
   if (isEnvironmentOnlyNoise(text)) return { group: "environment_only", term: null };
+  if (isCultureCsrNoise(title)) return { group: "culture_csr", term: null };
   return null;
 }
 
@@ -432,6 +514,11 @@ export const TIER1_BACKFILL_MAX_AGE_HOURS = 24 * 21;
 export const HOMEPAGE_TARGET_ITEMS = 10;
 export const BACKFILL_MIN_SCORE = 10;
 export const TIER1_BACKFILL_MIN_SCORE = 20;
+
+// round-6b: a fresh (<72h, not backfilled) item scoring under this never
+// takes a homepage slot (stage "below_fresh_floor"). Homepage selection
+// only: section pages and every other feed still list such items.
+export const HOMEPAGE_FRESH_MIN_SCORE = 5;
 
 // round-4: the §7 nav-visibility window ("hide /tenders and /regulators
 // until each has >=3 items") is a separate, wider window than the 72h
