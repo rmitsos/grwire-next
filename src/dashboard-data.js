@@ -1,6 +1,6 @@
 import { tracePossibleImpacts } from "./impact-map";
 import { validateRelationship } from "./relationships";
-import { ensureDatabase } from "./database";
+import { ensureDatabase } from "./database.js";
 import { buildDailyIntelligence } from "./agents/correlation-trends.js";
 import { collapseDuplicateArticles } from "./article-quality.js";
 

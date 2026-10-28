@@ -1,4 +1,5 @@
 import { normalizeItem, stripTags } from "./utils.js";
+import { matchesAnyTerm } from "../feed-rules.js";
 
 /**
  * Uses WordPress' public REST interface rather than RSS. The configured URL
@@ -35,7 +36,10 @@ export class WordPressSourceAdapter {
       if (!response.ok) throw new Error(`WordPress request failed (${response.status})`);
       const rows = await response.json();
       if (!Array.isArray(rows)) throw new Error("WordPress returned an unexpected payload");
-      return rows.map((post) =>
+      const excludeTitlePatterns = (source.excludeTitlePatterns || []).map((pattern) => new RegExp(pattern, "iu"));
+      const items = rows
+        .filter((post) => !excludeTitlePatterns.some((pattern) => pattern.test(post.title?.rendered || "")))
+        .map((post) =>
         normalizeItem(
           {
             id: String(post.id),
@@ -48,6 +52,15 @@ export class WordPressSourceAdapter {
           source.url,
         ),
       );
+      // round-4 ypen-energy-announcements: a WordPress category can still
+      // mix in subjects outside this source's scope (ΥΠΕΝ's "Ανακοινώσεις
+      // Τύπου" also covers environment/urban planning), so an optional
+      // titleFilter (same term syntax as feed-rules.js matchesAnyTerm) keeps
+      // only posts whose title/summary actually match — the same role
+      // `prefilter: true` documents on other sources, but applied here
+      // inside the adapter rather than threaded through noiseRejectReason.
+      if (!source.titleFilter?.length) return items;
+      return items.filter((item) => matchesAnyTerm(`${item.title} ${item.summary || ""}`, source.titleFilter));
     } catch (error) {
       if (error?.name === "AbortError") throw new Error("WordPress request timed out");
       throw error;

@@ -1,7 +1,7 @@
 import { SOURCES } from "../config/sources";
 import { scanMarket } from "./pipeline";
 import { detectArticleOrganizations } from "./article-organizations";
-import { ensureDatabase } from "./database";
+import { ensureDatabase } from "./database.js";
 import { buildDailyIntelligence } from "./agents/correlation-trends.js";
 import { buildDailyStory, buildFallbackDailyStory } from "./agents/story-builder.js";
 import { discoverSourceCandidates } from "./agents/source-guardian.js";
@@ -18,7 +18,8 @@ export async function ingestMarket() {
     readArticlePages: process.env.SOURCE_ARTICLE_READING !== "false",
     articleReadLimit: Number(process.env.SOURCE_ARTICLE_READ_LIMIT || 30),
     validationLimit: Number(process.env.SOURCE_VALIDATION_LIMIT || 20),
-    maxRelevantItems: Number(process.env.SOURCE_MAX_RELEVANT || 60),
+    // SOURCE_MAX_RELEVANT lets a deployment override the scan-wide cap without a code change.
+    maxRelevantItems: Number(process.env.SOURCE_MAX_RELEVANT || 150),
   });
   console.log("[ingest] scan complete", { ms: Date.now() - startedAt, fetched: report.fetched, relevant: report.relevant });
   let stored = 0;

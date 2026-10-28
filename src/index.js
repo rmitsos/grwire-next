@@ -14,3 +14,5 @@ export * from "./organizations.js";
 export * from "./article-organizations.js";
 export * from "./visibility.js";
 export * from "./store/postgres.js";
+export * from "./feed-rules.js";
+export * from "./google-news.js";

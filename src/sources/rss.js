@@ -11,10 +11,11 @@ export class RssSourceAdapter {
       maxBytes: source.maxBytes,
       accept: "application/rss+xml, application/atom+xml, application/xml, text/xml",
     });
-    return this.parse(result.text, result.url);
+    return this.parse(result.text, result.url, source);
   }
 
-  parse(xml, sourceUrl) {
+  parse(xml, sourceUrl, source = {}) {
+    const excludeTitlePatterns = (source.excludeTitlePatterns || []).map((pattern) => new RegExp(pattern, "iu"));
     const blocks = [...xml.matchAll(/<(item|entry)\b[^>]*>([\s\S]*?)<\/\1>/gi)];
     return blocks.flatMap(([, kind, body]) => {
       let link = firstTag(body, "link");
@@ -24,12 +25,18 @@ export class RssSourceAdapter {
       }
       link = absoluteUrl(link, sourceUrl);
       if (!link) return [];
+      const title = firstTag(body, "title");
+      if (excludeTitlePatterns.some((pattern) => pattern.test(title || ""))) return [];
+      // RSS <source url="...">Publisher</source>: used by Google News to name
+      // the original publisher (sources-spec.md §2 "Google News handling").
+      const publisher = firstTag(body, "source");
       return [normalizeItem({
         id: firstTag(body, kind.toLowerCase() === "entry" ? "id" : "guid") || link,
         url: link,
-        title: firstTag(body, "title"),
+        title,
         summary: firstTag(body, "description") || firstTag(body, "summary") || firstTag(body, "content"),
-        publishedAt: firstTag(body, "pubDate") || firstTag(body, "published") || firstTag(body, "updated")
+        publishedAt: firstTag(body, "pubDate") || firstTag(body, "published") || firstTag(body, "updated"),
+        metadata: publisher ? { publisher } : undefined,
       }, sourceUrl)];
     });
   }

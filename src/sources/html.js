@@ -14,6 +14,7 @@ export class HtmlListingSourceAdapter {
   }
   parse(html, sourceUrl, config = {}) {
     const className = config.linkClass;
+    const excludeTitlePatterns = (config.excludeTitlePatterns || []).map((pattern) => new RegExp(pattern, "iu"));
     const anchors = [...html.matchAll(/<a\b([^>]*)href=["']([^"']+)["']([^>]*)>([\s\S]*?)<\/a>/gi)];
     const items = anchors.flatMap(([, before, href, after, contents]) => {
       const attrs = `${before} ${after}`;
@@ -25,6 +26,7 @@ export class HtmlListingSourceAdapter {
       if (url.replace(/\/$/, "") === sourceUrl.replace(/\/$/, "")) return [];
       const title = stripTags(contents) || attrs.match(/title=["']([^"']+)["']/i)?.[1];
       if (!title || /^https?:\/\//i.test(title) || title.trim().length < (config.minimumTitleLength || 0)) return [];
+      if (excludeTitlePatterns.some((pattern) => pattern.test(title))) return [];
       if (config.linkPatterns?.length) {
         const haystack = `${url} ${title || ""}`.toLocaleLowerCase("el");
         if (!config.linkPatterns.some((pattern) => haystack.includes(String(pattern).toLocaleLowerCase("el")))) return [];

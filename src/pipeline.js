@@ -1,8 +1,11 @@
 import { createSourceAdapter } from "./sources/index.js";
-import { DEFAULT_WATCH_RULES, rankItems } from "./watch-rules.js";
+import { canonicalizeUrl, cleanUrl } from "./sources/utils.js";
+import { DEFAULT_WATCH_RULES, rankItems, sourceForcedCategories } from "./watch-rules.js";
 import { inspectArticle, validateArticleLink } from "./agents/source-guardian.js";
 import { readArticles } from "./agents/article-reader.js";
-import { collapseDuplicateArticles } from "./article-quality.js";
+import { collapseDuplicateArticles, cleanTitleForSource } from "./article-quality.js";
+import { DEFAULT_DAY_CAP_PER_SOURCE, athensDayKey, noiseRejectReason } from "./feed-rules.js";
+import { resolveGoogleNewsItems } from "./google-news.js";
 
 export async function scanMarket({
   sources,
@@ -13,7 +16,18 @@ export async function scanMarket({
   validationLimit = 40,
   readArticlePages = false,
   articleReadLimit = 30,
-  maxRelevantItems = 60,
+  // A deployment can override this via the SOURCE_MAX_RELEVANT env var (see
+  // src/ingest-service.js), without changing this default.
+  maxRelevantItems = 150,
+  maxPerSource = 12,
+  now = Date.now(),
+  // Optional per-item drop-reason callback, purely additive (no behaviour
+  // change when omitted): `onDrop(item, { stage, ... })` for every stage an
+  // item can fail — noise, relevance_rejected, no_category, day_cap,
+  // run_cap, link_invalid, max_relevant. Used by scripts/review-dump.js so
+  // sources with no DEFAULT_WATCH_RULES match (ΡΑΑΕΥ/ΥΠΕΝ/ΓΓΤΤ) show why
+  // each item was dropped instead of silently disappearing.
+  onDrop,
 }) {
   if (!Array.isArray(sources) || !sources.length) throw new TypeError("At least one source is required");
   const outcomes = [];
@@ -49,8 +63,14 @@ export async function scanMarket({
       invalidLinks: 0,
     });
     for (const item of result.value.items) {
-      const url = canonicalUrl(item.url);
-      if (!byUrl.has(url)) byUrl.set(url, { ...item, sourceId: source.id || source.url });
+      // Dedupe identity uses the fully canonical URL (lowercase host, no
+      // www., no tracking params); the stored URL only lowercases the host
+      // and strips tracking params, keeping www./path/trailing slash as
+      // published so links keep working on hosts that require them.
+      const canonical = canonicalizeUrl(item.url);
+      if (!byUrl.has(canonical)) {
+        byUrl.set(canonical, { ...item, sourceId: source.id || source.url, tier: source.tier, url: cleanUrl(item.url), originalUrl: item.url });
+      }
     }
   }
 
@@ -68,17 +88,42 @@ export async function scanMarket({
       .sort((a, b) => b.validation.subject.score - a.validation.subject.score)
       .slice(0, articleReadLimit)
       .map(({ item }) => item);
-    const readItems = await readArticles(preselected, {
+    // Fetch the publisher's original link (canonical hosts can 404 on sites
+    // that require the www. prefix), then restore the canonical identity.
+    const readTargets = preselected.map((item) => ({ ...item, url: item.originalUrl || item.url }));
+    const readItems = await readArticles(readTargets, {
       fetch: fetch || globalThis.fetch,
       limit: articleReadLimit,
     });
     const readByUrl = new Map(readItems.map((item, index) => [preselected[index].url, item]));
-    discoveredItems = discoveredItems.map((item) => readByUrl.get(item.url) || item);
+    discoveredItems = discoveredItems.map((item) => {
+      const read = readByUrl.get(item.url);
+      if (!read) return item;
+      return { ...read, url: item.url, originalUrl: item.originalUrl };
+    });
   }
 
-  const inspected = collapseDuplicateArticles(discoveredItems)
+  // sources-spec.md §5 noise_hard_reject: dropped before ranking, with the
+  // reason counted per source in the scan report.
+  const noiseRejectedBySource = new Map();
+  const noiseFiltered = discoveredItems.filter((item) => {
+    const reason = noiseRejectReason(item);
+    if (!reason) return true;
+    noiseRejectedBySource.set(item.sourceId, (noiseRejectedBySource.get(item.sourceId) || 0) + 1);
+    onDrop?.(item, { stage: "noise", ...reason });
+    return false;
+  });
+
+  const inspected = collapseDuplicateArticles(noiseFiltered)
     .map((item) => ({ ...item, validation: inspectArticle(item, { rules }) }))
-  const candidates = inspected.filter((item) => item.validation.accepted);
+  // sources-spec.md §2.2 ppc-press source-level routing (watch-rules.js
+  // sourceForcedCategories) guarantees a category regardless of the generic
+  // relevance gate, so those items must not be dropped here either.
+  const candidates = inspected.filter((item) => {
+    if (item.validation.accepted || sourceForcedCategories(item).length > 0) return true;
+    onDrop?.(item, { stage: "relevance_rejected" });
+    return false;
+  });
 
   if (validateLinks && candidates.length) {
     const candidatesToCheck = candidates
@@ -86,7 +131,7 @@ export async function scanMarket({
       .slice(0, validationLimit);
     const checked = await Promise.all(candidatesToCheck.map(async (item) => ({
       item,
-      link: await validateArticleLink(item, { fetch: fetch || globalThis.fetch }),
+      link: await validateArticleLink({ ...item, url: item.originalUrl || item.url }, { fetch: fetch || globalThis.fetch }),
     })));
     const checksByUrl = new Map(checked.map(({ item, link }) => [item.url, link]));
     for (const item of candidates) {
@@ -97,21 +142,57 @@ export async function scanMarket({
 
   const finalCandidates = candidates.filter((item) => {
     if (!validateLinks) return true;
-    return ["reachable", "syntax-valid", "not-checked"].includes(item.validation.url.status);
+    if (["reachable", "syntax-valid", "not-checked"].includes(item.validation.url.status)) return true;
+    onDrop?.(item, { stage: "link_invalid" });
+    return false;
   });
   // Fresh market coverage must reach storage before older, higher-scoring
   // evergreen items. Keep relevance as the tie-breaker within the same news
   // cycle so the homepage and daily story do not stagnate on old coverage.
-  const ranked = rankItems(finalCandidates, rules)
-    .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0) || b.score - a.score)
-    .slice(0, maxRelevantItems)
-    .map((item) => ({
-    ...item,
-    metadata: {
-      ...(item.metadata || {}),
-      validation: item.validation,
+  const rankedAll = rankItems(finalCandidates, rules);
+  if (onDrop) {
+    const rankedUrls = new Set(rankedAll.map((item) => item.url));
+    for (const item of finalCandidates) {
+      if (!rankedUrls.has(item.url)) onDrop(item, { stage: "no_category" });
+    }
+  }
+  const dayCappedBySource = new Map();
+  const perSourceCapped = capPerSource(rankedAll, {
+    sources: activeSources,
+    maxPerSource,
+    now,
+    onDayCapDrop: (item) => {
+      dayCappedBySource.set(item.sourceId, (dayCappedBySource.get(item.sourceId) || 0) + 1);
+      onDrop?.(item, { stage: "day_cap" });
     },
-  }));
+    onRunCapDrop: (item) => onDrop?.(item, { stage: "run_cap" }),
+  });
+  const sortedCapped = perSourceCapped
+    .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0) || b.score - a.score);
+  if (onDrop) {
+    for (const item of sortedCapped.slice(maxRelevantItems)) onDrop(item, { stage: "max_relevant" });
+  }
+  let ranked = sortedCapped
+    .slice(0, maxRelevantItems)
+    .map((item) => {
+      const source = activeSources.find((candidate) => candidate.id === item.sourceId);
+      let hostname;
+      try { hostname = new URL(item.url).hostname.replace(/^www\./, ""); } catch { hostname = undefined; }
+      return {
+        ...item,
+        title: cleanTitleForSource(item.title, [source?.name, hostname, item.metadata?.publisher]),
+        metadata: {
+          ...(item.metadata || {}),
+          validation: item.validation,
+        },
+      };
+    });
+
+  // sources-spec.md §2 "Google News handling": dedupe against direct-source
+  // items, or resolve to the publisher URL (bounded to the items that
+  // already survived relevance + both caps above).
+  ranked = await resolveGoogleNewsItems(ranked, { fetch: fetch || globalThis.fetch });
+
   const acceptedBySource = new Map();
   const readFailedBySource = new Map();
   const validationBySource = new Map();
@@ -133,6 +214,8 @@ export async function scanMarket({
     source.accepted = acceptedBySource.get(source.id) || 0;
     source.rejected = Math.max(0, source.fetched - source.accepted);
     source.readFailed = readFailedBySource.get(source.id) || 0;
+    source.noiseRejected = noiseRejectedBySource.get(source.id) || 0;
+    source.dayCapped = dayCappedBySource.get(source.id) || 0;
     Object.assign(source, validationBySource.get(source.id) || {});
   }
   return {
@@ -144,11 +227,41 @@ export async function scanMarket({
   };
 }
 
-function canonicalUrl(value) {
-  const url = new URL(value);
-  url.hash = "";
-  for (const key of [...url.searchParams.keys()]) {
-    if (/^(utm_|fbclid|gclid)/i.test(key)) url.searchParams.delete(key);
+// Applied after relevance scoring so a prolific source (ypodomes publishes
+// ~100/week) cannot crowd out everything else before the global cap runs.
+// `items` is already sorted highest-score-first (then freshest). Two caps
+// apply in sequence: sources-spec.md §5/§2 day_cap per source per Europe/
+// Athens calendar day (items with no publishedAt count toward the scan
+// day), then the existing maxPerSource/maxItems limit as an overall
+// per-run ceiling. Both keep each source's highest-ranked items.
+function capPerSource(items, { sources = [], maxPerSource = 12, now = Date.now(), onDayCapDrop, onRunCapDrop } = {}) {
+  const dayCapBySource = new Map();
+  const runLimitBySource = new Map();
+  for (const source of sources) {
+    if (!source.id) continue;
+    dayCapBySource.set(source.id, source.dayCap ?? DEFAULT_DAY_CAP_PER_SOURCE);
+    const limit = source.maxPerSource ?? source.maxItems;
+    if (limit !== undefined) runLimitBySource.set(source.id, limit);
   }
-  return url.href;
+
+  const dayCounts = new Map();
+  const afterDayCap = items.filter((item) => {
+    const key = `${item.sourceId}|${athensDayKey(item.publishedAt, now)}`;
+    const cap = dayCapBySource.get(item.sourceId) ?? DEFAULT_DAY_CAP_PER_SOURCE;
+    const count = dayCounts.get(key) || 0;
+    if (count >= cap) { onDayCapDrop?.(item); return false; }
+    dayCounts.set(key, count + 1);
+    return true;
+  });
+
+  const runCounts = new Map();
+  const kept = [];
+  for (const item of afterDayCap) {
+    const limit = runLimitBySource.get(item.sourceId) ?? maxPerSource;
+    const count = runCounts.get(item.sourceId) || 0;
+    if (count >= limit) { onRunCapDrop?.(item); continue; }
+    runCounts.set(item.sourceId, count + 1);
+    kept.push(item);
+  }
+  return kept;
 }

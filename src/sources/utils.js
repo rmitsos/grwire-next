@@ -1,3 +1,72 @@
+// sources-spec.md §5 canonical_url.strip_params: "utm_*", "fbclid", "gclid",
+// "mc_cid", "mc_eid", "amp", "outputType=amp" (value-gated, handled below).
+// "ref" is kept from the pre-spec behaviour (not in the spec list, but
+// relied on by existing stored links/tests).
+const TRACKING_PARAM_PREFIXES = ["utm_", "mc_"];
+const TRACKING_PARAM_EXACT = new Set(["fbclid", "gclid", "ref", "amp"]);
+
+function stripTrackingParams(url) {
+  for (const key of [...url.searchParams.keys()]) {
+    const lower = key.toLowerCase();
+    if (TRACKING_PARAM_EXACT.has(lower) || TRACKING_PARAM_PREFIXES.some((prefix) => lower.startsWith(prefix))) {
+      url.searchParams.delete(key);
+      continue;
+    }
+    if (lower === "outputtype" && url.searchParams.get(key).toLowerCase() === "amp") url.searchParams.delete(key);
+  }
+}
+
+// Strips a trailing "/amp" or "/amp/" path suffix (sources-spec.md §5
+// canonical_url.strip_path_suffix), independent of any other trailing-slash
+// normalisation the caller applies.
+function stripAmpPathSuffix(pathname) {
+  return pathname.replace(/\/amp\/?$/i, "") || "/";
+}
+
+/**
+ * Produces a stable identity URL for dedupe/storage: lowercase host, no
+ * `www.`, no tracking params, no fragment, no `/amp` suffix or trailing
+ * slash. Returns the input unchanged if it cannot be parsed as a URL.
+ */
+export function canonicalizeUrl(value) {
+  if (value === undefined || value === null) return value;
+  try {
+    const decoded = String(value).replace(/&amp;/g, "&");
+    const url = new URL(decoded);
+    url.hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+    url.hash = "";
+    stripTrackingParams(url);
+    let pathname = stripAmpPathSuffix(url.pathname);
+    if (pathname.length > 1) pathname = pathname.replace(/\/+$/, "") || "/";
+    url.pathname = pathname || "/";
+    return url.href;
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * Produces the URL stored for display/links: lowercase host, decoded
+ * `&amp;`, no tracking params, no fragment. Unlike canonicalizeUrl, this
+ * keeps `www.`, the path and any trailing slash as published, so stored
+ * links keep working on hosts that require (or omit) the www. prefix.
+ * Returns the input unchanged if it cannot be parsed as a URL.
+ */
+export function cleanUrl(value) {
+  if (value === undefined || value === null) return value;
+  try {
+    const decoded = String(value).replace(/&amp;/g, "&");
+    const url = new URL(decoded);
+    url.hostname = url.hostname.toLowerCase();
+    url.hash = "";
+    stripTrackingParams(url);
+    url.pathname = stripAmpPathSuffix(url.pathname);
+    return url.href;
+  } catch {
+    return value;
+  }
+}
+
 export function decodeEntities(value = "") {
   return value
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
@@ -54,6 +123,7 @@ export async function fetchText(fetchImpl, url, options = {}) {
     timeoutMs = DEFAULT_TIMEOUT_MS,
     maxBytes = DEFAULT_MAX_BYTES,
     accept = "*/*",
+    redirect,
   } = options;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -66,7 +136,11 @@ export async function fetchText(fetchImpl, url, options = {}) {
         ...headers,
       },
       signal: controller.signal,
+      ...(redirect ? { redirect } : {}),
     });
+    // With redirect: "manual" a redirect response resolves instead of
+    // throwing, with response.ok false (status in the 3xx range) — covered
+    // by the same !response.ok check as a 4xx/5xx.
     if (!response.ok) throw new Error(`Request failed (${response.status})`);
 
     const declared = Number(response.headers?.get?.("content-length"));
