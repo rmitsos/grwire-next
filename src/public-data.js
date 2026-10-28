@@ -96,7 +96,9 @@ export const SECTION_SLUG_BY_SPEC_ID = Object.fromEntries(
  * stage (same shape as feed-rules.js noiseRejectReason) or `{ stage }` for
  * day_cap/duplicate.
  */
-export function selectArticles(rows, { category, limit = 80, now = Date.now(), onDrop } = {}) {
+// The category-independent half of the read-time rules (noise, day cap, duplicates, telco/deals
+// gating). Expensive on a full 300-row read, so callers that need several categories run it once.
+function prepareRows(rows, { now = Date.now(), onDrop } = {}) {
   const withoutNoise = rows.filter((row) => {
     const reason = noiseRejectReason(row);
     if (!reason) return true;
@@ -105,14 +107,22 @@ export function selectArticles(rows, { category, limit = 80, now = Date.now(), o
   });
   const dayCapped = applyDayCap(withoutNoise, { now, onDrop: (row) => onDrop?.(row, { stage: "day_cap" }) });
   const deduped = collapseDuplicateArticles(dayCapped, { onDrop: (row) => onDrop?.(row, { stage: "duplicate" }) });
-  let cleaned = deduped.map(reclassifyRow)
+  return deduped.map(reclassifyRow)
     .flatMap((row) => dropTelcoWithoutNetworkAngle(row, onDrop))
     .flatMap((row) => dropDealsWithoutCompany(row, onDrop));
+}
+
+function pickRows(prepared, { category, limit = 80, onDrop } = {}) {
+  let cleaned = prepared;
   if (category) {
     cleaned = cleaned.filter((row) => row.categories.includes(category));
     cleaned = enforceEventCapPerSection(cleaned, onDrop);
   }
   return cleaned.slice(0, limit).map(toArticle);
+}
+
+export function selectArticles(rows, { category, limit = 80, now = Date.now(), onDrop } = {}) {
+  return pickRows(prepareRows(rows, { now, onDrop }), { category, limit, onDrop });
 }
 
 // round-4 telco rule: telecom-fibre is only a valid category when the item
@@ -184,14 +194,10 @@ async function readArticleRows({ query, limit }) {
   // build renders dozens of pages at once and otherwise stalls on that many identical queries.
   const hit = recentRows.get(queryLimit);
   if (hit && Date.now() - hit.at < RECENT_ROWS_TTL_MS) return hit.promise;
-  const startedAt = Date.now();
-  console.log("[public-diag] read start", queryLimit);
   const promise = Promise.resolve(sql`
     SELECT * FROM articles
     ORDER BY COALESCE(published_at, updated_at) DESC NULLS LAST LIMIT ${queryLimit}
   `);
-  promise.then((rows) => console.log("[public-diag] read done", Date.now() - startedAt, "ms", rows.length, "rows"),
-    (error) => console.log("[public-diag] read failed", Date.now() - startedAt, "ms", error?.message));
   recentRows.set(queryLimit, { at: Date.now(), promise });
   promise.catch(() => { if (recentRows.get(queryLimit)?.promise === promise) recentRows.delete(queryLimit); });
   return promise;
@@ -243,20 +249,24 @@ export function computeNavVisibility(articles = [], { now = Date.now() } = {}) {
  * failure legitimately would.
  */
 export function navVisibilityFromRows(rows, { now = Date.now() } = {}) {
+  const prepared = prepareRows(rows, { now });
   const articles = ["tenders", "regulators"].flatMap((category) =>
-    selectArticles(rows, { category, limit: 100, now }));
+    pickRows(prepared, { category, limit: 100 }));
   return computeNavVisibility(articles, { now });
 }
 
+let navCache;
+
 export async function getNavVisibility({ now = Date.now() } = {}) {
+  // Every public page renders the shared nav; computing it is a full read-rules pass over the
+  // newest rows, so share one result per process for a minute (a static build renders dozens).
+  if (navCache && now - navCache.at < RECENT_ROWS_TTL_MS) return navCache.promise;
+  const promise = readArticleRows({ limit: 100 }).then((rows) => navVisibilityFromRows(rows, { now }));
+  navCache = { at: now, promise };
   try {
-    const t0 = Date.now();
-    const rows = await readArticleRows({ limit: 100 });
-    const t1 = Date.now();
-    const out = navVisibilityFromRows(rows, { now });
-    console.log("[public-diag] nav", t1 - t0, "ms read,", Date.now() - t1, "ms compute");
-    return out;
+    return await promise;
   } catch {
+    if (navCache?.promise === promise) navCache = undefined;
     return computeNavVisibility([], { now });
   }
 }
