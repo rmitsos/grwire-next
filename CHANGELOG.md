@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Changed
+- Homepage: the Daily Market Story block is removed from the public homepage. The `DailyStory` component, story generation in ingest and the `/search` story archive are unchanged.
 - Insights #1 (AI in Greek SMEs) and #2 (fibre switch), EL + EN, published: the DRAFT/ΠΡΟΣΧΕΔΙΟ marker is removed from each file's first comment, so the pages are indexable, drop the draft label and appear in the sitemap.
 
 ### Added
