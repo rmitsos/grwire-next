@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { stripTrackingParams, cleanOutgoingLink, unwrapGoogleNewsUrl, publicSourceName } from "../src/public-links.js";
+import { stripTrackingParams, cleanOutgoingLink, unwrapGoogleNewsUrl, publicSourceName, readFeedSummary } from "../src/public-links.js";
 import { selectArticles, navVisibilityFromRows, PUBLIC_CATEGORIES } from "../src/public-data.js";
 import { PUBLIC_COPY, getPublicCopy, sectionTitle } from "../src/landing/public-copy.js";
 import { LANDING_ROUTES, sectionPath } from "../src/landing/routes.js";
@@ -188,4 +188,16 @@ test("subscribe page swaps the dead form for an honest notice while the newslett
   assert.ok(page.includes("getNewsletterConfig().enabled"));
   assert.ok(page.includes("signup-closed"));
   assert.ok(!/starts soon|ξεκινά σύντομα/i.test(LANDING_COPY.el.hero.teaserNote + LANDING_COPY.en.hero.teaserNote));
+});
+
+test("Google News feed summaries: entities decoded, repeated title dropped, publisher confirmed by the title tail", () => {
+  const title = "Αγορά δύο ταχυτήτων - Μεγάλος κυρίαρχος ο ΟΤΕ - Moneyreview.gr";
+  const summary = "Αγορά δύο ταχυτήτων - Μεγάλος κυρίαρχος ο ΟΤΕ &nbsp;&nbsp; Moneyreview.gr";
+  assert.deepEqual(readFeedSummary(title, summary), { summary: null, publisher: "Moneyreview.gr" });
+  const withBody = readFeedSummary("Deal closes - Reuters", "The buyer pays EUR 1bn.  Reuters");
+  assert.equal(withBody.summary, "The buyer pays EUR 1bn.");
+  assert.equal(withBody.publisher, "Reuters");
+  // A trailing segment the title does not confirm is not taken as a publisher.
+  assert.equal(readFeedSummary("Plain title", "Body text  Someone").publisher, null);
+  assert.equal(readFeedSummary("t", "a &amp;nbsp; b").summary, "a b");
 });

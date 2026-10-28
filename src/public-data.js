@@ -3,7 +3,7 @@ import { collapseDuplicateArticles, cleanTitleForSource } from "./article-qualit
 import { DEFAULT_WATCH_RULES, rankItems } from "./watch-rules.js";
 import { storyDateToIso } from "./story-date.js";
 import { canonicalizeUrl } from "./sources/utils.js";
-import { cleanOutgoingLink, publicSourceName } from "./public-links.js";
+import { cleanOutgoingLink, publicSourceName, readFeedSummary } from "./public-links.js";
 import { SOURCES } from "../config/sources.js";
 import {
   BACKFILL_MAX_AGE_HOURS,
@@ -484,17 +484,19 @@ export async function searchStories({ query, limit = 50 } = {}) {
 function toArticle(row) {
   const source = SOURCE_BY_ID.get(row.source_id);
   const link = cleanOutgoingLink(row.canonical_url, row.metadata);
+  const feed = readFeedSummary(row.title, row.summary);
+  const publisher = row.metadata?.publisher || feed.publisher;
   let hostname;
   try { hostname = new URL(link.url).hostname.replace(/^www\./, ""); } catch { hostname = undefined; }
   return {
     id: row.id,
     url: link.url,
     viaGoogleNews: link.viaGoogleNews,
-    title: cleanTitleForSource(row.title, [source?.name, hostname, row.metadata?.publisher]),
-    summary: row.summary,
+    title: cleanTitleForSource(row.title, [source?.name, hostname, publisher]),
+    summary: feed.summary,
     publishedAt: row.published_at ? new Date(row.published_at).toISOString() : null,
     sourceId: row.source_id,
-    sourceName: publicSourceName({ publisher: row.metadata?.publisher, configuredName: source?.name, url: link.url }),
+    sourceName: publicSourceName({ publisher, configuredName: source?.name, url: link.url }),
     score: Number(row.score),
     categories: row.categories || [],
     relevance: row.relevance || [],

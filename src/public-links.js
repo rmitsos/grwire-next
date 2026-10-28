@@ -102,3 +102,37 @@ export function publicSourceName({ publisher, configuredName, url } = {}) {
     return host === "news.google.com" ? null : host;
   } catch { return null; }
 }
+
+function plainText(value) {
+  let text = String(value ?? "");
+  for (let i = 0; i < 2; i += 1) {
+    text = text.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'");
+  }
+  return text.replace(/<[^>]*>/g, " ").replace(/&nbsp;|&#160;|\u00a0/g, " ");
+}
+
+const compare = (value) => plainText(value).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+/**
+ * Google News descriptions are "<title>  <publisher>" (the publisher after non-breaking spaces,
+ * stored with the entities un-decoded). Returns the clean summary and, when the trailing segment
+ * is confirmed by the title's own " - Publisher" tail, that publisher so the title suffix can be
+ * stripped. A summary that only repeats the title is dropped (null).
+ */
+export function readFeedSummary(title, summary) {
+  if (!summary) return { summary: summary ?? null, publisher: null };
+  const text = plainText(summary).trim();
+  const parts = text.split(/\s{2,}/).map((part) => part.trim()).filter(Boolean);
+  const titleText = plainText(title);
+  const tailMatch = titleText.match(/^(.*\S)\s+[-–—|]\s+([^-–—|]+)$/);
+  if (parts.length >= 2 && tailMatch) {
+    const publisher = parts[parts.length - 1];
+    if (compare(publisher) === compare(tailMatch[2])) {
+      const body = parts.slice(0, -1).join(" ");
+      const bodyKey = compare(body);
+      const repeatsTitle = bodyKey === compare(tailMatch[1]) || bodyKey === compare(titleText);
+      return { summary: repeatsTitle ? null : body, publisher: tailMatch[2].trim() };
+    }
+  }
+  return { summary: text.replace(/\s+/g, " "), publisher: null };
+}
