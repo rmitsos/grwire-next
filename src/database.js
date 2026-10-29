@@ -53,6 +53,8 @@ async function createSchema(sql) {
   `;
   await sql`ALTER TABLE articles ADD COLUMN IF NOT EXISTS categories TEXT[] NOT NULL DEFAULT '{}'`;
   await sql`ALTER TABLE articles ADD COLUMN IF NOT EXISTS relevance JSONB NOT NULL DEFAULT '[]'`;
+  // Additive (NULL for every scanned row): 'curated' marks editor-uploaded items (POST /api/curated).
+  await sql`ALTER TABLE articles ADD COLUMN IF NOT EXISTS source_kind TEXT`;
   await sql`
     CREATE TABLE IF NOT EXISTS article_organizations (
       article_id UUID NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
@@ -136,6 +138,7 @@ async function createSchema(sql) {
   `;
   await sql`CREATE INDEX IF NOT EXISTS articles_published_idx ON articles (published_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS articles_categories_idx ON articles USING GIN (categories)`;
+  await sql`CREATE INDEX IF NOT EXISTS articles_source_kind_idx ON articles (source_kind) WHERE source_kind IS NOT NULL`;
   await sql`CREATE INDEX IF NOT EXISTS relationship_claims_source_idx ON relationship_claims (source_organization_id)`;
   await sql`CREATE INDEX IF NOT EXISTS relationship_claims_target_idx ON relationship_claims (target_organization_id)`;
   await sql`CREATE INDEX IF NOT EXISTS scan_runs_scanned_idx ON scan_runs (scanned_at DESC)`;

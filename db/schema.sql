@@ -111,8 +111,12 @@ CREATE TABLE IF NOT EXISTS daily_stories (
 CREATE INDEX IF NOT EXISTS articles_published_idx ON articles (published_at DESC);
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS categories TEXT[] NOT NULL DEFAULT '{}';
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS relevance JSONB NOT NULL DEFAULT '[]';
+-- Additive (NULL for every scanned row): 'curated' marks editor-uploaded items (POST /api/curated).
+-- Remove them all with: DELETE FROM articles WHERE source_kind = 'curated';
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS source_kind TEXT;
 CREATE INDEX IF NOT EXISTS articles_categories_idx ON articles USING GIN (categories);
 CREATE INDEX IF NOT EXISTS articles_source_idx ON articles (source_id);
+CREATE INDEX IF NOT EXISTS articles_source_kind_idx ON articles (source_kind) WHERE source_kind IS NOT NULL;
 CREATE INDEX IF NOT EXISTS article_organizations_org_idx
   ON article_organizations (organization_id, article_id);
 CREATE INDEX IF NOT EXISTS relationship_claims_source_idx

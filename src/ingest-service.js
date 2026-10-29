@@ -45,8 +45,11 @@ export async function ingestMarket() {
         relevance = EXCLUDED.relevance,
         metadata = articles.metadata || EXCLUDED.metadata,
         updated_at = now()
+      WHERE articles.source_kind IS DISTINCT FROM 'curated'
       RETURNING id
     `;
+    // A scanned copy of a URL an editor curated never overwrites the curated row (no row returned).
+    if (!rows.length) continue;
     const articleId = rows[0].id;
     item.id = articleId;
     for (const match of detectArticleOrganizations(item)) {
@@ -146,7 +149,8 @@ async function persistDailyStory(sql, story) {
 async function refreshArticleClassification(sql) {
   const rows = await sql`
     SELECT id, canonical_url, title, summary, published_at, source_id, score, categories, relevance, metadata
-    FROM articles ORDER BY updated_at DESC LIMIT 60
+    FROM articles WHERE source_kind IS DISTINCT FROM 'curated'
+    ORDER BY updated_at DESC LIMIT 60
   `;
   for (let index = 0; index < rows.length; index += 10) {
     await Promise.all(rows.slice(index, index + 10).map(async (row) => {
