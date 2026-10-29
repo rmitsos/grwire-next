@@ -157,13 +157,15 @@ export function selectArticles(rows, { category, limit = 80, now = Date.now(), o
 }
 
 // round-4 telco rule: telecom-fibre is only a valid category when the item
-// actually names a network/technology angle or operator (hasTelecomNetworkAngle)
+// actually names a network/technology angle or operator in its headline (hasTelecomNetworkAngle)
 // — a "telecommunications company" story that never gets more specific than
 // that (e.g. a generic AI-tools piece from a telco, a consumer-gadget piece)
 // loses the telco category, and is dropped outright if it had no other one.
 function dropTelcoWithoutNetworkAngle(row, onDrop) {
   if (!row.categories.includes("telco")) return [row];
-  if (hasTelecomNetworkAngle(`${row.title || ""} ${row.summary || ""}`)) return [row];
+  // go-live: the HEADLINE must carry the network angle. A summary that mentions a network in passing
+  // (data-centre or AI pieces that name an operator) no longer keeps a story on /telco.
+  if (hasTelecomNetworkAngle(row.title || "")) return [row];
   const categories = row.categories.filter((c) => c !== "telco");
   if (!categories.length) {
     onDrop?.(row, { stage: "telco_no_network_angle" });

@@ -466,12 +466,44 @@ function consumerFuelNoiseTerm(title) {
 // company deal stories (e.g. "ΓΕΚ ΤΕΡΝΑ: Μαγνήτης διεθνών κεφαλαίων 5,3 δισ.")
 // carry neither the opening nor the URL path, so they are untouched. The
 // headline is matched accent-insensitively; the dash may be hyphen, en or em.
-const MARKET_HEADLINE_RE = /^\s*χρηματιστηριο\s*[:\-–—]/u;
-const MARKET_URL_RE = /^https?:\/\/(?:[^/]*\.)?naftemporiki\.gr\/finance\/markets\//i;
+const MARKET_HEADLINE_RE = /^\s*χρηματιστηριο(?:\s+αθηνων)?\s*[:\-–—]/u;
+// go-live: "ΧΑ:" / "ΧΑ –" (Athens Exchange shorthand) opening a headline, and the same shorthand
+// ("στο ΧΑ", "του ΧΑ") next to a session-report word. Genuine deal stories name the exchange in
+// passing ("εισαγωγή στο ΧΑ" alone) and carry no session word, so they stay.
+const MARKET_XA_OPEN_RE = /^\s*(?:χα|xa|χ\.α\.)\s*[:\-–—]/u;
+const MARKET_XA_SESSION_RE = /(?:^|[^\p{L}])(?:στο|του|το|απο το)\s+(?:χα|χ\.α\.)(?![\p{L}])/u;
+const MARKET_SESSION_WORDS = ["αντιδραση", "συνωστισμο", "κλεισιμο", "συνεδριαση", "τζιρο", "ανοδο", "πτωση", "ρεκορ", "δεικτη", "μετοχες", "μετοχων"];
+const MARKET_URL_RES = [
+  /^https?:\/\/(?:[^/]*\.)?naftemporiki\.gr\/finance\/markets\//i,
+  // ot.gr, capital.gr, bankingnews, etc. file market commentary under /xrimatistirio
+  /^https?:\/\/[^/]+\/(?:[a-z0-9-]+\/)?(?:xrimatistirio|chrimatistirio|stock-market|stocks-and-markets)(?:[-_/]|$)/i,
+  /^https?:\/\/(?:[^/]*\.)?ot\.gr\/(?:\d{4}\/\d{2}\/\d{2}\/)?(?:xrimatistirio|markets)(?:[-_/]|$)/i,
+];
 
 export function isStockMarketPiece(item = {}) {
-  if (MARKET_HEADLINE_RE.test(normaliseText(item.title || ""))) return true;
-  return [item.url, item.canonical_url].some((url) => typeof url === "string" && MARKET_URL_RE.test(url.trim()));
+  const title = normaliseText(item.title || "");
+  if (MARKET_HEADLINE_RE.test(title) || MARKET_XA_OPEN_RE.test(title)) return true;
+  if (MARKET_XA_SESSION_RE.test(title) && MARKET_SESSION_WORDS.some((word) => title.includes(word))) return true;
+  return [item.url, item.canonical_url].some((url) => typeof url === "string" && MARKET_URL_RES.some((re) => re.test(url.trim().replace(/[?#].*$/, ""))));
+}
+
+// go-live: bank/broker consumer promotions ("Πειραιώς: νέο στεγαστικό με επιτόκιο 3%") and a short
+// list of named editorial blocks. A bank in a title is not enough (project finance, bond deals and
+// results are news): it takes a bank name AND a retail-product word. Named blocks are exact
+// phrases Dimitris has asked to keep out, reviewed in the live check of 29 Oct 2026.
+const BANK_TERMS = ["τραπεζα πειραιωσ", "πειραιωσ", "eurobank", "alpha bank", "εθνικη τραπεζα", "optima bank", "τραπεζα κυπρου", "attica bank"];
+const RETAIL_PRODUCT_TERMS = ["στεγαστικ", "καταναλωτικ", "πιστωτικ", "προθεσμιακ", "προσφορα", "προσφορες", "καμπανια", "cashback", "επιτοκιο", "πιστωτικη καρτα", "πιστωτικες καρτες", "ασφαλιστικο προιον"];
+const BLOCKED_TITLE_PHRASES = ["project continuum"];
+
+export function isBankPromo(item = {}) {
+  const title = normaliseText(item.title || "");
+  if (!BANK_TERMS.some((term) => title.includes(term))) return false;
+  return RETAIL_PRODUCT_TERMS.some((term) => title.includes(term));
+}
+
+export function isBlockedEditorial(item = {}) {
+  const title = normaliseText(item.title || "");
+  return BLOCKED_TITLE_PHRASES.some((phrase) => title.includes(phrase));
 }
 
 /**
@@ -485,6 +517,8 @@ export function noiseRejectReason(item = {}) {
   const text = `${title} ${item.summary || ""}`;
   if (isStockMarketPiece(item)) return { group: "stock_market_headline", term: null };
   if (isSponsoredContent(item)) return { group: "sponsored", term: null };
+  if (isBlockedEditorial(item)) return { group: "advertorial_blocklist", term: null };
+  if (isBankPromo(item)) return { group: "bank_promo", term: null };
   for (const [group, terms] of Object.entries(NOISE_HARD_REJECT)) {
     if (group === "consumer_fuel") continue;
     for (const term of terms) {
@@ -661,7 +695,7 @@ export function isCyprusOnly(article = {}) {
 // generic topic terms) is not enough on its own.
 const TELCO_NETWORK_ANGLE_TERMS = [
   "δικτυ*", "οπτικ*", "ftth", "fttx", "fttb", "fttc", "5g", "φασμα*", "κεραι*", "παροχ*",
-  "εεττ", "καλωδι*", "υποθαλασσ*", "data center", "datacenter", "κεντρ* δεδομενων",
+  "εεττ", "καλωδι*", "υποθαλασσ*",
   "δορυφορ*", "χαλκ*",
   "οτε", "telekom", "cosmote", "vodafone", "nova", "united fiber", "united group",
   "δεη fiber", "grid telecom",

@@ -106,7 +106,14 @@ export async function scanMarket({
   // sources-spec.md §5 noise_hard_reject: dropped before ranking, with the
   // reason counted per source in the scan report.
   const noiseRejectedBySource = new Map();
+  // go-live: a source flagged requirePublishedAt (tag pages that mix months-old and fresh links, e.g.
+  // naftemporiki-telecoms) only contributes items that carry a real publication date.
+  const requireDate = new Set(activeSources.filter((source) => source.requirePublishedAt).map((source) => source.id));
   const noiseFiltered = discoveredItems.filter((item) => {
+    if (requireDate.has(item.sourceId) && (!item.publishedAt || Number.isNaN(Date.parse(item.publishedAt)))) {
+      onDrop?.(item, { stage: "undated_at_ingest" });
+      return false;
+    }
     const reason = noiseRejectReason(item);
     if (!reason) return true;
     noiseRejectedBySource.set(item.sourceId, (noiseRejectedBySource.get(item.sourceId) || 0) + 1);

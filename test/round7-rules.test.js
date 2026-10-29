@@ -151,7 +151,10 @@ test("round-7 sponsored content is dropped only on an explicit marker, never by 
   assert.equal(sponsoredReason({ title: "Διαφημιστική εκστρατεία της ΔΕΗ για το νέο δίκτυο" }), null);
   assert.equal(sponsoredReason({ title: "Το συνέδριο ενέργειας χρηματοδοτείται από χορηγούς, sponsored by ΑΔΜΗΕ" }), null);
   assert.deepEqual(noiseRejectReason({ ...plain, url: "https://energypress.gr/sponsored/project-continuum" }), { group: "sponsored", term: null });
-  assert.equal(noiseRejectReason(plain), null);
+  // go-live: the marker alone does NOT catch the live "Project Continuum" piece (no label, URL or flag),
+  // so that headline is on an explicit editorial blocklist (group advertorial_blocklist), not a guess.
+  assert.deepEqual(noiseRejectReason(plain), { group: "advertorial_blocklist", term: null });
+  assert.equal(noiseRejectReason({ ...plain, title: "Νέα ενεργειακή τεχνολογία για τα δίκτυα" }), null, "the topic alone is never enough");
 });
 
 // ---- Fix 4: summary cleanup -------------------------------------------------------------------

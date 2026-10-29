@@ -206,6 +206,7 @@ export const SOURCES = [
     id: "naftemporiki-telecoms",
     type: "html",
     tier: 4,
+    requirePublishedAt: true, // go-live: the tag page lists months-old undated links; only dated items are ingested
     url: "https://www.naftemporiki.gr/tag/tilepikoinonies/",
     linkPatterns: ["tilepikoin", "telecom", "ote", "cosmote", "vodafone", "nova", "ftth", "fiber", "fibre", "5g", "network", "internet", "δικτυ", "κινητ"],
     minimumTitleLength: 16,
