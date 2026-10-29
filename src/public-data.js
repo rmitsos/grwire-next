@@ -266,10 +266,25 @@ export function selectHomepageInputs(rows, { now = Date.now() } = {}) {
   return { articles, sections };
 }
 
+// What each section page lists: how many stories and when the newest was published. The
+// homepage section tiles show this, so the number on a tile is the number on the page it links
+// to. It only counts; it does not place stories on the homepage, so the once-per-story rule of
+// buildHomepageSections is untouched.
+export function summarizeSections(sections = {}) {
+  return Object.fromEntries(Object.keys(PUBLIC_CATEGORIES).map((slug) => {
+    const list = sections[slug] ?? [];
+    const latest = list.reduce((max, article) => {
+      const time = Date.parse(article.publishedAt ?? "");
+      return Number.isFinite(time) && time > max ? time : max;
+    }, 0);
+    return [slug, { count: list.length, latestAt: latest ? new Date(latest).toISOString() : null }];
+  }));
+}
+
 export async function getHomepageData() {
   const [rows, story] = await Promise.all([readHomepageRows(), getLatestStory()]);
   const { articles, sections } = selectHomepageInputs(rows);
-  return { articles, story, ...buildHomepageSections(articles, { sections }) };
+  return { articles, story, sectionSummary: summarizeSections(sections), ...buildHomepageSections(articles, { sections }) };
 }
 
 async function readHomepageRows() {

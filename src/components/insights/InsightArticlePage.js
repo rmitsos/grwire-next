@@ -23,6 +23,7 @@ export function InsightArticlePage({ lang, insight }) {
     <>
       <LandingHeader
         lang={lang}
+        active="insights"
         elHref={insightPath(insight.slug, "el")}
         enHref={insightPath(insight.slug, "en")}
         subscribeHref={`${LANDING_ROUTES[lang].subscribe}#subscribe`}
