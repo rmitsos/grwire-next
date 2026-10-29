@@ -71,7 +71,8 @@ test("public articles: clean link, ' - Source' title suffix stripped, source nam
     title: "Η Nova επεκτείνει το δίκτυο FTTH σε νέους δήμους – Insider.gr",
     sourceId: "src-y",
     publishedAt: "2026-10-28T09:00:00.000Z",
-    metadata: { publisher: "Insider.gr" },
+    // Resolvable (original URL in the data): shown with the publisher link; an unresolvable one is dropped (round 7).
+    metadata: { publisher: "Insider.gr", originalUrl: "https://www.insider.gr/story/nova-ftth?utm_source=rss" },
   })];
   const articles = selectArticles(rows, { category: "telco" });
   assert.equal(articles.length, 2);
@@ -81,7 +82,8 @@ test("public articles: clean link, ' - Source' title suffix stripped, source nam
   assert.equal(first.sourceName, "Capital.gr");
   assert.equal(first.viaGoogleNews, false);
   assert.equal(second.title, "Η Nova επεκτείνει το δίκτυο FTTH σε νέους δήμους");
-  assert.equal(second.viaGoogleNews, true);
+  assert.equal(second.url, "https://www.insider.gr/story/nova-ftth");
+  assert.equal(second.viaGoogleNews, false);
   assert.equal(second.sourceName, "Insider.gr");
 });
 

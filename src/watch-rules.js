@@ -1,7 +1,7 @@
 import { stripTrailingSiteSuffix } from "./article-quality.js";
 import {
   matchesAnyTerm, specSectionKeywordMatch, SECTOR_ORGANIZATIONS,
-  hasTier1ActionWord, agendaScoreCap,
+  hasTier1ActionWord, agendaScoreCap, isWaterSewageStory,
 } from "./feed-rules.js";
 
 function normalise(value = "") {
@@ -155,6 +155,11 @@ export function scoreItem(item, rawRule) {
 
   if (includesAny(combined, GLOBAL_EXCLUSIONS)) {
     return { ruleId: rule.id, label: rule.label, category: rule.category, score: 0, accepted: false, reasons: ["excluded lifestyle/rental/retail content"] };
+  }
+
+  // round-7: a water/sewage utility story is not an infrastructure-and-works match.
+  if (rule.category === "infrastructure" && isWaterSewageStory({ title: item.title || "" })) {
+    return { ruleId: rule.id, label: rule.label, category: rule.category, score: 0, accepted: false, reasons: ["water/sewage utility story"] };
   }
 
   if (includesAny(title, rule.entities)) {

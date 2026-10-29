@@ -64,7 +64,7 @@ const REPORT = {
       title: "Η Cosmote επεκτείνει δίκτυο FTTH οπτικών ινών σε νέους δήμους Ελλάδας",
       sourceId: "test-telco-src-b", publishedAt: "2026-10-25T08:00:00.000Z", score: 5,
     }),
-    // sectionOnly: excluded from the homepage, still listed on its section page.
+    // Unresolved Google News (round 7): dropped everywhere, section pages included.
     item({
       url: "https://news.google.com/rss/articles/CBMitest",
       title: "ΟΤΕ FTTH αποκλειστικό δίκτυο επέκταση στην Ελλάδα",
@@ -134,19 +134,20 @@ test("buildReviewDump: near-duplicate telco story is dropped, the higher-scored 
   assert.ok(survivor, "expected the original story to survive on the telco section page");
 });
 
-test("buildReviewDump: a sectionOnly item is excluded from the homepage but listed on its section page", () => {
+test("buildReviewDump: an unresolved Google News item is shown nowhere (round 7), not even on its section page", () => {
   const dump = buildReviewDump(REPORT, { now: NOW });
   const onHomepage = [dump.homepage.lead, ...dump.homepage.recent, ...Object.values(dump.homepage.columns).flat()]
     .filter(Boolean).some((a) => a.url === "https://news.google.com/rss/articles/CBMitest");
-  assert.equal(onHomepage, false, "sectionOnly items must not appear on the homepage");
+  assert.equal(onHomepage, false, "unresolved Google News items must not appear on the homepage");
 
-  const sectionItem = dump.sections.telco.fresh.find((a) => a.url === "https://news.google.com/rss/articles/CBMitest");
-  assert.ok(sectionItem, "expected the sectionOnly item on its section page");
-  assert.equal(sectionItem.sectionOnly, true);
+  for (const bucket of ["fresh", "older"]) {
+    assert.ok(!dump.sections.telco[bucket].some((a) => a.url === "https://news.google.com/rss/articles/CBMitest"),
+      `unresolved Google News item must not be on the telco section page (${bucket})`);
+  }
 
-  const sectionOnlyDrop = dump.dropped.find((d) => d.url === "https://news.google.com/rss/articles/CBMitest");
-  assert.ok(sectionOnlyDrop, "expected a section_only drop recorded for the homepage pass");
-  assert.equal(sectionOnlyDrop.reason.stage, "section_only");
+  const drop = dump.dropped.find((d) => d.url === "https://news.google.com/rss/articles/CBMitest");
+  assert.ok(drop, "expected a google_news_unresolved drop to be recorded");
+  assert.equal(drop.reason.stage, "google_news_unresolved");
 });
 
 test("buildReviewDump: a >72h-old item lands in its section's older list and is flagged stale for the homepage", () => {

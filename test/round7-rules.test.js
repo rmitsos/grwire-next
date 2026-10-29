@@ -76,3 +76,79 @@ test("round-7 stock-market pieces are also rejected at scan (ingest) time", asyn
   assert.deepEqual(result.items.map((item) => item.url), ["https://x.test/keep"]);
   assert.equal(result.sources.find((s) => s.id === "mixed").noiseRejected, 2);
 });
+
+// ---- Fix 3: Google News redirects on section pages -------------------------------------------
+
+const GNEWS = "https://news.google.com/rss/articles/CBMiOpaqueEncryptedToken?oc=5";
+const OTE_TITLE = "Ο ΟΤΕ επεκτείνει το δίκτυο FTTH οπτικών ινών σε νέους δήμους της Ελλάδας";
+
+test("round-7 unresolved Google News links are dropped from section pages as well as the homepage", () => {
+  const dropped = [];
+  const rows = [
+    row({ id: "g1", title: OTE_TITLE, url: GNEWS, source: "gnews-fibre", categories: ["telco"], metadata: { publisher: "Capital.gr" } }),
+    row({ id: "g2", title: "Vodafone and Nova expand 5G network coverage in Greece", url: GNEWS + "2", source: "gnews-fibre", categories: ["telco"] }),
+    row({ id: "ok", title: OTE_TITLE + " (2)", url: "https://www.capital.gr/ote-ftth", source: "capital", categories: ["telco"] }),
+    row({ id: "res", title: "Η Nova επεκτείνει το δίκτυο 5G οπτικών ινών σε νέους δήμους", url: GNEWS + "3", source: "gnews-fibre", categories: ["telco"], metadata: { originalUrl: "https://www.insider.gr/nova-5g?utm_source=x" } }),
+  ];
+  const out = selectArticles(rows, { category: "telco", now: NOW, onDrop: (r, reason) => dropped.push([r.id, reason.stage]) });
+  assert.ok(out.length >= 1);
+  assert.ok(out.every((a) => !a.url.includes("news.google.com")), `no Google News link: ${out.map((a) => a.url)}`);
+  assert.ok(out.every((a) => a.viaGoogleNews === false));
+  assert.ok(out.some((a) => a.url === "https://www.insider.gr/nova-5g"), "a resolvable Google News item keeps its publisher URL");
+  assert.deepEqual(dropped.filter(([, stage]) => stage === "google_news_unresolved").map(([id]) => id).sort(), ["g1", "g2"]);
+});
+
+// ---- Fix 6: undated items, water/sewage, sponsored content -----------------------------------
+
+test("round-7 undated items are dropped (section pages, homepage selection and nav counts)", () => {
+  const dropped = [];
+  const rows = [
+    row({ id: "u1", title: OTE_TITLE, url: "https://www.capital.gr/u1", categories: ["telco"], publishedAt: null }),
+    row({ id: "u2", title: OTE_TITLE + " B", url: "https://www.capital.gr/u2", categories: ["telco"], publishedAt: "not a date" }),
+    row({ id: "ok", title: OTE_TITLE + " C", url: "https://www.capital.gr/ok", categories: ["telco"] }),
+  ];
+  const out = selectArticles(rows, { now: NOW, onDrop: (r, reason) => dropped.push([r.id, reason.stage]) });
+  assert.deepEqual(out.map((a) => a.url), ["https://www.capital.gr/ok"]);
+  assert.ok(out.every((a) => a.publishedAt));
+  assert.deepEqual(dropped.sort(), [["u1", "undated"], ["u2", "undated"]]);
+});
+
+test("round-7 water/sewage stories are not infrastructure news: the Mykonos port water-recycling item is dropped", () => {
+  const dropped = [];
+  const mykonos = row({
+    id: "myk", title: "Νέο σύστημα ανακύκλωσης νερού στο λιμάνι της Μυκόνου",
+    summary: "Ένα νέο σύστημα ανακύκλωσης και επαναχρησιμοποίησης νερού τέθηκε σε λειτουργία στο λιμάνι της Μυκόνου, με στόχο τη μείωση της κατανάλωσης νερού κατά περισσότερο από 65%. Το έργο χρηματοδοτήθηκε εξ ολοκλήρου από την CTL Maritime, εταιρεία του ομίλου MSC, ενισχύοντας τις περιβαλλοντικές υποδομές του λιμένα [&hellip;]",
+    url: "https://ypodomes.com/mykonos-water", source: "ypodomes", categories: ["infrastructure"],
+  });
+  const port = row({ id: "port", title: "Παραχώρηση του λιμανιού της Αλεξανδρούπολης: νέος διαγωνισμός ΣΔΙΤ", url: "https://ypodomes.com/port", source: "ypodomes", categories: ["infrastructure"] });
+  const out = selectArticles([mykonos, port], { category: "infrastructure", now: NOW, onDrop: (r, reason) => dropped.push([r.id, reason.stage]) });
+  assert.deepEqual(out.map((a) => a.url), ["https://ypodomes.com/port"]);
+  assert.deepEqual(dropped, [["myk", "no_category"]]);
+  assert.equal(selectArticles([mykonos], { now: NOW }).length, 0, "also gone from the homepage selection");
+});
+
+test("round-7 isWaterSewageStory: water headline vs major works", async () => {
+  const { isWaterSewageStory } = await import("../src/feed-rules.js");
+  assert.equal(isWaterSewageStory({ title: "Έργα ύδρευσης και αποχέτευσης στη Νάξο" }), true);
+  assert.equal(isWaterSewageStory({ title: "Νέος βιολογικός καθαρισμός στη Ρόδο" }), true);
+  assert.equal(isWaterSewageStory({ title: "Data center με ψύξη νερού από την Digital Realty" }), false);
+  assert.equal(isWaterSewageStory({ title: "Νέος αυτοκινητόδρομος Πάτρα–Πύργος" }), false);
+});
+
+test("round-7 sponsored content is dropped only on an explicit marker, never by headline alone", async () => {
+  const { sponsoredReason } = await import("../src/feed-rules.js");
+  const plain = { title: "Project Continuum: Νέα ενεργειακή τεχνολογία για τα δίκτυα", summary: "Η νέα τεχνολογία αποθήκευσης…", url: "https://energypress.gr/news/project-continuum" };
+  assert.equal(sponsoredReason(plain), null, "headline alone is not evidence of sponsorship");
+  assert.equal(sponsoredReason({ ...plain, url: "https://energypress.gr/sponsored/project-continuum" }), "url");
+  assert.equal(sponsoredReason({ ...plain, url: "https://energypress.gr/news/not-an-advertorial-project/" }), null, "a marker word inside a longer slug is not a path segment");
+  assert.equal(sponsoredReason({ ...plain, metadata: { sponsored: true } }), "metadata");
+  assert.equal(sponsoredReason({ ...plain, metadata: { categories: ["Advertorial"] } }), "metadata");
+  assert.equal(sponsoredReason({ ...plain, title: "[Sponsored] Project Continuum" }), "label");
+  assert.equal(sponsoredReason({ ...plain, title: "Χορηγούμενο: Project Continuum" }), "label");
+  assert.equal(sponsoredReason({ ...plain, summary: "Advertorial. Η νέα τεχνολογία" }), "label");
+  assert.equal(sponsoredReason({ ...plain, summary: "Διαφημιστικό δημοσίευμα – η νέα τεχνολογία" }), "phrase");
+  assert.equal(sponsoredReason({ title: "Διαφημιστική εκστρατεία της ΔΕΗ για το νέο δίκτυο" }), null);
+  assert.equal(sponsoredReason({ title: "Το συνέδριο ενέργειας χρηματοδοτείται από χορηγούς, sponsored by ΑΔΜΗΕ" }), null);
+  assert.deepEqual(noiseRejectReason({ ...plain, url: "https://energypress.gr/sponsored/project-continuum" }), { group: "sponsored", term: null });
+  assert.equal(noiseRejectReason(plain), null);
+});

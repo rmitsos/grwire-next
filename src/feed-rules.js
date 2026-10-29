@@ -484,6 +484,7 @@ export function noiseRejectReason(item = {}) {
   const title = item.title || "";
   const text = `${title} ${item.summary || ""}`;
   if (isStockMarketPiece(item)) return { group: "stock_market_headline", term: null };
+  if (isSponsoredContent(item)) return { group: "sponsored", term: null };
   for (const [group, terms] of Object.entries(NOISE_HARD_REJECT)) {
     if (group === "consumer_fuel") continue;
     for (const term of terms) {
@@ -500,6 +501,61 @@ export function noiseRejectReason(item = {}) {
   if (isEnvironmentOnlyNoise(text)) return { group: "environment_only", term: null };
   if (isCultureCsrNoise(title)) return { group: "culture_csr", term: null };
   return null;
+}
+
+// round-7: water / sewage utility stories are not infrastructure-and-works news
+// for this product (the §1 infrastructure negatives list ύδρευση/αποχέτευση).
+// The round-6 check never ran in code, and the Mykonos port story ("Νέο
+// σύστημα ανακύκλωσης νερού στο λιμάνι της Μυκόνου") says "νερού"/"λιμάνι", not
+// "ύδρευση", so it cleared the infrastructure rule on the "λιμάν" token alone.
+// The HEADLINE decides: a water term in the title makes it a water story unless
+// the same title also names major network works (rail, motorway, metro,
+// airport, data centre, subsea cable), which stay infrastructure.
+const WATER_SEWAGE_TITLE_TERMS = [
+  "νερο", "νερου", "νερα", "νερων", "υδρευσ*", "αποχετευσ*", "λυματ*", "βιολογικ* καθαρισμ*", "αφαλατωσ*", "υδατ*", "ευδαπ", "ευαθ",
+  "water", "wastewater", "sewage", "desalination",
+];
+const WATER_SEWAGE_WORKS_EXCEPTIONS = [
+  "σιδηροδρομ*", "αυτοκινητοδρομ*", "μετρο", "αεροδρομ*", "railway", "motorway", "airport", "data center", "καλωδ*", "subsea cable",
+];
+
+export function isWaterSewageStory(item = {}) {
+  const title = item.title || "";
+  if (!matchesAnyTerm(title, WATER_SEWAGE_TITLE_TERMS)) return false;
+  return !matchesAnyTerm(title, WATER_SEWAGE_WORKS_EXCEPTIONS);
+}
+
+// round-7: sponsored / advertorial content is never shown. It is detected
+// from explicit markers only — a URL path segment, a metadata flag, or a
+// sponsorship label at the start of the title/summary or a stock advertorial
+// phrase — never from the headline's subject alone (an energy-technology
+// headline is not evidence of sponsorship). A lone "sponsored" mid-sentence
+// ("sponsored by …") is deliberately not a marker.
+const SPONSORED_URL_RE = /\/(?:sponsored|advertorial|promoted|paid-(?:content|post)|partner-content|brand-content|branded-content|xorigoumeno|prowthitiko)(?:[-_/]|$)/i;
+const SPONSORED_LABEL_RE = /^[\s\[\(|*–—:\-]*(?:sponsored|advertorial|paid (?:content|post)|promoted|χορηγουμεν\S*|διαφημιστικ\S*|προωθητικ\S*|επι πληρωμη)(?:\s*[\]\)|:.–—\-]|\s*$)/u;
+const SPONSORED_PHRASES = [
+  "sponsored content", "sponsored post", "paid content", "paid post", "paid partnership", "promoted content",
+  "χορηγουμενο περιεχομενο", "χορηγουμενο αρθρο", "διαφημιστικο δημοσιευμα", "διαφημιστικο περιεχομενο",
+  "προωθητικο περιεχομενο", "προωθητικο δημοσιευμα", "επι πληρωμη δημοσιευμα", "advertorial",
+];
+
+export function sponsoredReason(item = {}) {
+  for (const url of [item.url, item.canonical_url]) {
+    if (typeof url === "string" && SPONSORED_URL_RE.test(url.replace(/[?#].*$/, ""))) return "url";
+  }
+  const meta = item.metadata || {};
+  if (meta.sponsored === true || meta.advertorial === true || meta.isSponsored === true) return "metadata";
+  const labels = [meta.articleSection, meta.section, ...(Array.isArray(meta.categories) ? meta.categories : []), ...(Array.isArray(meta.tags) ? meta.tags : [])];
+  if (labels.some((label) => typeof label === "string" && SPONSORED_LABEL_RE.test(normaliseText(label)))) return "metadata";
+  const title = normaliseText(item.title || "");
+  const summary = normaliseText(item.summary || "");
+  if (SPONSORED_LABEL_RE.test(title) || SPONSORED_LABEL_RE.test(summary)) return "label";
+  if (matchesAnyTerm(`${item.title || ""} ${item.summary || ""}`, SPONSORED_PHRASES)) return "phrase";
+  return null;
+}
+
+export function isSponsoredContent(item = {}) {
+  return sponsoredReason(item) !== null;
 }
 
 /** Europe/Athens calendar day (YYYY-MM-DD) for a publishedAt value, or for `now` if absent. */

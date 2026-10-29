@@ -109,11 +109,36 @@ function prepareRows(rows, { now = Date.now(), onDrop } = {}) {
     onDrop?.(row, { stage: "noise", ...reason });
     return false;
   });
-  const dayCapped = applyDayCap(withoutNoise, { now, onDrop: (row) => onDrop?.(row, { stage: "day_cap" }) });
+  const displayable = withoutNoise.filter((row) => {
+    const stage = undisplayableStage(row);
+    if (!stage) return true;
+    onDrop?.(row, { stage });
+    return false;
+  });
+  const dayCapped = applyDayCap(displayable, { now, onDrop: (row) => onDrop?.(row, { stage: "day_cap" }) });
   const deduped = collapseDuplicateArticles(dayCapped, { onDrop: (row) => onDrop?.(row, { stage: "duplicate" }) });
   return deduped.map(reclassifyRow)
     .flatMap((row) => dropTelcoWithoutNetworkAngle(row, onDrop))
-    .flatMap((row) => dropDealsWithoutCompany(row, onDrop));
+    .flatMap((row) => dropDealsWithoutCompany(row, onDrop))
+    .filter((row) => {
+      // round-7: the rules (read-time reclassification) found no category at all — e.g. the
+      // water/sewage negative removed the only match — so there is nothing to place it under.
+      if (row.categories.length) return true;
+      onDrop?.(row, { stage: "no_category" });
+      return false;
+    });
+}
+
+// round-7 display gates that need no ranking, applied to stored rows at read time:
+//  - undated: a row with no (parseable) publish date is never shown (the DB read orders by
+//    COALESCE(published_at, updated_at), so such rows used to float among today's items);
+//  - google_news_unresolved: a news.google.com redirect that cannot be resolved to the
+//    publisher URL (the same cleanOutgoingLink the homepage uses) is not shown on any page.
+function undisplayableStage(row) {
+  const published = row.published_at ? new Date(row.published_at).getTime() : NaN;
+  if (Number.isNaN(published)) return "undated";
+  if (cleanOutgoingLink(row.canonical_url, row.metadata).viaGoogleNews) return "google_news_unresolved";
+  return null;
 }
 
 function pickRows(prepared, { category, limit = 80, onDrop } = {}) {
