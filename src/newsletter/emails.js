@@ -15,13 +15,13 @@ const COPY = {
     confirm: {
       subject: "Επιβεβαιώστε την εγγραφή σας στο GR Wire",
       greeting: "Γεια σας,",
-      body: "Ζητήσατε να λαμβάνετε το GR Wire, την ημερήσια ενημέρωση για τις τηλεπικοινωνίες και την ίνα στην Ελλάδα.",
+      body: "Ζητήσατε να λαμβάνετε το GR Wire, την ημερήσια ενημέρωση για τις τηλεπικοινωνίες στην Ελλάδα: δίκτυα σταθερής και κινητής, και δορυφορική επικοινωνία.",
       button: "Επιβεβαίωση εγγραφής",
       ignore: "Αν δεν το ζητήσατε εσείς, αγνοήστε αυτό το μήνυμα. Δεν θα λάβετε τίποτα άλλο.",
     },
     welcome: {
       subject: "Καλώς ήρθατε στο GR Wire",
-      body: "Ευχαριστούμε για την εγγραφή. Από αύριο το πρωί θα λαμβάνετε ένα σύντομο email με τα νέα της αγοράς τηλεπικοινωνιών και ίνας, κάθε είδηση με την πηγή της και λίγες γραμμές σχόλιο. Χωρίς διαφημίσεις. Μπορείτε να διαγραφείτε με ένα κλικ από κάθε email.",
+      body: "Ευχαριστούμε για την εγγραφή. Από αύριο το πρωί θα λαμβάνετε ένα σύντομο email με τα νέα για τις τηλεπικοινωνίες στην Ελλάδα: δίκτυα σταθερής και κινητής, και δορυφορική επικοινωνία. Κάθε είδηση με την πηγή της και λίγες γραμμές σχόλιο. Χωρίς διαφημίσεις. Μπορείτε να διαγραφείτε με ένα κλικ από κάθε email.",
     },
     digest: { subjectPrefix: "GR Wire", heading: "Τα νέα της αγοράς", comment: "Το σχόλιό μας", source: "Πηγή", readOriginal: "Πηγή" },
     footer: "Το GR Wire το εκδίδει η Tareno Systems (tarenosystems.com).",
@@ -34,13 +34,13 @@ const COPY = {
     confirm: {
       subject: "Confirm your GR Wire subscription",
       greeting: "Hello,",
-      body: "You asked to receive GR Wire, the daily update on telecom and fibre in Greece.",
+      body: "You asked to receive GR Wire, the daily update on telecoms in Greece: fixed and mobile networks, and satellite communications.",
       button: "Confirm subscription",
       ignore: "If this wasn't you, just ignore this message and you won't hear from us again.",
     },
     welcome: {
       subject: "Welcome to GR Wire",
-      body: "Thanks for subscribing. From tomorrow morning you'll get a short email with the telecom and fibre market news, each item with its source and a few lines of comment. No ads. You can unsubscribe with one click from any email.",
+      body: "Thanks for subscribing. From tomorrow morning you'll get a short email with the news on telecoms in Greece: fixed and mobile networks, and satellite communications. Each item with its source and a few lines of comment. No ads. You can unsubscribe with one click from any email.",
     },
     digest: { subjectPrefix: "GR Wire", heading: "Today's market news", comment: "Our comment", source: "Source", readOriginal: "Source" },
     footer: "GR Wire is published by Tareno Systems (tarenosystems.com).",

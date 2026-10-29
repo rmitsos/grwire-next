@@ -60,7 +60,7 @@ export const LANDING_COPY = {
     },
     hero: {
       chip: "Τηλεπικοινωνίες & Οπτικές Ίνες",
-      headlineMain: "Η ελληνική αγορά τηλεπικοινωνιών και ίνας, κάθε πρωί.",
+      headlineMain: "Τηλεπικοινωνίες στην Ελλάδα: δίκτυα σταθερής και κινητής, και δορυφορική επικοινωνία, κάθε πρωί.",
       headlineSoft: "Μόνο στοιχεία με πηγή.",
       lead: "Κάθε εργάσιμη ένα σύντομο email με τα νέα της αγοράς, τις αποφάσεις των ρυθμιστών και τους διαγωνισμούς, μαζί με το σχόλιό μας για το τι σημαίνουν. Κάθε αριθμός έχει πηγή και ημερομηνία.",
       signupClosed: "Η εγγραφή ανοίγει σύντομα.",
@@ -158,7 +158,7 @@ export const LANDING_COPY = {
     },
     hero: {
       chip: "Telecom & fibre",
-      headlineMain: "Greek telecom and fibre, every morning.",
+      headlineMain: "Telecoms in Greece: fixed and mobile networks, and satellite communications, every morning.",
       headlineSoft: "Only sourced facts.",
       lead: "A short email every weekday with the market news, regulator decisions and tenders, plus our comment on what they mean. Every figure carries its source and date.",
       signupClosed: "Sign-up opens soon.",

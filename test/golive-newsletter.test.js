@@ -127,7 +127,7 @@ test("copy: v2 wording, daily not weekly, no series teaser, controller and 7-day
     assert.match(JSON.stringify(LANDING_COPY[lang].privacy.details), /7/);
     assert.match(LANDING_COPY[lang].subscribeForm.consentText, /Tareno Systems/);
   }
-  assert.equal(LANDING_COPY.el.hero.headlineMain, "Η ελληνική αγορά τηλεπικοινωνιών και ίνας, κάθε πρωί.");
+  assert.equal(LANDING_COPY.el.hero.headlineMain, "Τηλεπικοινωνίες στην Ελλάδα: δίκτυα σταθερής και κινητής, και δορυφορική επικοινωνία, κάθε πρωί.");
   assert.equal(LANDING_COPY.en.subscribeForm.freeNote, "Free. No ads.");
   assert.equal(LANDING_COPY.el.subscribeForm.freeNote, "Δωρεάν. Χωρίς διαφημίσεις.");
   assert.equal(CONSENT_TEXT_VERSION, "2026-10-29-v2");
