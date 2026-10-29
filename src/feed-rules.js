@@ -460,6 +460,20 @@ function consumerFuelNoiseTerm(title) {
   return NOISE_HARD_REJECT.consumer_fuel.find((term) => matchesAnyTerm(title, [term])) || null;
 }
 
+// round-7: stock-market pieces. A headline that opens "Χρηματιστήριο:" or
+// "Χρηματιστήριο –" is a market commentary (naftemporiki files these under
+// /finance/markets/), not sector news, whatever company it names. Genuine
+// company deal stories (e.g. "ΓΕΚ ΤΕΡΝΑ: Μαγνήτης διεθνών κεφαλαίων 5,3 δισ.")
+// carry neither the opening nor the URL path, so they are untouched. The
+// headline is matched accent-insensitively; the dash may be hyphen, en or em.
+const MARKET_HEADLINE_RE = /^\s*χρηματιστηριο\s*[:\-–—]/u;
+const MARKET_URL_RE = /^https?:\/\/(?:[^/]*\.)?naftemporiki\.gr\/finance\/markets\//i;
+
+export function isStockMarketPiece(item = {}) {
+  if (MARKET_HEADLINE_RE.test(normaliseText(item.title || ""))) return true;
+  return [item.url, item.canonical_url].some((url) => typeof url === "string" && MARKET_URL_RE.test(url.trim()));
+}
+
 /**
  * Returns `{ group, term }` for the first noise_hard_reject term matched in
  * `item.title` + `item.summary`, or for the rules-based
@@ -469,6 +483,7 @@ function consumerFuelNoiseTerm(title) {
 export function noiseRejectReason(item = {}) {
   const title = item.title || "";
   const text = `${title} ${item.summary || ""}`;
+  if (isStockMarketPiece(item)) return { group: "stock_market_headline", term: null };
   for (const [group, terms] of Object.entries(NOISE_HARD_REJECT)) {
     if (group === "consumer_fuel") continue;
     for (const term of terms) {
