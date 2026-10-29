@@ -361,7 +361,7 @@ test("buildHomepageSections caps deals at SECTION_HOMEPAGE_CAPS['deals-companies
   assert.equal(total, 2, `expected exactly 2 deals items on the homepage, got ${total}`);
 });
 
-test("buildHomepageSections never exceeds homepage.max_items (20), and (round 7) every §1 section is within its cap by displayed tag when all are oversupplied", () => {
+test("buildHomepageSections total converges to exactly homepage.max_items (20), (round 7: counted once, under the primary section) when every §1 section is oversupplied", () => {
   const now = new Date("2026-10-25T12:00:00Z").getTime();
   let n = 0;
   const unique = () => `https://x.test/cap-${n++}`;
@@ -384,11 +384,7 @@ test("buildHomepageSections never exceeds homepage.max_items (20), and (round 7)
   const sections = buildHomepageSections(articles, { now });
   const total = (sections.lead ? 1 : 0) + sections.recent.length
     + Object.values(sections.columns).reduce((sum, column) => sum + column.length, 0);
-  // Before round 7 this converged to exactly 20 by counting each article once under its
-  // primary spec section. The final list is now also held to the caps by displayed tag
-  // (the tenders/regulators fixtures above carry the infrastructure/telco tags), so it
-  // lands lower; the caps themselves are asserted in test/round7-rules.test.js.
-  assert.ok(total > 0 && total <= HOMEPAGE_MAX_ITEMS, `expected 1..${HOMEPAGE_MAX_ITEMS} total homepage items, got ${total}`);
+  assert.equal(total, HOMEPAGE_MAX_ITEMS, `expected exactly ${HOMEPAGE_MAX_ITEMS} total homepage items, got ${total}`);
 });
 
 // --- 2b. homepageSectionOf --------------------------------------------------

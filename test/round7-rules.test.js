@@ -277,17 +277,42 @@ test("round-7 caps: no section exceeds its homepage cap or the 35% share on the 
   }
 });
 
-test("round-7 caps: an item tagged Telecom AND Deals counts toward both sections (deals max 2 on the final list)", () => {
-  const tower = (i) => art(i, ["telco", "deals"], { hoursAgo: 1 + i * 0.2, score: 30 });
+test("round-7 caps: a multi-tag story counts ONCE, under its primary section (first category), never per tag", () => {
+  const primaryOf = (a) => CATEGORY_TO_SPEC_SECTION[a.categories[0]];
+  const tower = (i) => art(i, ["telco", "deals", "energy"], { hoursAgo: 1 + i * 0.2, score: 30 });
   const articles = [
     ...Array.from({ length: 3 }, (_, i) => tower(i)),
     ...Array.from({ length: 2 }, (_, i) => art(i, ["deals"], { hoursAgo: 3 + i, score: 22 })),
-    ...Array.from({ length: 4 }, (_, i) => art(i, ["telco"], { hoursAgo: 6 + i, score: 18 })),
+    ...Array.from({ length: 3 }, (_, i) => art(i, ["energy"], { hoursAgo: 5 + i, score: 20 })),
     ...Array.from({ length: 3 }, (_, i) => art(i, ["infrastructure"], { hoursAgo: 9 + i, score: 17 })),
   ];
   const list = shownOf(buildHomepageSections(articles, { now: NOW }));
-  const dealsTagged = list.filter((a) => a.categories.includes("deals")).length;
-  assert.ok(dealsTagged <= SECTION_HOMEPAGE_CAPS["deals-companies"], `deals-tagged: ${dealsTagged}`);
+  for (const [section, cap] of Object.entries(SECTION_HOMEPAGE_CAPS)) {
+    const n = list.filter((a) => primaryOf(a) === section).length;
+    assert.ok(n <= cap, `${section}: ${n} > ${cap}`);
+  }
+  // The three telco-primary stories keep their place although they also carry the deals and energy tags.
+  assert.equal(list.filter((a) => primaryOf(a) === "telecom-fibre" && a.categories.length === 3).length, 3);
+});
+
+test("round-7 caps: trimToSectionCaps leaves a section alone when its extra tags are the only overlap", () => {
+  const lead = art(0, ["energy"], { score: 50 });
+  const tagged = Array.from({ length: 3 }, (_, i) => art(i, ["telco", "energy"], { score: 20 - i }));
+  const energy = Array.from({ length: 2 }, (_, i) => art(i + 10, ["energy"], { score: 15 - i }));
+  const dropped = [];
+  const out = trimToSectionCaps({ lead, recent: [...tagged, ...energy, art(0, ["infrastructure"])], columns: {} }, { onDrop: (a) => dropped.push(a) });
+  // energy-primary: lead + 2 = 3 (cap 3); the three telco-primary stories are not counted against energy.
+  assert.deepEqual(dropped, []);
+  assert.equal(out.recent.length, 6);
+});
+
+test("round-7 caps: primary-section overflow is still trimmed (4 energy-primary stories out of 9 -> 3)", () => {
+  const lead = art(0, ["energy"], { score: 50 });
+  const energy = Array.from({ length: 3 }, (_, i) => art(i + 1, ["energy", "telco"], { score: 20 - i }));
+  const others = [art(0, ["telco"]), art(1, ["telco"]), art(0, ["infrastructure"]), art(1, ["infrastructure"]), art(0, ["regulators"])];
+  const out = trimToSectionCaps({ lead, recent: [...energy, ...others], columns: {} });
+  assert.equal(out.trimmed.length, 1);
+  assert.equal(out.trimmed[0], energy[2]);
 });
 
 test("round-7 caps: the reviewer's case — 4 energy stories in a list of 9 is trimmed to 3 (33%) and the lead survives", () => {

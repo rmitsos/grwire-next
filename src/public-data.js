@@ -338,7 +338,7 @@ export async function getNavVisibility({ now = Date.now(), strict = false } = {}
  * article is placed once: as the lead, in a section column or in "recent".
  * Since round 7 the columns are filled first, from the same per-section lists the
  * section pages show (`sections`), and the final list is held to the section caps
- * by displayed tag (see trimToSectionCaps). Section pages still list every
+ * once per article, under its primary section (see trimToSectionCaps). Section pages still list every
  * matching article separately.
  *
  * Also enforces, across lead + recent + columns together:
@@ -556,22 +556,22 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop,
 
 const COLUMN_MAX_ITEMS = 5;
 
-// Spec sections an article counts toward on the FINAL homepage list: one per
-// displayed category tag (an article tagged Telecom and Deals counts toward
-// both, as a reader sees it), plus its primary spec section.
-function displayedSpecSections(article) {
-  const sections = new Set((article.categories || []).map((category) => CATEGORY_TO_SPEC_SECTION[category]).filter(Boolean));
-  const primary = homepageSectionOf(article);
-  if (primary) sections.add(primary);
-  return sections;
+// The one spec section an article counts toward on the FINAL homepage list:
+// its primary section, homepageSectionOf(article) (first public category
+// mapped to a spec section, or the regulators/tenders keyword override — the
+// same rule that files it under a section page's main tag). Extra tags on a
+// multi-tag story never use up slots in the other sections' caps.
+function primarySpecSection(article) {
+  return homepageSectionOf(article) || null;
 }
 
 /**
  * round-7 (section caps): the per-section caps in the eligibility check above
- * count each article once, under its primary spec section, while a reader
- * counts the tags on the finished page — so a list could show 4 energy-tagged
- * stories out of 9. This enforces the §1 homepage_cap and the §5 35% share on
- * the FINAL list (lead + recent + columns, after backfill), by displayed tags.
+ * run while the list is being built; columns, top-ups and backfill can still
+ * push a section over. This enforces the §1 homepage_cap and the §5 35% share
+ * on the FINAL list (lead + recent + columns, after backfill). Each article
+ * counts ONCE, under its primary spec section (primarySpecSection), never once
+ * per tag.
  * The share is of the list as it stands, but never of fewer than
  * HOMEPAGE_TARGET_ITEMS (10) slots, so a thin day is not collapsed to one story
  * per section (a section may always show floor(35% x 10) = 3). The lead is
@@ -581,7 +581,7 @@ function displayedSpecSections(article) {
 export function sectionOverCap(list, { protectedArticle } = {}) {
   const shareCap = Math.floor(SECTION_SHARE_MAX * Math.max(list.length, HOMEPAGE_TARGET_ITEMS));
   for (const specSection of Object.keys(SECTION_HOMEPAGE_CAPS)) {
-    const inSection = list.filter((article) => displayedSpecSections(article).has(specSection));
+    const inSection = list.filter((article) => primarySpecSection(article) === specSection);
     const cap = Math.min(SECTION_HOMEPAGE_CAPS[specSection], shareCap);
     if (inSection.length <= cap) continue;
     const removable = inSection.filter((article) => article !== protectedArticle);
