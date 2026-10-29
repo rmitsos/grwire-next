@@ -179,3 +179,21 @@ CREATE TABLE IF NOT EXISTS subscribers (
 
 CREATE UNIQUE INDEX IF NOT EXISTS subscribers_email_idx ON subscribers (email);
 CREATE INDEX IF NOT EXISTS subscribers_status_created_idx ON subscribers (status, created_at);
+
+-- Daily digest. One row per subscriber per send date: the primary key makes the send idempotent.
+CREATE TABLE IF NOT EXISTS digest_sends (
+  subscriber_id UUID NOT NULL REFERENCES subscribers(id) ON DELETE CASCADE,
+  send_date DATE NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('sending', 'sent', 'failed')),
+  attempted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  sent_at TIMESTAMPTZ,
+  PRIMARY KEY (subscriber_id, send_date)
+);
+
+-- Optional editor comment for a given day's email (one text per language).
+CREATE TABLE IF NOT EXISTS digest_comments (
+  send_date DATE PRIMARY KEY,
+  comment_el TEXT,
+  comment_en TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

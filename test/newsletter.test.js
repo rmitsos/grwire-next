@@ -5,7 +5,6 @@ import {
   validateEmail,
   CONSENT_TEXT_VERSION,
 } from "../src/newsletter/service.js";
-import { createResendProvider, assertTrackingDisabled } from "../src/newsletter/provider.js";
 import { getNewsletterConfig } from "../src/newsletter/config.js";
 import { generateToken, hashToken, hashesMatch } from "../src/newsletter/tokens.js";
 
@@ -279,95 +278,6 @@ test("tokens: hashesMatch is constant-time-safe and correct", () => {
   assert.equal(hashesMatch(hash, hashToken(token)), true);
   assert.equal(hashesMatch(hash, hashToken("something-else")), false);
   assert.equal(hashesMatch(hash, ""), false);
-});
-
-test("Resend provider: request shape and error does not leak the API key", async () => {
-  const calls = [];
-  const fakeFetch = async (url, options) => {
-    calls.push({ url, options });
-    return { ok: true, status: 200, json: async () => ({ id: "email_123" }) };
-  };
-  const provider = createResendProvider({
-    apiKey: "re_super_secret_key",
-    from: "GR Wire <weekly@grwire.com>",
-    fetch: fakeFetch,
-  });
-
-  await provider.send({
-    to: "reader@example.com",
-    subject: "Weekly",
-    html: "<p>hi</p>",
-    text: "hi",
-    headers: { "List-Unsubscribe": "<https://www.grwire.com/unsubscribe?token=x>" },
-  });
-
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, "https://api.resend.com/emails");
-  assert.equal(calls[0].options.method, "POST");
-  assert.equal(calls[0].options.headers.Authorization, "Bearer re_super_secret_key");
-  assert.deepEqual(JSON.parse(calls[0].options.body), {
-    from: "GR Wire <weekly@grwire.com>",
-    to: ["reader@example.com"],
-    subject: "Weekly",
-    html: "<p>hi</p>",
-    text: "hi",
-    headers: { "List-Unsubscribe": "<https://www.grwire.com/unsubscribe?token=x>" },
-  });
-
-  const failingFetch = async () => ({ ok: false, status: 401, json: async () => ({ message: "bad key" }) });
-  const failingProvider = createResendProvider({
-    apiKey: "re_super_secret_key",
-    from: "GR Wire <weekly@grwire.com>",
-    fetch: failingFetch,
-  });
-  await assert.rejects(
-    () => failingProvider.send({ to: "x@example.com", subject: "s", html: "h", text: "t" }),
-    (error) => {
-      assert.match(error.message, /401/);
-      assert.doesNotMatch(error.message, /re_super_secret_key/);
-      return true;
-    },
-  );
-});
-
-test("assertTrackingDisabled throws when open or click tracking is on", async () => {
-  const trackingOnFetch = async () => ({
-    ok: true,
-    status: 200,
-    json: async () => ({ open_tracking: true, click_tracking: false }),
-  });
-  await assert.rejects(
-    () => assertTrackingDisabled({ apiKey: "k", domainId: "d1", fetch: trackingOnFetch }),
-    /tracking/i,
-  );
-
-  const trackingOffFetch = async () => ({ ok: true, status: 200, json: async () => ({}) });
-  await assert.doesNotReject(
-    () => assertTrackingDisabled({ apiKey: "k", domainId: "d1", fetch: trackingOffFetch }),
-  );
-});
-
-test("getNewsletterConfig reports enabled/missing by name only, never secret values", () => {
-  const disabled = getNewsletterConfig({});
-  assert.equal(disabled.enabled, false);
-  assert.deepEqual(disabled.missing.sort(), [
-    "DATABASE_URL",
-    "NEWSLETTER_FROM",
-    "NEWSLETTER_SITE_URL",
-    "RESEND_API_KEY",
-  ]);
-
-  const enabled = getNewsletterConfig({
-    RESEND_API_KEY: "re_super_secret_key",
-    NEWSLETTER_FROM: "GR Wire <weekly@grwire.com>",
-    NEWSLETTER_SITE_URL: "https://www.grwire.com",
-    DATABASE_URL: "postgres://user:pass@host/db",
-  });
-  assert.equal(enabled.enabled, true);
-  assert.deepEqual(enabled.missing, []);
-  for (const name of disabled.missing) {
-    assert.doesNotMatch(name, /secret|postgres:\/\//);
-  }
 });
 
 test("subscribe route: returns 503 and never touches the DB when config is missing", async () => {

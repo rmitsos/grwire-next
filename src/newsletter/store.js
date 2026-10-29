@@ -32,6 +32,26 @@ async function createSubscriberSchema(sql) {
   `;
   await sql`CREATE UNIQUE INDEX IF NOT EXISTS subscribers_email_idx ON subscribers (email)`;
   await sql`CREATE INDEX IF NOT EXISTS subscribers_status_created_idx ON subscribers (status, created_at)`;
+  // One row per subscriber per send date: the primary key is what makes the daily send idempotent.
+  await sql`
+    CREATE TABLE IF NOT EXISTS digest_sends (
+      subscriber_id UUID NOT NULL REFERENCES subscribers(id) ON DELETE CASCADE,
+      send_date DATE NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('sending', 'sent', 'failed')),
+      attempted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      sent_at TIMESTAMPTZ,
+      PRIMARY KEY (subscriber_id, send_date)
+    )
+  `;
+  // Optional editor comment for a given day's email (one text per language).
+  await sql`
+    CREATE TABLE IF NOT EXISTS digest_comments (
+      send_date DATE PRIMARY KEY,
+      comment_el TEXT,
+      comment_en TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
 }
 
 // Expects `email` already lowercased/trimmed by the caller (see newsletter/service.js#validateEmail).
@@ -96,7 +116,7 @@ export function createSubscriberStore(sql) {
       return { found: Boolean(existing[0]) };
     },
 
-    // Not scheduled by any cron; call manually or wire up a future job.
+    // Run daily by /api/cron/newsletter-cleanup: unconfirmed sign-ups are deleted after 7 days.
     async deleteStalePending({ olderThanDays = 7 } = {}) {
       await ensureSubscriberSchema(sql);
       const rows = await sql`
@@ -108,21 +128,50 @@ export function createSubscriberStore(sql) {
       return rows.length;
     },
 
-    async listConfirmed() {
+    // Confirmed subscribers who confirmed before the start (Athens time) of `sendDate`, so the
+    // welcome email's "from tomorrow morning" is true.
+    async listConfirmed({ sendDate } = {}) {
       await ensureSubscriberSchema(sql);
+      if (!sendDate) {
+        return sql`SELECT id, email, lang, status FROM subscribers WHERE status = 'confirmed' ORDER BY created_at ASC`;
+      }
       return sql`
-        SELECT id, email, lang, unsubscribe_token_hash
+        SELECT id, email, lang, status
         FROM subscribers
         WHERE status = 'confirmed'
+          AND confirmed_at < ((${sendDate}::date)::timestamp AT TIME ZONE 'Europe/Athens')
         ORDER BY created_at ASC
       `;
     },
 
-    // A weekly sender issues a fresh unsubscribe token per send (tokens are stored hashed,
-    // so the raw token can't be recovered later) via rotateUnsubscribeToken(id, hash).
-    async rotateUnsubscribeToken(id, hash) {
+    // true = this caller owns the send for (subscriber, date). A 'sent' or 'sending' row is never
+    // claimed again; only a 'failed' one is retried.
+    async claimDigestSend(subscriberId, sendDate) {
       await ensureSubscriberSchema(sql);
-      await sql`UPDATE subscribers SET unsubscribe_token_hash = ${hash}, updated_at = now() WHERE id = ${id}`;
+      const rows = await sql`
+        INSERT INTO digest_sends (subscriber_id, send_date, status)
+        VALUES (${subscriberId}, ${sendDate}::date, 'sending')
+        ON CONFLICT (subscriber_id, send_date) DO UPDATE
+          SET status = 'sending', attempted_at = now()
+          WHERE digest_sends.status = 'failed'
+        RETURNING subscriber_id
+      `;
+      return rows.length === 1;
+    },
+
+    async markDigestSend(subscriberId, sendDate, status) {
+      await ensureSubscriberSchema(sql);
+      await sql`
+        UPDATE digest_sends
+        SET status = ${status}, sent_at = CASE WHEN ${status} = 'sent' THEN now() ELSE NULL END
+        WHERE subscriber_id = ${subscriberId} AND send_date = ${sendDate}::date
+      `;
+    },
+
+    async getDigestComment(sendDate) {
+      await ensureSubscriberSchema(sql);
+      const rows = await sql`SELECT comment_el, comment_en FROM digest_comments WHERE send_date = ${sendDate}::date`;
+      return rows[0] ? { el: rows[0].comment_el || null, en: rows[0].comment_en || null } : { el: null, en: null };
     },
   };
 }

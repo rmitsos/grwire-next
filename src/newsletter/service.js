@@ -1,15 +1,16 @@
 import { hashToken } from "./tokens.js";
+import { confirmationEmail, welcomeEmail, digestEmail } from "./emails.js";
 
-export const CONSENT_TEXT_VERSION = "2026-10-25-v1";
+export const CONSENT_TEXT_VERSION = "2026-10-29-v2";
 
-// landing-copy.md §2, "Consent line (GDPR)" row.
+// subscribe-copy-v2.md, "Consent line" row (29 Oct 2026). The privacy-policy link is rendered next to it.
 export const CONSENT_TEXT = {
   el:
-    "Με την εγγραφή συμφωνείτε να λαμβάνετε το εβδομαδιαίο email του GR Wire. Θα σας στείλουμε πρώτα ένα " +
-    "email για να επιβεβαιώσετε τη διεύθυνσή σας. Μπορείτε να διαγραφείτε όποτε θέλετε, με ένα κλικ.",
+    "Με την εγγραφή συμφωνείτε να λαμβάνετε το ημερήσιο email του GR Wire από την Tareno Systems. Θα σας στείλουμε " +
+    "πρώτα ένα email για να επιβεβαιώσετε τη διεύθυνσή σας. Μπορείτε να διαγραφείτε όποτε θέλετε, με ένα κλικ.",
   en:
-    "By subscribing you agree to receive GR Wire's weekly email. We'll first send a message so you can " +
-    "confirm your address. You can unsubscribe at any time with one click.",
+    "By subscribing you agree to receive GR Wire's daily email from Tareno Systems. We'll first send a message " +
+    "so you can confirm your address. You can unsubscribe at any time with one click.",
 };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -38,30 +39,27 @@ export function buildListUnsubscribeHeaders(unsubscribeUrl) {
   };
 }
 
-function confirmationEmail(lang, confirmUrl) {
-  if (lang === "en") {
+// deps: { store, provider, siteUrl, now, randomToken }
+export function createNewsletterService({ store, provider, siteUrl, now, randomToken, unsubscribeTokenFor = null }) {
+  // The API URL goes in the List-Unsubscribe header (RFC 8058 needs a POST target); the visible
+  // footer link points at the human page, which only unsubscribes on a button click.
+  function unsubscribeLinks(email, lang, token) {
+    const isEn = lang === "en";
+    const encoded = encodeURIComponent(token);
     return {
-      subject: "Confirm your GR Wire subscription",
-      text: `Confirm your subscription to GR Wire's weekly email: ${confirmUrl}`,
-      html: `<p>Confirm your subscription to GR Wire's weekly email.</p><p><a href="${confirmUrl}">${confirmUrl}</a></p>`,
+      apiUrl: `${siteUrl}/api/newsletter/unsubscribe?token=${encoded}`,
+      pageUrl: `${siteUrl}${isEn ? "/en/unsubscribe" : "/unsubscribe"}?token=${encoded}`,
     };
   }
-  return {
-    subject: "Επιβεβαιώστε την εγγραφή σας στο GR Wire",
-    text: `Επιβεβαιώστε την εγγραφή σας στο εβδομαδιαίο email του GR Wire: ${confirmUrl}`,
-    html: `<p>Επιβεβαιώστε την εγγραφή σας στο εβδομαδιαίο email του GR Wire.</p><p><a href="${confirmUrl}">${confirmUrl}</a></p>`,
-  };
-}
 
-// deps: { store, provider, siteUrl, now, randomToken }
-export function createNewsletterService({ store, provider, siteUrl, now, randomToken }) {
-  async function sendConfirmationEmail({ email, lang, confirmToken }) {
+  async function sendConfirmationEmail({ email, lang, confirmToken, unsubscribeToken }) {
     // lang=en lets /api/newsletter/confirm localize its redirect even when the token turns out
     // to be invalid or expired, when a DB lookup can no longer tell us the subscriber's language.
     const langParam = lang === "en" ? "&lang=en" : "";
     const confirmUrl = `${siteUrl}/api/newsletter/confirm?token=${encodeURIComponent(confirmToken)}${langParam}`;
-    const { subject, html, text } = confirmationEmail(lang, confirmUrl);
-    await provider.send({ to: email, subject, html, text });
+    const links = unsubscribeLinks(email, lang, unsubscribeToken);
+    const { subject, html, text } = confirmationEmail({ lang, confirmUrl, unsubscribeUrl: links.pageUrl, siteUrl });
+    await provider.send({ to: email, subject, html, text, headers: buildListUnsubscribeHeaders(links.apiUrl), tag: "confirmation" });
   }
 
   async function subscribe({ email, lang, consent, website, sourcePage }) {
@@ -79,7 +77,7 @@ export function createNewsletterService({ store, provider, siteUrl, now, randomT
 
     const resolvedLang = resolveLang(lang);
     const confirmToken = randomToken();
-    const unsubscribeToken = randomToken();
+    const unsubscribeToken = unsubscribeTokenFor ? unsubscribeTokenFor(normalizedEmail) : randomToken();
     const row = await store.upsertPending({
       email: normalizedEmail,
       lang: resolvedLang,
@@ -92,7 +90,7 @@ export function createNewsletterService({ store, provider, siteUrl, now, randomT
     // Already confirmed: leave the row untouched and send nothing. Same response either way,
     // so this endpoint can't be used to probe which addresses are already on the list.
     if (row.status !== "confirmed") {
-      await sendConfirmationEmail({ email: normalizedEmail, lang: row.lang, confirmToken });
+      await sendConfirmationEmail({ email: normalizedEmail, lang: row.lang, confirmToken, unsubscribeToken });
     }
     return { ok: true, status: "check-inbox" };
   }
@@ -100,7 +98,18 @@ export function createNewsletterService({ store, provider, siteUrl, now, randomT
   async function confirm(token) {
     if (typeof token !== "string" || !token) return { ok: false, error: "invalid-or-expired" };
     const row = await store.confirmByTokenHash(hashToken(token), { maxAgeDays: 7 });
-    return row ? { ok: true, lang: row.lang } : { ok: false, error: "invalid-or-expired" };
+    if (!row) return { ok: false, error: "invalid-or-expired" };
+    // Welcome email, once, on confirmation. The confirmation itself never fails because of it.
+    if (unsubscribeTokenFor) {
+      try {
+        const links = unsubscribeLinks(row.email, row.lang, unsubscribeTokenFor(row.email));
+        const { subject, html, text } = welcomeEmail({ lang: row.lang, unsubscribeUrl: links.pageUrl, siteUrl });
+        await provider.send({ to: row.email, subject, html, text, headers: buildListUnsubscribeHeaders(links.apiUrl), tag: "welcome" });
+      } catch (error) {
+        console.error("[newsletter] welcome email failed:", error?.message || error);
+      }
+    }
+    return { ok: true, lang: row.lang };
   }
 
   async function unsubscribe(token) {
@@ -132,5 +141,16 @@ export function createNewsletterService({ store, provider, siteUrl, now, randomT
     });
   }
 
-  return { subscribe, confirm, unsubscribe, buildListUnsubscribeHeaders, sendToSubscriber };
+  // One daily email. Throws on a provider error so the caller can mark the send as failed.
+  async function sendDigest({ subscriber, stories, comment, date }) {
+    if (subscriber.status !== "confirmed") throw new Error("Cannot send to a subscriber who has not confirmed");
+    if (!unsubscribeTokenFor) throw new Error("unsubscribeTokenFor is required to send the digest");
+    const links = unsubscribeLinks(subscriber.email, subscriber.lang, unsubscribeTokenFor(subscriber.email));
+    const { subject, html, text } = digestEmail({
+      lang: subscriber.lang, stories, comment, unsubscribeUrl: links.pageUrl, siteUrl, date,
+    });
+    return provider.send({ to: subscriber.email, subject, html, text, headers: buildListUnsubscribeHeaders(links.apiUrl), tag: "digest" });
+  }
+
+  return { subscribe, confirm, unsubscribe, buildListUnsubscribeHeaders, sendToSubscriber, sendDigest };
 }
