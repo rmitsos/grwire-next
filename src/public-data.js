@@ -575,8 +575,8 @@ function displayedSpecSections(article) {
  * The share is of the list as it stands, but never of fewer than
  * HOMEPAGE_TARGET_ITEMS (10) slots, so a thin day is not collapsed to one story
  * per section (a section may always show floor(35% x 10) = 3). The lead is
- * never removed; the lowest-scoring, then oldest, article of an over-cap
- * section goes first, and the check repeats until the list is within caps.
+ * never removed; a backfill story, then the lowest-scoring, then the oldest
+ * article of an over-cap section goes first, and the check repeats until the list is within caps.
  */
 export function sectionOverCap(list, { protectedArticle } = {}) {
   const shareCap = Math.floor(SECTION_SHARE_MAX * Math.max(list.length, HOMEPAGE_TARGET_ITEMS));
@@ -586,7 +586,9 @@ export function sectionOverCap(list, { protectedArticle } = {}) {
     if (inSection.length <= cap) continue;
     const removable = inSection.filter((article) => article !== protectedArticle);
     if (!removable.length) continue;
-    const victim = removable.sort((a, b) => (a.score || 0) - (b.score || 0)
+    // An older backfill story goes before a fresh one, then the lowest score, then the oldest.
+    const victim = removable.sort((a, b) => Number(Boolean(b.homepageBackfill)) - Number(Boolean(a.homepageBackfill))
+      || (a.score || 0) - (b.score || 0)
       || Date.parse(a.publishedAt || 0) - Date.parse(b.publishedAt || 0))[0];
     return { specSection, victim };
   }

@@ -345,3 +345,13 @@ test("round-7 sitemap is revalidated (not frozen at build time), so the >=3 rule
   const mod = await import("../src/app/sitemap.js");
   assert.equal(mod.revalidate, 3600);
 });
+
+test("round-7 caps: an over-cap section loses its older backfill story before a fresh one, whatever the scores", () => {
+  const lead = art(0, ["energy"], { score: 50 });
+  const fresh = [art(1, ["energy"], { score: 8 }), art(2, ["energy"], { score: 9 })];
+  const backfill = { ...art(3, ["energy"], { hoursAgo: 24 * 9, score: 30 }), homepageBackfill: true };
+  const others = [art(0, ["telco"]), art(1, ["telco"]), art(0, ["infrastructure"]), art(1, ["infrastructure"]), art(0, ["regulators"])];
+  const dropped = [];
+  trimToSectionCaps({ lead, recent: [...fresh, backfill, ...others], columns: {} }, { onDrop: (a) => dropped.push(a) });
+  assert.deepEqual(dropped, [backfill]);
+});
