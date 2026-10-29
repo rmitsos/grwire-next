@@ -6,5 +6,6 @@ export default function robots() {
       // Search results run a database query per URL, so crawlers stay out of them.
       disallow: ["/intelligence", "/api", "/search?", "/en/search?"],
     },
+    sitemap: "https://www.grwire.com/sitemap.xml",
   };
 }

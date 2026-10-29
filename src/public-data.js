@@ -314,25 +314,32 @@ export function navVisibilityFromRows(rows, { now = Date.now() } = {}) {
 
 let navCache;
 
-export async function getNavVisibility({ now = Date.now() } = {}) {
+export async function getNavVisibility({ now = Date.now(), strict = false } = {}) {
   // Every public page renders the shared nav; computing it is a full read-rules pass over the
   // newest rows, so share one result per process for a minute (a static build renders dozens).
-  if (navCache && now - navCache.at < RECENT_ROWS_TTL_MS) return navCache.promise;
+  if (navCache && now - navCache.at < RECENT_ROWS_TTL_MS) {
+    return strict ? navCache.promise : navCache.promise.catch(() => computeNavVisibility([], { now }));
+  }
   const promise = readArticleRows({ limit: 100 }).then((rows) => navVisibilityFromRows(rows, { now }));
   navCache = { at: now, promise };
   try {
     return await promise;
   } catch {
     if (navCache?.promise === promise) navCache = undefined;
+    // strict (the sitemap): rethrow so a revalidating page keeps its last good copy instead of
+    // caching a sitemap without /tenders and /regulators for an hour.
+    if (strict) throw new Error("nav visibility read failed");
     return computeNavVisibility([], { now });
   }
 }
 
 /**
  * Lays out the homepage without repeating an article across sections. Each
- * article is placed once: as the lead, in "recent", or in the column for its
- * single highest-scoring category (categories[0], already rank-ordered by
- * rankItems). Section pages still list every matching article separately.
+ * article is placed once: as the lead, in a section column or in "recent".
+ * Since round 7 the columns are filled first, from the same per-section lists the
+ * section pages show (`sections`), and the final list is held to the section caps
+ * by displayed tag (see trimToSectionCaps). Section pages still list every
+ * matching article separately.
  *
  * Also enforces, across lead + recent + columns together:
  *  - sources-spec.md §3 max_age_hours.news: only items published within the

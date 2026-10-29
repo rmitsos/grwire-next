@@ -13,6 +13,10 @@ export async function HomePage({ lang }) {
   const [data, navVisibility] = await Promise.all([getHomepageData(), getNavVisibility()]);
   // Reads a markdown file, not the DB, so it still renders when the DB is empty/unavailable.
   const insight = getInsight("fibre-switch", lang);
+  // Columns take the best of each section first, so on a thin day "recent" can be empty while the
+  // columns are full; an empty "Latest" block next to filled columns would only look broken.
+  const hasColumnItems = Object.values(data.columns ?? {}).some((list) => list.length);
+  const showLatest = data.recent.length > 0 || !hasColumnItems;
 
   return (
     <PublicShell lang={lang} elHref={LANDING_ROUTES.el.home} enHref={LANDING_ROUTES.en.home}>
@@ -45,13 +49,15 @@ export async function HomePage({ lang }) {
         </section>
       )}
 
-      <section className="pub-section">
-        <div className="pub-heading">
-          <div><span className="pub-label">{copy.latestLabel}</span><h2>{copy.latestTitle}</h2></div>
-          <Link href={LANDING_ROUTES[lang].search}>{copy.searchLink}</Link>
-        </div>
-        <WireList articles={data.recent} lang={lang} />
-      </section>
+      {showLatest && (
+        <section className="pub-section">
+          <div className="pub-heading">
+            <div><span className="pub-label">{copy.latestLabel}</span><h2>{copy.latestTitle}</h2></div>
+            <Link href={LANDING_ROUTES[lang].search}>{copy.searchLink}</Link>
+          </div>
+          <WireList articles={data.recent} lang={lang} />
+        </section>
+      )}
 
       <section className="pub-grid">
         {Object.keys(PUBLIC_CATEGORIES).map((slug) => {

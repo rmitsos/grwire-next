@@ -313,3 +313,35 @@ test("round-7 caps: trimming does not pad — slots freed by the cap stay empty 
   assert.ok(list.length <= SECTION_HOMEPAGE_CAPS["energy-grids"], `list ${list.length}`);
   assert.ok(list.length >= 1);
 });
+
+// ---- Fix 7: sitemap and robots ---------------------------------------------------------------
+
+test("round-7 robots.txt advertises the sitemap and keeps its disallow rules", async () => {
+  const robots = (await import("../src/app/robots.js")).default();
+  assert.equal(robots.sitemap, "https://www.grwire.com/sitemap.xml");
+  assert.deepEqual(robots.rules.disallow, ["/intelligence", "/api", "/search?", "/en/search?"]);
+});
+
+test("round-7 sitemap lists /regulators and /en/regulators once the section has >=3 items in 30 days, and drops them below that", async () => {
+  const { buildPublicSitemapEntries } = await import("../src/app/sitemap.js");
+  const { computeNavVisibility } = await import("../src/public-data.js");
+  const reg = (i) => ({ url: `https://example.gr/r${i}`, categories: ["regulators"], publishedAt: new Date(NOW - (2 + i * 6) * 24 * HOUR).toISOString() });
+  const base = "https://www.grwire.com";
+  const urls = (articles) => buildPublicSitemapEntries(base, computeNavVisibility(articles, { now: NOW })).map((e) => e.url);
+
+  const three = urls([reg(0), reg(1), reg(2)]);
+  assert.ok(three.includes(`${base}/regulators`));
+  assert.ok(three.includes(`${base}/en/regulators`));
+  const two = urls([reg(0), reg(1)]);
+  assert.ok(!two.includes(`${base}/regulators`));
+  assert.ok(!two.includes(`${base}/en/regulators`));
+  // The visible sections are still there.
+  for (const path of ["/", "/en", "/telco", "/energy", "/infrastructure", "/deals"]) {
+    assert.ok(three.includes(`${base}${path === "/" ? "/" : path}`), path);
+  }
+});
+
+test("round-7 sitemap is revalidated (not frozen at build time), so the >=3 rule stays dynamic", async () => {
+  const mod = await import("../src/app/sitemap.js");
+  assert.equal(mod.revalidate, 3600);
+});
