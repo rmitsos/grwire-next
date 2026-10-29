@@ -557,10 +557,12 @@ export async function searchStories({ query, limit = 50 } = {}) {
 function toArticle(row) {
   const source = SOURCE_BY_ID.get(row.source_id);
   const link = cleanOutgoingLink(row.canonical_url, row.metadata);
-  const feed = readFeedSummary(row.title, row.summary);
-  const publisher = row.metadata?.publisher || feed.publisher;
   let hostname;
   try { hostname = new URL(link.url).hostname.replace(/^www\./, ""); } catch { hostname = undefined; }
+  const feed = readFeedSummary(row.title, row.summary, {
+    publishers: [source?.name, hostname, row.metadata?.publisher, ...(row.metadata?.relatedPublishers || [])],
+  });
+  const publisher = row.metadata?.publisher || feed.publisher;
   return {
     id: row.id,
     url: link.url,

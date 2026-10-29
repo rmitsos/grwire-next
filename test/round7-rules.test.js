@@ -152,3 +152,56 @@ test("round-7 sponsored content is dropped only on an explicit marker, never by 
   assert.deepEqual(noiseRejectReason({ ...plain, url: "https://energypress.gr/sponsored/project-continuum" }), { group: "sponsored", term: null });
   assert.equal(noiseRejectReason(plain), null);
 });
+
+// ---- Fix 4: summary cleanup -------------------------------------------------------------------
+
+test("round-7 summaries: '[&hellip;]' / '[…]' / '[...]' markers are stripped", async () => {
+  const { readFeedSummary } = await import("../src/public-links.js");
+  for (const marker of ["[&hellip;]", "[…]", "[...]", "[ … ]", "[&amp;hellip;]"]) {
+    const out = readFeedSummary("Τίτλος άρθρου για το δίκτυο", `Η ΡΑΑΕΥ θέτει σε διαβούλευση το πρόγραμμα ανάπτυξης ${marker}`);
+    assert.equal(out.summary, "Η ΡΑΑΕΥ θέτει σε διαβούλευση το πρόγραμμα ανάπτυξης", marker);
+  }
+});
+
+test("round-7 summaries: trailing ' - <Publisher>' (the Naftemporiki sitename and similar) is stripped", async () => {
+  const { readFeedSummary } = await import("../src/public-links.js");
+  const title = "ΓΕΚ Τέρνα: Στον σχεδιασμό ομολογιακή έκδοση 500 εκατ.";
+  const out = readFeedSummary(title + " - Η ΝΑΥΤΕΜΠΟΡΙΚΗ", `Οι συναντήσεις με ειδικούς επενδυτές στις διεθνείς αγορές… ${title} - Η ΝΑΥΤΕΜΠΟΡΙΚΗ`);
+  assert.equal(out.summary, "Οι συναντήσεις με ειδικούς επενδυτές στις διεθνείς αγορές…");
+  assert.equal(readFeedSummary("Τίτλος", "Η συμφωνία κλείνει σήμερα - Capital.gr", { publishers: ["Capital.gr"] }).summary, "Η συμφωνία κλείνει σήμερα");
+  assert.equal(readFeedSummary("Τίτλος", "Η συμφωνία κλείνει σήμερα - Η ΚΑΘΗΜΕΡΙΝΗ").summary, "Η συμφωνία κλείνει σήμερα");
+  // Not a publisher: a short company name or a normal clause after a dash stays.
+  assert.equal(readFeedSummary("Τίτλος", "Η σύμβαση υπογράφηκε με την κοινοπραξία - ΟΤΕ").summary, "Η σύμβαση υπογράφηκε με την κοινοπραξία - ΟΤΕ");
+  assert.equal(readFeedSummary("Τίτλος", "Το έργο ξεκινά - αναμένεται να ολοκληρωθεί το 2028").summary, "Το έργο ξεκινά - αναμένεται να ολοκληρωθεί το 2028");
+});
+
+test("round-7 summaries: energypress title repetition and 'handle date | time' leftovers are removed", async () => {
+  const { readFeedSummary } = await import("../src/public-links.js");
+  const title = "Παληαρούτα: Τις επόμενες ημέρες οι λίστες προτεραιότητας για τις merchant μπαταρίες - Ιεραρχούμε 3 κατηγορίες έργων αποθήκευσης";
+  const body = "Προτεραιότητα για να ηλεκτριστούν έχουν τα έργα αποθήκευσης τα οποία είναι ήδη σε εξέλιξη, σημείωσε η Γενική Γραμματέας Ενέργειας, μιλώντας στο...";
+  const out = readFeedSummary(title, `${title} ${body} ekalogerh 28 10 2026 | 07:30`);
+  assert.equal(out.summary, body);
+  // Only the title and the leftover: nothing is left to show.
+  assert.equal(readFeedSummary(title, `${title} ekotsifi 26 10 2026 | 15:16`).summary, null);
+  // A summary that merely begins with similar words is kept.
+  assert.equal(readFeedSummary("Η ΡΑΑΕΥ ανακοίνωσε νέα απόφαση", "Η ΡΑΑΕΥ ανακοίνωσε χθες νέα απόφαση για τις χρεώσεις.").summary, "Η ΡΑΑΕΥ ανακοίνωσε χθες νέα απόφαση για τις χρεώσεις.");
+  // A clock time inside the body is not a leftover.
+  assert.equal(readFeedSummary("Τίτλος", "Η συνεδρίαση ξεκινά στις 10:30").summary, "Η συνεδρίαση ξεκινά στις 10:30");
+});
+
+test("round-7 summaries are cleaned on the public article shape, section pages included", () => {
+  const title = "ΡΑΑΕΥ: Με 83 εκατ. από τα έσοδα των διασυνδέσεων η μείωση των χρεώσεων χρήσης συστήματος";
+  const rows = [row({
+    id: "e1", title, url: "https://energypress.gr/news/x", source: "energypress", categories: ["energy"],
+    summary: `${title} Η ΡΑΑΕΥ προχώρησε σε μείωση των χρεώσεων των διασυνδέσεων του συστήματος ηλεκτρικής ενέργειας... ekotsifi 26 10 2026 | 15:16`,
+  }), row({
+    id: "e2", title: "Ο ΑΔΜΗΕ προχωρά στη διασύνδεση των Κυκλάδων με νέο υποσταθμό υψηλής τάσης", url: "https://ypodomes.com/y", source: "ypodomes", categories: ["energy"],
+    summary: "Ο ΑΔΜΗΕ προχωρά στη διασύνδεση των νοτίων Κυκλάδων, έργου συνολικού προϋπολογισμού [&hellip;]",
+  })];
+  const out = selectArticles(rows, { category: "energy", now: NOW });
+  assert.ok(out.length >= 1);
+  for (const article of out) {
+    assert.ok(!/hellip|\[…\]|\[\.\.\.\]|\d{4}\s*\|\s*\d{1,2}:\d{2}/.test(article.summary || ""), article.summary);
+  }
+  assert.ok(out.find((a) => a.url === "https://energypress.gr/news/x").summary.startsWith("Η ΡΑΑΕΥ προχώρησε"));
+});
