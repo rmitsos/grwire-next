@@ -5,6 +5,7 @@ import { storyDateToIso } from "./story-date.js";
 import { canonicalizeUrl } from "./sources/utils.js";
 import { cleanOutgoingLink, publicSourceName, readFeedSummary } from "./public-links.js";
 import { SOURCES } from "../config/sources.js";
+import { CURATED_SCORE, isCuratedRow } from "./curated.js";
 import {
   BACKFILL_MAX_AGE_HOURS,
   BACKFILL_MIN_SCORE,
@@ -163,6 +164,7 @@ export function selectArticles(rows, { category, limit = 80, now = Date.now(), o
 // loses the telco category, and is dropped outright if it had no other one.
 function dropTelcoWithoutNetworkAngle(row, onDrop) {
   if (!row.categories.includes("telco")) return [row];
+  if (isCuratedRow(row)) return [row];
   // go-live: the HEADLINE must carry the network angle. A summary that mentions a network in passing
   // (data-centre or AI pieces that name an operator) no longer keeps a story on /telco.
   if (hasTelecomNetworkAngle(row.title || "")) return [row];
@@ -184,6 +186,7 @@ function dropTelcoWithoutNetworkAngle(row, onDrop) {
 // (deals_no_company); otherwise its other categories are kept.
 function dropDealsWithoutCompany(row, onDrop) {
   if (!row.categories.includes("deals")) return [row];
+  if (isCuratedRow(row)) return [row];
   if (isDealsEligible(row)) return [row];
   const categories = row.categories.filter((c) => c !== "deals");
   if (!categories.length) {
@@ -266,10 +269,25 @@ export function selectHomepageInputs(rows, { now = Date.now() } = {}) {
   return { articles, sections };
 }
 
+// What each section page lists: how many stories and when the newest was published. The
+// homepage section tiles show this, so the number on a tile is the number on the page it links
+// to. It only counts; it does not place stories on the homepage, so the once-per-story rule of
+// buildHomepageSections is untouched.
+export function summarizeSections(sections = {}) {
+  return Object.fromEntries(Object.keys(PUBLIC_CATEGORIES).map((slug) => {
+    const list = sections[slug] ?? [];
+    const latest = list.reduce((max, article) => {
+      const time = Date.parse(article.publishedAt ?? "");
+      return Number.isFinite(time) && time > max ? time : max;
+    }, 0);
+    return [slug, { count: list.length, latestAt: latest ? new Date(latest).toISOString() : null }];
+  }));
+}
+
 export async function getHomepageData() {
   const [rows, story] = await Promise.all([readHomepageRows(), getLatestStory()]);
   const { articles, sections } = selectHomepageInputs(rows);
-  return { articles, story, ...buildHomepageSections(articles, { sections }) };
+  return { articles, story, sectionSummary: summarizeSections(sections), ...buildHomepageSections(articles, { sections }) };
 }
 
 async function readHomepageRows() {
@@ -421,7 +439,8 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop,
     // round-6b: a fresh (non-backfill) item under the floor never takes a
     // homepage slot; section pages are unaffected. Backfill items have their
     // own floors (isBackfillCandidate).
-    if (!article.homepageBackfill && (article.score || 0) < HOMEPAGE_FRESH_MIN_SCORE) {
+    // Curated items (POST /api/curated) are an editor's pick and skip the score floors.
+    if (!article.homepageBackfill && !article.metadata?.curated && (article.score || 0) < HOMEPAGE_FRESH_MIN_SCORE) {
       return { ok: false, stage: "below_fresh_floor" };
     }
     if (isCyprusOnly(article)) return { ok: false, stage: "cyprus_only" };
@@ -481,21 +500,21 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop,
     lead = take(best);
   }
 
-  // round-7 (empty columns): a column is the top of its section page, not what
-  // is left over once "recent" has taken everything. Each column first takes
-  // the best fresh items of its own section (the same prepared list the
-  // section page shows, in the same order — `sections[slug]`, or the articles
-  // tagged with that category when the caller has no per-section lists),
-  // reserving half of the section's homepage cap (rounded up); "recent" then
-  // takes what the caps still allow. An article still appears only once.
+  // round-8 (column = section page): a column is the top of its section page. Each column takes the
+  // first eligible items of its own section's list (`sections[slug]`, the list /<section> shows, in
+  // the page's order) up to the section's homepage cap, and only stories whose MAIN section it is
+  // (categories[0]): a multi-tag story counts once, under its main section, and never takes a slot
+  // in another section's column. Since round 7 only half of the cap was reserved here, and "recent"
+  // then took the rest, so a story that heads its section page could sit in "recent" instead of its
+  // column. "recent" now takes what is left over.
   const freshUrls = new Set(fresh.map((article) => canonicalizeUrl(article.url)));
   const columns = Object.fromEntries(Object.keys(PUBLIC_CATEGORIES).map((category) => [category, []]));
   for (const category of Object.keys(columns)) {
-    const sectionCap = SECTION_HOMEPAGE_CAPS[CATEGORY_TO_SPEC_SECTION[category]] ?? COLUMN_MAX_ITEMS;
-    const reserve = Math.min(COLUMN_MAX_ITEMS, Math.ceil(sectionCap / 2));
+    const columnCap = columnCapOf(category);
     const candidates = sections?.[category] ?? articles.filter((article) => article.categories?.includes(category));
     for (const article of candidates) {
-      if (columns[category].length >= reserve) break;
+      if (columns[category].length >= columnCap) break;
+      if (article.categories?.[0] !== category) continue;
       if (!freshUrls.has(canonicalizeUrl(article.url))) continue;
       if (shown.has(canonicalizeUrl(article.url))) continue;
       if (eligible(article)) columns[category].push(take(article));
@@ -509,12 +528,13 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop,
     if (eligible(article)) recent.push(take(article));
   }
 
-  // Any column still short of five fills from its own section's list, then
-  // from anything else tagged for the section, within the caps.
+  // A column still short of its cap then takes stories of its section that are tagged for it but
+  // belong to another section's main list and were not placed anywhere else, within the caps.
   for (const category of Object.keys(columns)) {
+    const columnCap = columnCapOf(category);
     const candidates = sections?.[category] ?? articles.filter((article) => article.categories?.includes(category));
     for (const article of candidates) {
-      if (columns[category].length >= COLUMN_MAX_ITEMS) break;
+      if (columns[category].length >= columnCap) break;
       if (!freshUrls.has(canonicalizeUrl(article.url))) continue;
       if (shown.has(canonicalizeUrl(article.url))) continue;
       if (eligible(article)) columns[category].push(take(article));
@@ -527,8 +547,8 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop,
   // (eligible), and only while the homepage is under HOMEPAGE_TARGET_ITEMS. A column with nothing even then stays empty; the page hides it and links to the
   // section page instead.
   for (const category of Object.keys(columns)) {
-    const sectionCap = SECTION_HOMEPAGE_CAPS[CATEGORY_TO_SPEC_SECTION[category]] ?? COLUMN_MAX_ITEMS;
-    const reserve = Math.min(COLUMN_MAX_ITEMS, Math.ceil(sectionCap / 2));
+    const columnCap = columnCapOf(category);
+    const reserve = Math.min(columnCap, Math.ceil(columnCap / 2));
     const candidates = sections?.[category] ?? articles.filter((article) => article.categories?.includes(category));
     for (const article of candidates) {
       if (columns[category].length >= reserve || totalCount >= HOMEPAGE_TARGET_ITEMS) break;
@@ -578,6 +598,11 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop,
 
 const COLUMN_MAX_ITEMS = 5;
 
+// A column holds at most its section's §1 homepage cap (never more than COLUMN_MAX_ITEMS).
+function columnCapOf(category) {
+  return Math.min(COLUMN_MAX_ITEMS, SECTION_HOMEPAGE_CAPS[CATEGORY_TO_SPEC_SECTION[category]] ?? COLUMN_MAX_ITEMS);
+}
+
 // The one spec section an article counts toward on the FINAL homepage list:
 // its primary section, homepageSectionOf(article) (first public category
 // mapped to a spec section, or the regulators/tenders keyword override — the
@@ -608,8 +633,10 @@ export function sectionOverCap(list, { protectedArticle } = {}) {
     if (inSection.length <= cap) continue;
     const removable = inSection.filter((article) => article !== protectedArticle);
     if (!removable.length) continue;
-    // An older backfill story goes before a fresh one, then the lowest score, then the oldest.
-    const victim = removable.sort((a, b) => Number(Boolean(b.homepageBackfill)) - Number(Boolean(a.homepageBackfill))
+    // A scanned story goes before a curated one (an editor's pick; /api/curated), then an older
+    // backfill story before a fresh one, then the lowest score, then the oldest.
+    const victim = removable.sort((a, b) => Number(Boolean(a.metadata?.curated)) - Number(Boolean(b.metadata?.curated))
+      || Number(Boolean(b.homepageBackfill)) - Number(Boolean(a.homepageBackfill))
       || (a.score || 0) - (b.score || 0)
       || Date.parse(a.publishedAt || 0) - Date.parse(b.publishedAt || 0))[0];
     return { specSection, victim };
@@ -651,6 +678,7 @@ export function homepageBackfillWindowHours(article) {
 export function homepageBackfillIneligibleReason(article, now = Date.now()) {
   if (isAgendaItem(article.title)) return "agenda_item";
   if (isEventPiece(article.title)) return "event_piece";
+  if (article.metadata?.curated) return null;
   const minScore = isFresh(article, now, BACKFILL_MAX_AGE_HOURS) ? BACKFILL_MIN_SCORE : TIER1_BACKFILL_MIN_SCORE;
   return (article.score || 0) >= minScore ? null : "below_backfill_floor";
 }
@@ -736,6 +764,7 @@ function toArticle(row) {
     // An item is section-only while its link still points at news.google.com (unresolved);
     // a link unwrapped at display time is a normal publisher link.
     metadata: {
+      curated: isCuratedRow(row),
       sectionOnly: link.viaGoogleNews,
       publisher: row.metadata?.publisher,
       relatedPublishers: row.metadata?.relatedPublishers || [],
@@ -776,6 +805,12 @@ function toPublicEvidence(item) {
 
 
 function reclassifyRow(row) {
+  // Curated rows (articles.source_kind = 'curated') keep the section the editor filed them under:
+  // the rules below would re-derive categories and score from the headline and could drop them.
+  if (isCuratedRow(row)) {
+    const categories = (row.categories || []).filter((category) => category in PUBLIC_CATEGORIES);
+    return { ...row, categories, relevance: row.relevance || [], score: Math.max(Number(row.score) || 0, CURATED_SCORE) };
+  }
   const [ranked] = rankItems([{
     url: row.canonical_url,
     title: row.title,

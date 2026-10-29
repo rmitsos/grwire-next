@@ -19,7 +19,7 @@ export async function SearchPage({ lang, searchParams }) {
     : [[], []];
 
   return (
-    <PublicShell lang={lang} elHref={LANDING_ROUTES.el.search} enHref={LANDING_ROUTES.en.search}>
+    <PublicShell lang={lang} active="search" elHref={LANDING_ROUTES.el.search} enHref={LANDING_ROUTES.en.search}>
       <section className="pub-hero">
         <span className="pub-label">{copy.search.label}</span>
         <h1>{copy.search.title}</h1>

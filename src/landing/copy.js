@@ -7,7 +7,7 @@
 import { CONSENT_TEXT } from "../newsletter/service.js";
 
 export const NAV_SECTIONS = [
-  { slug: "telco", path: "/telco", color: "var(--sec-telecom-fibre)", primary: true },
+  { slug: "telco", path: "/telco", color: "var(--sec-telecom-fibre)" },
   { slug: "energy", path: "/energy", color: "var(--sec-energy-grids)" },
   { slug: "infrastructure", path: "/infrastructure", color: "var(--sec-infrastructure-works)" },
   { slug: "tenders", path: "/tenders", color: "var(--sec-tenders-contracts)" },
@@ -120,6 +120,8 @@ export const LANDING_COPY = {
         { title: "Χωρίς παρακολούθηση", text: "Δεν μετράμε ανοίγματα και κλικ στα email μας. Η διαγραφή γίνεται με ένα κλικ." },
       ],
     },
+    // Approved scope line without "κάθε πρωί": the homepage sign-up band uses it as its title.
+    scopeLine: "Τηλεπικοινωνίες στην Ελλάδα: δίκτυα σταθερής και κινητής, και δορυφορική επικοινωνία",
     cta2: {
       title: "Κάθε πρωί, πέντε λεπτά.",
     },
@@ -227,6 +229,7 @@ export const LANDING_COPY = {
         { title: "No tracking", text: "We don't track opens or clicks in our emails. Unsubscribing takes one click." },
       ],
     },
+    scopeLine: "Telecoms in Greece: fixed and mobile networks, and satellite communications",
     cta2: {
       title: "Every morning, five minutes.",
     },

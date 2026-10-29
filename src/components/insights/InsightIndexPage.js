@@ -13,6 +13,7 @@ export function InsightIndexPage({ lang, insights }) {
     <>
       <LandingHeader
         lang={lang}
+        active="insights"
         elHref={insightsIndexPath("el")}
         enHref={insightsIndexPath("en")}
         subscribeHref={`${LANDING_ROUTES[lang].subscribe}#subscribe`}

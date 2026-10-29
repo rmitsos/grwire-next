@@ -120,6 +120,16 @@ Private intelligence lives at `/intelligence`. `vercel.json` schedules the
 multi-source scanner daily; configure `CRON_SECRET` so Vercel can authenticate
 the ingestion route. A signed-in user can also run a scan manually.
 
+### Curated items
+
+`POST /api/curated` takes a JSON array (max 50) of `{title_el, summary_el, url, source,
+published_at, section}` and stores them as tier-1 items (`articles.source_kind = 'curated'`).
+Set `CURATED_INGEST_SECRET` on the server; clients send `Authorization: Bearer <secret>`.
+Use `GRWIRE_CURATED_SECRET=... scripts/send-curated.sh <base-url> <file.json>`. Re-sending a
+file is a no-op (dedupe by URL). Remove them all with
+`DELETE FROM articles WHERE source_kind = 'curated';`. A preview deployment must have its own
+branch-scoped `DATABASE_URL` before anything is uploaded to it.
+
 ## Agent pipeline
 
 The scanner now runs three explicit intelligence agents:

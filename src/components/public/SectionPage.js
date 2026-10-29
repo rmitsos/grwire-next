@@ -13,7 +13,7 @@ export async function SectionPage({ lang, category }) {
   const { fresh, older } = splitByFreshness(articles);
 
   return (
-    <PublicShell lang={lang} elHref={sectionPath("el", category)} enHref={sectionPath("en", category)}>
+    <PublicShell lang={lang} active={category} elHref={sectionPath("el", category)} enHref={sectionPath("en", category)}>
       <section className={`pub-hero ${category}`}>
         <span className="pub-label">{copy.section.label}</span>
         <h1>{sectionTitle(category, lang)}</h1>
