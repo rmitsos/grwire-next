@@ -15,7 +15,9 @@ import {
   HOMEPAGE_TARGET_ITEMS,
   HOMEPAGE_FRESH_MIN_SCORE,
   HOMEPAGE_MAX_ITEMS,
+  CATEGORY_TO_SPEC_SECTION,
   SECTION_HOMEPAGE_CAPS,
+  SECTION_SHARE_MAX,
   SECTION_NAV_WINDOW_DAYS,
   SECTION_SHARE_CAP,
   athensDayKey,
@@ -247,9 +249,35 @@ export async function getLatestArticles({ category, query, limit = 80 } = {}) {
   }
 }
 
+/**
+ * round-7 (empty columns): the homepage is laid out from the SAME rows and the
+ * SAME selection the section pages use. `articles` is the global limit-100 list;
+ * `sections[slug]` is exactly what getLatestArticles({ category: slug, limit: 100 })
+ * returns for that section page (selectArticles with that category and limit).
+ */
+export function selectHomepageInputs(rows, { now = Date.now() } = {}) {
+  const articles = selectArticles(rows, { limit: 100, now });
+  const sections = Object.fromEntries(Object.keys(PUBLIC_CATEGORIES).map((category) => [
+    category,
+    selectArticles(rows, { category, limit: 100, now }),
+  ]));
+  return { articles, sections };
+}
+
 export async function getHomepageData() {
-  const [articles, story] = await Promise.all([getLatestArticles({ limit: 100 }), getLatestStory()]);
-  return { articles, story, ...buildHomepageSections(articles) };
+  const [rows, story] = await Promise.all([readHomepageRows(), getLatestStory()]);
+  const { articles, sections } = selectHomepageInputs(rows);
+  return { articles, story, ...buildHomepageSections(articles, { sections }) };
+}
+
+async function readHomepageRows() {
+  try {
+    return await readArticleRows({ limit: 100 });
+  } catch (error) {
+    // Rethrow so a cached page keeps its last good copy instead of caching an empty one.
+    console.error("[public] article read failed:", error?.message || error);
+    throw error;
+  }
 }
 
 // round-4 §7: /tenders and /regulators are hidden from nav/sitemap until
@@ -341,7 +369,7 @@ export async function getNavVisibility({ now = Date.now() } = {}) {
  * Skipped items are never replaced with padding: a slot that runs out of
  * eligible articles is just left shorter than its usual capacity.
  */
-export function buildHomepageSections(articles = [], { now = Date.now(), onDrop } = {}) {
+export function buildHomepageSections(articles = [], { now = Date.now(), onDrop, sections } = {}) {
   const { fresh, older } = splitByFreshness(articles, { now });
   // Always computed, not just when fresh is short: caps/rules below (home_cap,
   // section caps, event/Cyprus rules) routinely shrink a large fresh set to
@@ -444,6 +472,27 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop 
     lead = take(best);
   }
 
+  // round-7 (empty columns): a column is the top of its section page, not what
+  // is left over once "recent" has taken everything. Each column first takes
+  // the best fresh items of its own section (the same prepared list the
+  // section page shows, in the same order — `sections[slug]`, or the articles
+  // tagged with that category when the caller has no per-section lists),
+  // reserving half of the section's homepage cap (rounded up); "recent" then
+  // takes what the caps still allow. An article still appears only once.
+  const freshUrls = new Set(fresh.map((article) => canonicalizeUrl(article.url)));
+  const columns = Object.fromEntries(Object.keys(PUBLIC_CATEGORIES).map((category) => [category, []]));
+  for (const category of Object.keys(columns)) {
+    const sectionCap = SECTION_HOMEPAGE_CAPS[CATEGORY_TO_SPEC_SECTION[category]] ?? COLUMN_MAX_ITEMS;
+    const reserve = Math.min(COLUMN_MAX_ITEMS, Math.ceil(sectionCap / 2));
+    const candidates = sections?.[category] ?? articles.filter((article) => article.categories?.includes(category));
+    for (const article of candidates) {
+      if (columns[category].length >= reserve) break;
+      if (!freshUrls.has(canonicalizeUrl(article.url))) continue;
+      if (shown.has(canonicalizeUrl(article.url))) continue;
+      if (eligible(article)) columns[category].push(take(article));
+    }
+  }
+
   const recent = [];
   for (const article of fresh) {
     if (recent.length >= 12) break;
@@ -451,13 +500,16 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop 
     if (eligible(article)) recent.push(take(article));
   }
 
-  const columns = Object.fromEntries(Object.keys(PUBLIC_CATEGORIES).map((category) => [category, []]));
-  for (const article of fresh) {
-    if (shown.has(canonicalizeUrl(article.url))) continue;
-    const primaryCategory = article.categories?.[0];
-    if (!primaryCategory || !columns[primaryCategory]) continue;
-    if (columns[primaryCategory].length >= 5) continue;
-    if (eligible(article)) columns[primaryCategory].push(take(article));
+  // Any column still short of five fills from its own section's list, then
+  // from anything else tagged for the section, within the caps.
+  for (const category of Object.keys(columns)) {
+    const candidates = sections?.[category] ?? articles.filter((article) => article.categories?.includes(category));
+    for (const article of candidates) {
+      if (columns[category].length >= COLUMN_MAX_ITEMS) break;
+      if (!freshUrls.has(canonicalizeUrl(article.url))) continue;
+      if (shown.has(canonicalizeUrl(article.url))) continue;
+      if (eligible(article)) columns[category].push(take(article));
+    }
   }
 
   // homepage backfill (round 4, target 10 / no padding since round 6): every
@@ -470,7 +522,82 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop 
     if (eligible(article)) recent.push(take(article));
   }
 
-  return { lead, recent, columns };
+  // round-7 (section caps): enforce the caps on the finished list, then let
+  // the backfill pool refill — never above HOMEPAGE_TARGET_ITEMS, never below
+  // the backfill floors, and only with an article that keeps every section
+  // within its caps.
+  const trimmedResult = trimToSectionCaps({ lead, recent, columns }, { onDrop: reportDrop });
+  if (!trimmedResult.trimmed.length) return { lead, recent, columns };
+  const trimmedRecent = trimmedResult.recent;
+  const trimmedColumns = trimmedResult.columns;
+  const finalList = () => [trimmedResult.lead, ...trimmedRecent, ...Object.values(trimmedColumns).flat()].filter(Boolean);
+  shown.clear();
+  perSourceCount.clear();
+  perSpecSectionCount.clear();
+  totalCount = 0;
+  for (const article of finalList()) take(article);
+  const trimmedUrls = new Set(trimmedResult.trimmed.map((article) => canonicalizeUrl(article.url)));
+  for (const article of backfillPool) {
+    if (totalCount >= HOMEPAGE_TARGET_ITEMS) break;
+    const url = canonicalizeUrl(article.url);
+    if (shown.has(url) || trimmedUrls.has(url)) continue;
+    if (sectionOverCap([...finalList(), article])) continue;
+    if (eligible(article)) trimmedRecent.push(take(article));
+  }
+  return { lead: trimmedResult.lead, recent: trimmedRecent, columns: trimmedColumns };
+}
+
+const COLUMN_MAX_ITEMS = 5;
+
+// Spec sections an article counts toward on the FINAL homepage list: one per
+// displayed category tag (an article tagged Telecom and Deals counts toward
+// both, as a reader sees it), plus its primary spec section.
+function displayedSpecSections(article) {
+  const sections = new Set((article.categories || []).map((category) => CATEGORY_TO_SPEC_SECTION[category]).filter(Boolean));
+  const primary = homepageSectionOf(article);
+  if (primary) sections.add(primary);
+  return sections;
+}
+
+/**
+ * round-7 (section caps): the per-section caps in the eligibility check above
+ * count each article once, under its primary spec section, while a reader
+ * counts the tags on the finished page — so a list could show 4 energy-tagged
+ * stories out of 9. This enforces the §1 homepage_cap and the §5 35% share on
+ * the FINAL list (lead + recent + columns, after backfill), by displayed tags.
+ * The share is of the list as it stands, but never of fewer than
+ * HOMEPAGE_TARGET_ITEMS (10) slots, so a thin day is not collapsed to one story
+ * per section (a section may always show floor(35% x 10) = 3). The lead is
+ * never removed; the lowest-scoring, then oldest, article of an over-cap
+ * section goes first, and the check repeats until the list is within caps.
+ */
+export function sectionOverCap(list, { protectedArticle } = {}) {
+  const shareCap = Math.floor(SECTION_SHARE_MAX * Math.max(list.length, HOMEPAGE_TARGET_ITEMS));
+  for (const specSection of Object.keys(SECTION_HOMEPAGE_CAPS)) {
+    const inSection = list.filter((article) => displayedSpecSections(article).has(specSection));
+    const cap = Math.min(SECTION_HOMEPAGE_CAPS[specSection], shareCap);
+    if (inSection.length <= cap) continue;
+    const removable = inSection.filter((article) => article !== protectedArticle);
+    if (!removable.length) continue;
+    const victim = removable.sort((a, b) => (a.score || 0) - (b.score || 0)
+      || Date.parse(a.publishedAt || 0) - Date.parse(b.publishedAt || 0))[0];
+    return { specSection, victim };
+  }
+  return null;
+}
+
+export function trimToSectionCaps({ lead, recent, columns }, { onDrop } = {}) {
+  const trimmed = [];
+  for (;;) {
+    const all = [lead, ...recent, ...Object.values(columns).flat()].filter(Boolean);
+    const over = sectionOverCap(all, { protectedArticle: lead });
+    if (!over) return { lead, recent, columns, trimmed };
+    const { victim, specSection } = over;
+    if (onDrop) onDrop(victim, { stage: "section_cap_final", specSection });
+    trimmed.push(victim);
+    recent = recent.filter((article) => article !== victim);
+    columns = Object.fromEntries(Object.entries(columns).map(([category, list]) => [category, list.filter((article) => article !== victim)]));
+  }
 }
 
 /**

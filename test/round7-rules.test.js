@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { noiseRejectReason, isStockMarketPiece } from "../src/feed-rules.js";
-import { selectArticles } from "../src/public-data.js";
+import { selectArticles, selectHomepageInputs, buildHomepageSections, trimToSectionCaps } from "../src/public-data.js";
+import { CATEGORY_TO_SPEC_SECTION, SECTION_HOMEPAGE_CAPS, SECTION_SHARE_MAX, HOMEPAGE_TARGET_ITEMS } from "../src/feed-rules.js";
 
 const NOW = Date.parse("2026-10-29T08:00:00+02:00");
 const HOUR = 3_600_000;
@@ -204,4 +205,111 @@ test("round-7 summaries are cleaned on the public article shape, section pages i
     assert.ok(!/hellip|\[…\]|\[\.\.\.\]|\d{4}\s*\|\s*\d{1,2}:\d{2}/.test(article.summary || ""), article.summary);
   }
   assert.ok(out.find((a) => a.url === "https://energypress.gr/news/x").summary.startsWith("Η ΡΑΑΕΥ προχώρησε"));
+});
+
+// ---- Fix 2: homepage columns use the section pages' selection ------------------------------
+
+const art = (i, categories, { hoursAgo = 3 + i * 0.1, score = 20, title } = {}) => ({
+  url: `https://example.gr/a-${categories.join("-")}-${i}`,
+  title: title || `Ειδηση ${categories.join("/")} αρ. ${i}`,
+  summary: "", sourceId: `src-${categories.join("-")}-${i}`, categories, score,
+  publishedAt: new Date(NOW - hoursAgo * HOUR).toISOString(), metadata: {},
+});
+const shownOf = (r) => [r.lead, ...r.recent, ...Object.values(r.columns).flat()].filter(Boolean);
+const specOf = (a) => new Set((a.categories || []).map((c) => CATEGORY_TO_SPEC_SECTION[c]).filter(Boolean));
+
+test("round-7 columns: every section with fresh items has a non-empty column, even when 'recent' could take everything", () => {
+  const articles = [
+    ...Array.from({ length: 6 }, (_, i) => art(i, ["energy"], { hoursAgo: 1 + i * 0.2 })),
+    ...Array.from({ length: 3 }, (_, i) => art(i, ["telco"], { hoursAgo: 8 + i })),
+    ...Array.from({ length: 2 }, (_, i) => art(i, ["infrastructure"], { hoursAgo: 10 + i })),
+    ...Array.from({ length: 2 }, (_, i) => art(i, ["deals"], { hoursAgo: 12 + i })),
+  ];
+  const result = buildHomepageSections(articles, { now: NOW });
+  for (const slug of ["telco", "energy", "infrastructure", "deals"]) {
+    assert.ok(result.columns[slug].length >= 1, `column ${slug} must not be empty`);
+    for (const a of result.columns[slug]) assert.ok(a.categories.includes(slug));
+  }
+  assert.equal(result.columns.regulators.length, 0, "a section with no items stays empty (nothing is padded in)");
+  const urls = shownOf(result).map((a) => a.url);
+  assert.equal(new Set(urls).size, urls.length, "an article appears once on the homepage");
+});
+
+test("round-7 columns come from the section-page list, in its order (`sections` option)", () => {
+  const articles = Array.from({ length: 8 }, (_, i) => art(i, ["telco"], { hoursAgo: 2 + i, score: i === 0 ? 60 : i === 6 ? 40 : 20 }));
+  // The section page ranks article 6 first; the column must lead with it, not with the newest.
+  const result = buildHomepageSections(articles, { now: NOW, sections: { telco: [articles[6]] } });
+  assert.equal(result.columns.telco[0]?.url, articles[6].url);
+});
+
+test("round-7 selectHomepageInputs: section lists equal what each section page selects from the same rows", () => {
+  const rows = [
+    row({ id: "t1", title: "Η Cosmote επεκτείνει το δίκτυο οπτικών ινών FTTH σε 40 πόλεις", source: "cosmote", categories: ["telco"], score: 30, hoursAgo: 2 }),
+    row({ id: "e1", title: "Ο ΑΔΜΗΕ προχωρά στη διασύνδεση των Κυκλάδων με νέο υποσταθμό υψηλής τάσης", source: "ypodomes", categories: ["energy"], score: 30, hoursAgo: 3 }),
+  ];
+  const { articles, sections } = selectHomepageInputs(rows, { now: NOW });
+  assert.deepEqual(articles.map((a) => a.url), selectArticles(rows, { limit: 100, now: NOW }).map((a) => a.url));
+  for (const slug of ["telco", "energy", "infrastructure", "deals", "tenders", "regulators"]) {
+    assert.deepEqual(sections[slug].map((a) => a.url), selectArticles(rows, { category: slug, limit: 100, now: NOW }).map((a) => a.url), slug);
+  }
+});
+
+// ---- Fix 5: section caps hold on the FINAL homepage list ----------------------------------
+
+const countBySection = (list) => {
+  const counts = {};
+  for (const a of list) for (const s of specOf(a)) counts[s] = (counts[s] || 0) + 1;
+  return counts;
+};
+
+test("round-7 caps: no section exceeds its homepage cap or the 35% share on the final list", () => {
+  const articles = [
+    ...Array.from({ length: 8 }, (_, i) => art(i, ["energy"], { hoursAgo: 1 + i * 0.3, score: 25 - i })),
+    ...Array.from({ length: 5 }, (_, i) => art(i, ["deals"], { hoursAgo: 2 + i * 0.3, score: 24 - i })),
+    ...Array.from({ length: 4 }, (_, i) => art(i, ["telco"], { hoursAgo: 4 + i * 0.3, score: 20 - i })),
+    ...Array.from({ length: 4 }, (_, i) => art(i, ["infrastructure"], { hoursAgo: 5 + i * 0.3, score: 19 - i })),
+  ];
+  const list = shownOf(buildHomepageSections(articles, { now: NOW }));
+  const total = list.length;
+  const shareCap = Math.floor(SECTION_SHARE_MAX * Math.max(total, HOMEPAGE_TARGET_ITEMS));
+  for (const [section, count] of Object.entries(countBySection(list))) {
+    assert.ok(count <= Math.min(SECTION_HOMEPAGE_CAPS[section], shareCap), `${section}: ${count} of ${total}`);
+  }
+});
+
+test("round-7 caps: an item tagged Telecom AND Deals counts toward both sections (deals max 2 on the final list)", () => {
+  const tower = (i) => art(i, ["telco", "deals"], { hoursAgo: 1 + i * 0.2, score: 30 });
+  const articles = [
+    ...Array.from({ length: 3 }, (_, i) => tower(i)),
+    ...Array.from({ length: 2 }, (_, i) => art(i, ["deals"], { hoursAgo: 3 + i, score: 22 })),
+    ...Array.from({ length: 4 }, (_, i) => art(i, ["telco"], { hoursAgo: 6 + i, score: 18 })),
+    ...Array.from({ length: 3 }, (_, i) => art(i, ["infrastructure"], { hoursAgo: 9 + i, score: 17 })),
+  ];
+  const list = shownOf(buildHomepageSections(articles, { now: NOW }));
+  const dealsTagged = list.filter((a) => a.categories.includes("deals")).length;
+  assert.ok(dealsTagged <= SECTION_HOMEPAGE_CAPS["deals-companies"], `deals-tagged: ${dealsTagged}`);
+});
+
+test("round-7 caps: the reviewer's case — 4 energy stories in a list of 9 is trimmed to 3 (33%) and the lead survives", () => {
+  const lead = art(0, ["energy"], { score: 50 });
+  const energy = Array.from({ length: 3 }, (_, i) => art(i + 1, ["energy"], { score: 20 - i }));
+  const others = [
+    art(0, ["telco"]), art(1, ["telco"]), art(0, ["infrastructure"]), art(1, ["infrastructure"]), art(0, ["regulators"]),
+  ];
+  const input = { lead, recent: [...energy, ...others], columns: {} };
+  const dropped = [];
+  const out = trimToSectionCaps(input, { onDrop: (a, reason) => dropped.push([a, reason]) });
+  assert.equal(out.lead, lead);
+  const all = [out.lead, ...out.recent].filter(Boolean);
+  assert.equal(all.filter((a) => a.categories.includes("energy")).length, 3);
+  assert.equal(dropped.length, 1);
+  assert.equal(dropped[0][0], energy[2], "the lowest-scoring energy story goes");
+  assert.equal(dropped[0][1].stage, "section_cap_final");
+});
+
+test("round-7 caps: trimming does not pad — slots freed by the cap stay empty unless backfill qualifies", () => {
+  const articles = Array.from({ length: 6 }, (_, i) => art(i, ["energy"], { hoursAgo: 1 + i * 0.3, score: 25 - i }));
+  const list = shownOf(buildHomepageSections(articles, { now: NOW }));
+  assert.ok(list.length <= SECTION_HOMEPAGE_CAPS["energy-grids"], `list ${list.length}`);
+  assert.ok(list.length >= 1);
 });
