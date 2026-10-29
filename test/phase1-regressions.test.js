@@ -512,17 +512,19 @@ test("spec section ids map onto existing PUBLIC_CATEGORIES slugs, and redirects 
   }
 });
 
-test("PublicHeader and sitemap only link to existing public section slugs", () => {
-  const headerSrc = readFileSync(fileURLToPath(new URL("../src/components/PublicHeader.js", import.meta.url)), "utf8");
+test("LandingHeader and sitemap only link to existing public section slugs", () => {
+  const headerSrc = readFileSync(fileURLToPath(new URL("../src/components/landing/LandingHeader.js", import.meta.url)), "utf8");
   const sitemapSrc = readFileSync(fileURLToPath(new URL("../src/app/sitemap.js", import.meta.url)), "utf8");
   const existingSlugs = ["deals", "telco", "energy", "infrastructure", "tenders", "regulators"];
   const forbidden = ["deals-companies", "telecom-fibre", "energy-grids", "infrastructure-works", "tenders-contracts", "regulators-policy", "finance"];
   for (const slug of forbidden) {
-    assert.ok(!headerSrc.includes(`/${slug}`), `PublicHeader should not link to /${slug}`);
+    assert.ok(!headerSrc.includes(`/${slug}`), `LandingHeader should not link to /${slug}`);
     assert.ok(!sitemapSrc.includes(`/${slug}`), `sitemap should not link to /${slug}`);
   }
+  // The header builds section links from NAV_SECTIONS (checked in landing.test.js); the sitemap
+  // names each slug.
+  assert.ok(headerSrc.includes("NAV_SECTIONS") && headerSrc.includes("sectionPath"));
   for (const slug of existingSlugs) {
-    assert.ok(headerSrc.includes(`/${slug}`), `PublicHeader should link to /${slug}`);
-    assert.ok(sitemapSrc.includes(`/${slug}`), `sitemap should link to /${slug}`);
+    assert.ok(sitemapSrc.includes(`"${slug}"`), `sitemap should list ${slug}`);
   }
 });

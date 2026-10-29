@@ -7,6 +7,7 @@ import { SubscribeForm } from "@/components/landing/SubscribeForm";
 import { StatusBanner } from "@/components/landing/StatusBanner";
 import { TelecomIcon, TRUST_ICONS } from "@/components/landing/icons";
 import { getLatestArticles } from "@/public-data";
+import { getNewsletterConfig } from "@/newsletter/config";
 import { insightPath } from "@/insights/content";
 
 // Launch focus is telecom-fibre (landing-copy.md), so the sample cards show one latest article
@@ -47,10 +48,17 @@ export async function SubscribePage({ lang }) {
   const copy = getLandingCopy(lang);
   const sourcePage = LANDING_ROUTES[lang].subscribe;
   const samples = await getSampleArticles();
+  // The sign-up API answers 503 "unavailable" until the newsletter env vars are set. Until then
+  // the page says sign-up opens soon instead of showing a form that cannot work; the form comes
+  // back by itself once the config is present (next revalidation, at most an hour).
+  const signupOpen = getNewsletterConfig().enabled;
+  const signupForm = (idSuffix) => signupOpen
+    ? <SubscribeForm lang={lang} sourcePage={sourcePage} idSuffix={idSuffix} />
+    : <p className="signup-closed" role="status">{copy.hero.signupClosed}</p>;
 
   return (
     <>
-      <LandingHeader lang={lang} />
+      <LandingHeader lang={lang} elHref={LANDING_ROUTES.el.subscribe} enHref={LANDING_ROUTES.en.subscribe} />
       <main>
         <section className="hero" id="subscribe">
           <div className="wrap">
@@ -68,7 +76,7 @@ export async function SubscribePage({ lang }) {
               <Suspense fallback={null}>
                 <StatusBanner lang={lang} />
               </Suspense>
-              <SubscribeForm lang={lang} sourcePage={sourcePage} idSuffix="hero" />
+              {signupForm("hero")}
               <p className="from-li">
                 {copy.hero.fromLinkedIn.before}
                 <a href={insightPath("fibre-switch", lang)}>{copy.hero.fromLinkedIn.link}</a>
@@ -100,9 +108,11 @@ export async function SubscribePage({ lang }) {
                 </div>
               ))}
             </div>
-            <a className="cta-link" href="#subscribe">
-              {copy.series.cta}
-            </a>
+            {signupOpen && (
+              <a className="cta-link" href="#subscribe">
+                {copy.series.cta}
+              </a>
+            )}
           </div>
         </section>
 
@@ -138,7 +148,7 @@ export async function SubscribePage({ lang }) {
                       </a>
                     </p>
                     <div className="src">
-                      {[article.sourceId, formatSampleDate(article.publishedAt)].filter(Boolean).join(" · ")}
+                      {[article.sourceName, formatSampleDate(article.publishedAt)].filter(Boolean).join(" · ")}
                     </div>
                   </article>
                 ))}
@@ -171,11 +181,11 @@ export async function SubscribePage({ lang }) {
               <h2>{copy.cta2.title}</h2>
               <p className="intro">{copy.cta2.intro}</p>
             </div>
-            <SubscribeForm lang={lang} sourcePage={sourcePage} idSuffix="cta2" />
+            {signupForm("cta2")}
           </div>
         </section>
       </main>
-      <LandingFooter lang={lang} />
+      <LandingFooter lang={lang} elHref={LANDING_ROUTES.el.subscribe} enHref={LANDING_ROUTES.en.subscribe} />
     </>
   );
 }

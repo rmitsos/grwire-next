@@ -55,6 +55,8 @@ export const LANDING_COPY = {
       wordmark: "GR WIRE",
       navSections: SECTION_LABELS,
       subscribeButton: "Εγγραφή",
+      searchLabel: "Αναζήτηση",
+      insightsLabel: "Insights",
     },
     hero: {
       chip: "Τηλεπικοινωνίες & Οπτικές Ίνες",
@@ -62,7 +64,8 @@ export const LANDING_COPY = {
       headlineSoft: "Μόνο στοιχεία με πηγή.",
       lead: "Ένα email κάθε εβδομάδα με τα σημαντικά της αγοράς, τις αποφάσεις των ρυθμιστών και τους μεγάλους διαγωνισμούς. Κάθε αριθμός έχει πηγή και ημερομηνία.",
       teaserSoon: "Σύντομα",
-      teaserNote: "Η πρώτη σειρά του GR Wire ξεκινά σύντομα.",
+      teaserNote: "Το πρώτο εβδομαδιαίο τεύχος ετοιμάζεται. Η εγγραφή ανοίγει σύντομα.",
+      signupClosed: "Η εγγραφή ανοίγει σύντομα. Το πρώτο εβδομαδιαίο τεύχος ετοιμάζεται.",
       // landing-copy.md, "Context line for LinkedIn arrivals" — verbatim, split around the link text.
       fromLinkedIn: { before: "Ήρθατε από μια ανάρτηση στο LinkedIn; Η πλήρης ανάλυση βρίσκεται ", link: "εδώ →", after: "." },
     },
@@ -154,6 +157,8 @@ export const LANDING_COPY = {
       wordmark: "GR WIRE",
       navSections: SECTION_LABELS,
       subscribeButton: "Subscribe",
+      searchLabel: "Search",
+      insightsLabel: "Insights",
     },
     hero: {
       chip: "Telecom & fibre",
@@ -161,7 +166,8 @@ export const LANDING_COPY = {
       headlineSoft: "Only sourced facts.",
       lead: "One email a week with the main market news, regulator decisions and large tenders. Every figure carries its source and date.",
       teaserSoon: "Coming soon",
-      teaserNote: "GR Wire's first series starts soon.",
+      teaserNote: "The first weekly issue is being prepared. Sign-up opens soon.",
+      signupClosed: "Sign-up opens soon. The first weekly issue is being prepared.",
       // landing-copy.md, "Context line for LinkedIn arrivals" — verbatim, split around the link text.
       fromLinkedIn: { before: "Came from a LinkedIn post? The full analysis is ", link: "here →", after: "." },
     },

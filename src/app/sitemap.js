@@ -1,4 +1,4 @@
-import { LANDING_ROUTES } from "../landing/routes.js";
+import { LANDING_ROUTES, sectionPath } from "../landing/routes.js";
 import { listInsights, insightPath, insightsIndexPath } from "../insights/content.js";
 import { getNavVisibility } from "../public-data.js";
 
@@ -47,22 +47,32 @@ export function buildInsightSitemapEntries(base, elInsights, enInsights) {
   return [...indexEntries, ...articleEntries];
 }
 
+// Pure: the wire pages in both languages. /tenders and /regulators (and their /en twins) are
+// left out until their section has >=3 items in the last 30 days (the pages still resolve,
+// they're just not advertised). Tenders stays before Regulators, per the nav order.
+export function buildPublicSitemapEntries(base, navVisibility) {
+  const sections = ["deals", "telco", "energy", "infrastructure"];
+  if (navVisibility.tenders?.shown) sections.push("tenders");
+  if (navVisibility.regulators?.shown) sections.push("regulators");
+  const pagePairs = [
+    { el: LANDING_ROUTES.el.home, en: LANDING_ROUTES.en.home, priority: 1 },
+    ...sections.map((slug) => ({ el: sectionPath("el", slug), en: sectionPath("en", slug), priority: 0.8 })),
+    { el: LANDING_ROUTES.el.search, en: LANDING_ROUTES.en.search, priority: 0.8 },
+  ];
+  return pagePairs.flatMap((pair) => {
+    const alternates = { languages: { el: `${base}${pair.el}`, en: `${base}${pair.en}` } };
+    return ["el", "en"].map((lang) => ({
+      url: `${base}${pair[lang]}`,
+      changeFrequency: "daily",
+      priority: pair.priority,
+      alternates,
+    }));
+  });
+}
+
 export default async function sitemap() {
   const base = process.env.NEXT_PUBLIC_SITE_URL || "https://grwire.com";
-  // sources-spec.md round-4 §7: /tenders and /regulators are excluded from
-  // the sitemap until their section has >=3 items in the last 30 days (the
-  // pages still resolve, they're just not advertised). Tenders stays
-  // before Regulators among the two, per the nav order.
-  const navVisibility = await getNavVisibility();
-  const paths = ["", "/deals", "/telco", "/energy", "/infrastructure"];
-  if (navVisibility.tenders.shown) paths.push("/tenders");
-  if (navVisibility.regulators.shown) paths.push("/regulators");
-  paths.push("/search");
-  const pages = paths.map((path) => ({
-    url: `${base}${path}`,
-    changeFrequency: "daily",
-    priority: path ? 0.8 : 1,
-  }));
+  const pages = buildPublicSitemapEntries(base, await getNavVisibility());
 
   const subscribe = {
     url: `${base}${LANDING_ROUTES.el.subscribe}`,

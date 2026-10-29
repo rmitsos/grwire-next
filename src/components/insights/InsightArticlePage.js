@@ -81,7 +81,7 @@ export function InsightArticlePage({ lang, insight }) {
           </div>
         </article>
       </main>
-      <LandingFooter lang={lang} />
+      <LandingFooter lang={lang} elHref={insightPath(insight.slug, "el")} enHref={insightPath(insight.slug, "en")} />
     </>
   );
 }

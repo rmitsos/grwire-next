@@ -3,7 +3,7 @@ import { collapseDuplicateArticles, cleanTitleForSource } from "./article-qualit
 import { DEFAULT_WATCH_RULES, rankItems } from "./watch-rules.js";
 import { storyDateToIso } from "./story-date.js";
 import { canonicalizeUrl } from "./sources/utils.js";
-import { isGoogleNewsUrl } from "./google-news.js";
+import { cleanOutgoingLink, publicSourceName, readFeedSummary } from "./public-links.js";
 import { SOURCES } from "../config/sources.js";
 import {
   BACKFILL_MAX_AGE_HOURS,
@@ -96,7 +96,9 @@ export const SECTION_SLUG_BY_SPEC_ID = Object.fromEntries(
  * stage (same shape as feed-rules.js noiseRejectReason) or `{ stage }` for
  * day_cap/duplicate.
  */
-export function selectArticles(rows, { category, limit = 80, now = Date.now(), onDrop } = {}) {
+// The category-independent half of the read-time rules (noise, day cap, duplicates, telco/deals
+// gating). Expensive on a full 300-row read, so callers that need several categories run it once.
+function prepareRows(rows, { now = Date.now(), onDrop } = {}) {
   const withoutNoise = rows.filter((row) => {
     const reason = noiseRejectReason(row);
     if (!reason) return true;
@@ -105,14 +107,22 @@ export function selectArticles(rows, { category, limit = 80, now = Date.now(), o
   });
   const dayCapped = applyDayCap(withoutNoise, { now, onDrop: (row) => onDrop?.(row, { stage: "day_cap" }) });
   const deduped = collapseDuplicateArticles(dayCapped, { onDrop: (row) => onDrop?.(row, { stage: "duplicate" }) });
-  let cleaned = deduped.map(reclassifyRow)
+  return deduped.map(reclassifyRow)
     .flatMap((row) => dropTelcoWithoutNetworkAngle(row, onDrop))
     .flatMap((row) => dropDealsWithoutCompany(row, onDrop));
+}
+
+function pickRows(prepared, { category, limit = 80, onDrop } = {}) {
+  let cleaned = prepared;
   if (category) {
     cleaned = cleaned.filter((row) => row.categories.includes(category));
     cleaned = enforceEventCapPerSection(cleaned, onDrop);
   }
   return cleaned.slice(0, limit).map(toArticle);
+}
+
+export function selectArticles(rows, { category, limit = 80, now = Date.now(), onDrop } = {}) {
+  return pickRows(prepareRows(rows, { now, onDrop }), { category, limit, onDrop });
 }
 
 // round-4 telco rule: telecom-fibre is only a valid category when the item
@@ -164,25 +174,38 @@ function enforceEventCapPerSection(rows, onDrop) {
   return rows.filter((row) => !dropUrls.has(row.canonical_url));
 }
 
-export async function getLatestArticles({ category, query, limit = 80 } = {}) {
+const RECENT_ROWS_TTL_MS = 60 * 1000;
+const recentRows = new Map();
+
+async function readArticleRows({ query, limit }) {
   const sql = getSql();
   if (!sql) return [];
+  const queryLimit = Math.min(Math.max(limit * 3, limit), 300);
+  if (query) {
+    const pattern = `%${query}%`;
+    return sql`
+      SELECT * FROM articles
+      WHERE title ILIKE ${pattern} OR summary ILIKE ${pattern}
+      ORDER BY COALESCE(published_at, updated_at) DESC NULLS LAST LIMIT ${queryLimit}
+    `;
+  }
+  // Every public page reads the same newest rows (the page body and the shared nav both do), so
+  // share one in-flight/recent read per process instead of one 300-row query per page. A static
+  // build renders dozens of pages at once and otherwise stalls on that many identical queries.
+  const hit = recentRows.get(queryLimit);
+  if (hit && Date.now() - hit.at < RECENT_ROWS_TTL_MS) return hit.promise;
+  const promise = Promise.resolve(sql`
+    SELECT * FROM articles
+    ORDER BY COALESCE(published_at, updated_at) DESC NULLS LAST LIMIT ${queryLimit}
+  `);
+  recentRows.set(queryLimit, { at: Date.now(), promise });
+  promise.catch(() => { if (recentRows.get(queryLimit)?.promise === promise) recentRows.delete(queryLimit); });
+  return promise;
+}
+
+export async function getLatestArticles({ category, query, limit = 80 } = {}) {
   try {
-    let rows;
-    const queryLimit = Math.min(Math.max(limit * 3, limit), 300);
-    if (query) {
-      const pattern = `%${query}%`;
-      rows = await sql`
-        SELECT * FROM articles
-        WHERE title ILIKE ${pattern} OR summary ILIKE ${pattern}
-        ORDER BY COALESCE(published_at, updated_at) DESC NULLS LAST LIMIT ${queryLimit}
-      `;
-    } else {
-      rows = await sql`
-        SELECT * FROM articles
-        ORDER BY COALESCE(published_at, updated_at) DESC NULLS LAST LIMIT ${queryLimit}
-      `;
-    }
+    const rows = await readArticleRows({ query, limit });
     // sources-spec.md §5 noise_hard_reject and the §5/§2 per-source day cap
     // apply at read time too, so previously-stored rows that predate these
     // rules (or that ingest keeps re-upserting) disappear from the pages
@@ -216,17 +239,34 @@ export function computeNavVisibility(articles = [], { now = Date.now() } = {}) {
 }
 
 /**
- * DB-backed wrapper of computeNavVisibility; getLatestArticles already
- * returns [] with no DATABASE_URL, so both links are hidden. A read failure
- * is swallowed (hidden, not thrown): this runs in the shared public layout
- * on every page, and a nav-visibility hiccup must not take the whole site
- * down the way a real page-content read failure legitimately would.
+ * DB-backed wrapper of computeNavVisibility. It counts exactly what each section page lists:
+ * the same rows (the 300 newest, as for any limit-100 read) run through the same selection with
+ * that page's category and limit (selectArticles({ category, limit: 100 }), the call behind
+ * getLatestArticles on /tenders and /regulators), so the nav can never promise a page with
+ * fewer than 3 items. No DATABASE_URL returns no rows, so both links are hidden. A read failure
+ * is swallowed (hidden, not thrown): this runs in the shared public layout on every page, and a
+ * nav-visibility hiccup must not take the whole site down the way a real page-content read
+ * failure legitimately would.
  */
+export function navVisibilityFromRows(rows, { now = Date.now() } = {}) {
+  const prepared = prepareRows(rows, { now });
+  const articles = ["tenders", "regulators"].flatMap((category) =>
+    pickRows(prepared, { category, limit: 100 }));
+  return computeNavVisibility(articles, { now });
+}
+
+let navCache;
+
 export async function getNavVisibility({ now = Date.now() } = {}) {
+  // Every public page renders the shared nav; computing it is a full read-rules pass over the
+  // newest rows, so share one result per process for a minute (a static build renders dozens).
+  if (navCache && now - navCache.at < RECENT_ROWS_TTL_MS) return navCache.promise;
+  const promise = readArticleRows({ limit: 100 }).then((rows) => navVisibilityFromRows(rows, { now }));
+  navCache = { at: now, promise };
   try {
-    const articles = await getLatestArticles({ limit: 300 });
-    return computeNavVisibility(articles, { now });
+    return await promise;
   } catch {
+    if (navCache?.promise === promise) navCache = undefined;
     return computeNavVisibility([], { now });
   }
 }
@@ -437,23 +477,33 @@ export async function searchStories({ query, limit = 50 } = {}) {
   }
 }
 
+// Display-time shaping (nothing is written back): the link is unwrapped from Google News when
+// the original URL is in the data and stripped of tracking params, the title loses a trailing
+// " - Source" that matches the item's source, and the public source name replaces the internal
+// source id. `viaGoogleNews` marks links that still go through news.google.com.
 function toArticle(row) {
+  const source = SOURCE_BY_ID.get(row.source_id);
+  const link = cleanOutgoingLink(row.canonical_url, row.metadata);
+  const feed = readFeedSummary(row.title, row.summary);
+  const publisher = row.metadata?.publisher || feed.publisher;
   let hostname;
-  try { hostname = new URL(row.canonical_url).hostname.replace(/^www\./, ""); } catch { hostname = undefined; }
+  try { hostname = new URL(link.url).hostname.replace(/^www\./, ""); } catch { hostname = undefined; }
   return {
     id: row.id,
-    url: row.canonical_url,
-    title: cleanTitleForSource(row.title, [SOURCE_BY_ID.get(row.source_id)?.name, hostname, row.metadata?.publisher]),
-    summary: row.summary,
+    url: link.url,
+    viaGoogleNews: link.viaGoogleNews,
+    title: cleanTitleForSource(row.title, [source?.name, hostname, publisher]),
+    summary: feed.summary,
     publishedAt: row.published_at ? new Date(row.published_at).toISOString() : null,
     sourceId: row.source_id,
+    sourceName: publicSourceName({ publisher, configuredName: source?.name, url: link.url }),
     score: Number(row.score),
     categories: row.categories || [],
     relevance: row.relevance || [],
-    // rows stored before Google News flagging existed have no metadata.sectionOnly,
-    // so any news.google.com link is treated as sectionOnly at read time too.
+    // An item is section-only while its link still points at news.google.com (unresolved);
+    // a link unwrapped at display time is a normal publisher link.
     metadata: {
-      sectionOnly: Boolean(row.metadata?.sectionOnly) || isGoogleNewsUrl(row.canonical_url),
+      sectionOnly: link.viaGoogleNews,
       publisher: row.metadata?.publisher,
       relatedPublishers: row.metadata?.relatedPublishers || [],
     },
@@ -468,10 +518,26 @@ function toStory(row) {
     standfirst: row.standfirst,
     body: row.body || [],
     category: row.category,
-    confidence: Number(row.confidence || 0),
     articleIds: row.article_ids || [],
-    evidence: row.evidence || [],
+    evidence: (row.evidence || []).map(toPublicEvidence),
     metadata: row.metadata || {},
+  };
+}
+
+// Story evidence is stored with internal ids and scores; the public shape carries only what a
+// reader sees: a clean link, a clean title and the publisher name.
+function toPublicEvidence(item) {
+  const source = SOURCE_BY_ID.get(item.sourceId);
+  const link = cleanOutgoingLink(item.url, item.metadata);
+  let hostname;
+  try { hostname = new URL(link.url).hostname.replace(/^www\./, ""); } catch { hostname = undefined; }
+  return {
+    id: item.id,
+    url: link.url,
+    viaGoogleNews: link.viaGoogleNews,
+    title: cleanTitleForSource(item.title, [source?.name, hostname, item.publisher]),
+    publishedAt: item.publishedAt,
+    sourceName: publicSourceName({ publisher: item.publisher, configuredName: source?.name, url: link.url }),
   };
 }
 
