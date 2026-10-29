@@ -60,12 +60,10 @@ export const LANDING_COPY = {
     },
     hero: {
       chip: "Τηλεπικοινωνίες & Οπτικές Ίνες",
-      headlineMain: "Η ελληνική αγορά τηλεπικοινωνιών και ίνας, σε ένα email την εβδομάδα.",
+      headlineMain: "Η ελληνική αγορά τηλεπικοινωνιών και ίνας, κάθε πρωί.",
       headlineSoft: "Μόνο στοιχεία με πηγή.",
-      lead: "Ένα email κάθε εβδομάδα με τα σημαντικά της αγοράς, τις αποφάσεις των ρυθμιστών και τους μεγάλους διαγωνισμούς. Κάθε αριθμός έχει πηγή και ημερομηνία.",
-      teaserSoon: "Σύντομα",
-      teaserNote: "Το πρώτο εβδομαδιαίο τεύχος ετοιμάζεται. Η εγγραφή ανοίγει σύντομα.",
-      signupClosed: "Η εγγραφή ανοίγει σύντομα. Το πρώτο εβδομαδιαίο τεύχος ετοιμάζεται.",
+      lead: "Κάθε εργάσιμη ένα σύντομο email με τα νέα της αγοράς, τις αποφάσεις των ρυθμιστών και τους διαγωνισμούς, μαζί με το σχόλιό μας για το τι σημαίνουν. Κάθε αριθμός έχει πηγή και ημερομηνία.",
+      signupClosed: "Η εγγραφή ανοίγει σύντομα.",
       // landing-copy.md, "Context line for LinkedIn arrivals" — verbatim, split around the link text.
       fromLinkedIn: { before: "Ήρθατε από μια ανάρτηση στο LinkedIn; Η πλήρης ανάλυση βρίσκεται ", link: "εδώ →", after: "." },
     },
@@ -73,36 +71,28 @@ export const LANDING_COPY = {
       fieldLabel: "Το email σας",
       placeholder: "onoma@etaireia.gr",
       button: "Εγγραφή",
-      freeNote: "Δωρεάν. Ένα email την εβδομάδα.",
+      freeNote: "Δωρεάν. Χωρίς διαφημίσεις.",
       consentText: CONSENT_TEXT.el,
       privacyLinkLabel: "Πολιτική απορρήτου",
-    },
-    series: {
-      kicker: "Ξεκινάμε με",
-      title: "Η πρώτη σειρά: η ίνα στην Ελλάδα, σε τρεις ερωτήσεις",
-      intro: "Τρία σύντομα κείμενα, ένα κάθε εβδομάδα. Το καθένα ξεκινά από μια ερώτηση και απαντά με στοιχεία.",
-      items: [
-        { n: "1/3", question: "Πώς προχωρά η ανάπτυξη της οπτικής ίνας;" },
-        { n: "2/3", question: "Πληρώνουν πράγματι οι συνδρομητές για ίνα;" },
-        { n: "3/3", question: "Νιώθουμε την ταχύτητα; Router, Wi-Fi και πακέτο" },
-      ],
-      soon: "Σύντομα",
-      cta: "Λάβετε τη σειρά στο email σας →",
     },
     whatYouGet: {
       title: "Τι λαμβάνετε",
       items: [
         {
-          title: "Ένα Insight την εβδομάδα",
-          text: "Ένα θέμα, εξηγημένο: τα βασικά νούμερα με πηγή, τι σημαίνει για παρόχους, αναδόχους και επιχειρήσεις, τι να παρακολουθήσουμε.",
+          title: "Η ημερήσια ενημέρωση",
+          text: "Κάθε εργάσιμη το πρωί, τα σημαντικά της αγοράς, καθένα με σύνδεσμο στην πηγή και με λίγες γραμμές σχόλιο για το τι σημαίνει.",
         },
         {
-          title: "Η ημερήσια σύνοψη",
-          text: "3–5 σημεία κάθε πρωί στο grwire.com, το καθένα με σύνδεσμο στην πηγή. Τα πιο σημαντικά της εβδομάδας μπαίνουν στο email.",
+          title: "Τα Insights μας",
+          text: "Όταν δημοσιεύουμε ένα Insight, μπαίνει στο email της ημέρας: ένα θέμα εξηγημένο, με τα βασικά νούμερα και την πηγή τους.",
         },
         {
           title: "Ρυθμιστές και διαγωνισμοί",
           text: "Διαβουλεύσεις της ΕΕΤΤ με ημερομηνία λήξης και διαγωνισμοί άνω των 500.000 € από ΚΗΜΔΗΣ και Διαύγεια: φορέας, αντικείμενο, ποσό, προθεσμία.",
+        },
+        {
+          title: "Χωρίς διαφημίσεις",
+          text: "Δεν φιλοξενούμε διαφημίσεις ούτε χορηγούμενο περιεχόμενο. Το GR Wire το εκδίδει η Tareno Systems.",
         },
       ],
     },
@@ -121,8 +111,7 @@ export const LANDING_COPY = {
       ],
     },
     cta2: {
-      title: "Μία φορά την εβδομάδα, πέντε λεπτά.",
-      intro: "Ξεκινάμε με τη σειρά για την οπτική ίνα. Ακολουθούν θέματα από τους ρυθμιστές.",
+      title: "Κάθε πρωί, πέντε λεπτά.",
     },
     footer: {
       wordmark: "GR WIRE",
@@ -133,20 +122,27 @@ export const LANDING_COPY = {
     },
     privacy: {
       title: "Πολιτική απορρήτου",
-      // subscribe-flow.md, "Privacy page line (EL)" — verbatim, nothing added.
-      body: "Κρατάμε μόνο τη διεύθυνση email σας και την ημερομηνία που συμφωνήσατε, για να σας στέλνουμε το εβδομαδιαίο email του GR Wire. Δεν τη μοιραζόμαστε με τρίτους, εκτός από την υπηρεσία που στέλνει τα email για λογαριασμό μας. Μπορείτε να διαγραφείτε ή να ζητήσετε τη διαγραφή των στοιχείων σας όποτε θέλετε.",
+      // subscribe-copy-v2.md, "Privacy line" — verbatim; `details` is the controller/processor/retention list.
+      body: "Η Tareno Systems κρατά μόνο τη διεύθυνση email σας και την ημερομηνία που συμφωνήσατε, για να σας στέλνει το ημερήσιο email του GR Wire. Δεν τη μοιραζόμαστε με τρίτους, εκτός από την υπηρεσία που στέλνει τα email για λογαριασμό μας. Μπορείτε να διαγραφείτε ή να ζητήσετε τη διαγραφή των στοιχείων σας όποτε θέλετε.",
+      details: [
+        "Υπεύθυνος επεξεργασίας: Tareno Systems (Δημήτρης Ρούσσος), tarenosystems.com.",
+        "Εκτελών την επεξεργασία: Amazon SES (Amazon Web Services), περιοχή ΕΕ (Φρανκφούρτη), μόνο για την αποστολή των email.",
+        "Εγγραφές που δεν επιβεβαιώνονται διαγράφονται μέσα σε 7 ημέρες.",
+        "Δεν μετράμε ανοίγματα ή κλικ στα email και δεν υπάρχουν διαφημίσεις.",
+      ],
+      contactLabel: "Για διαγραφή στοιχείων ή απορίες:",
       backLink: "← Πίσω στην αρχική",
     },
     unsubscribe: {
       title: "Διαγραφή από το email του GR Wire",
-      intro: "Πατήστε το παρακάτω κουμπί για να διαγραφείτε από το εβδομαδιαίο email του GR Wire. Η ενέργεια αυτή δεν μπορεί να αναιρεθεί.",
+      intro: "Πατήστε το παρακάτω κουμπί για να διαγραφείτε από το ημερήσιο email του GR Wire. Η ενέργεια αυτή δεν μπορεί να αναιρεθεί.",
       button: "Διαγραφή",
       missingToken: "Ο σύνδεσμος διαγραφής δεν είναι έγκυρος.",
       backLink: "← Πίσω στην αρχική",
     },
     confirmed: {
       title: "Η εγγραφή σας επιβεβαιώθηκε",
-      body: "Είστε στη λίστα. Θα λαμβάνετε το εβδομαδιαίο email του GR Wire, με δυνατότητα διαγραφής όποτε θέλετε.",
+      body: "Η εγγραφή σας επιβεβαιώθηκε. Το πρώτο email έρχεται το επόμενο εργάσιμο πρωί.",
       backLink: "← Πίσω στην αρχική",
     },
     statusMessages: STATUS_MESSAGES.el,
@@ -162,12 +158,10 @@ export const LANDING_COPY = {
     },
     hero: {
       chip: "Telecom & fibre",
-      headlineMain: "Greek telecom and fibre in one weekly email.",
+      headlineMain: "Greek telecom and fibre, every morning.",
       headlineSoft: "Only sourced facts.",
-      lead: "One email a week with the main market news, regulator decisions and large tenders. Every figure carries its source and date.",
-      teaserSoon: "Coming soon",
-      teaserNote: "The first weekly issue is being prepared. Sign-up opens soon.",
-      signupClosed: "Sign-up opens soon. The first weekly issue is being prepared.",
+      lead: "A short email every weekday with the market news, regulator decisions and tenders, plus our comment on what they mean. Every figure carries its source and date.",
+      signupClosed: "Sign-up opens soon.",
       // landing-copy.md, "Context line for LinkedIn arrivals" — verbatim, split around the link text.
       fromLinkedIn: { before: "Came from a LinkedIn post? The full analysis is ", link: "here →", after: "." },
     },
@@ -175,36 +169,28 @@ export const LANDING_COPY = {
       fieldLabel: "Your email",
       placeholder: "name@company.com",
       button: "Subscribe",
-      freeNote: "Free. One email a week.",
+      freeNote: "Free. No ads.",
       consentText: CONSENT_TEXT.en,
       privacyLinkLabel: "Privacy policy",
-    },
-    series: {
-      kicker: "Starting with",
-      title: "The first series: fibre in Greece, in three questions",
-      intro: "Three short pieces, one a week. Each starts with a question and answers it with data.",
-      items: [
-        { n: "1/3", question: "How is the fibre rollout progressing?" },
-        { n: "2/3", question: "Do subscribers actually pay for fibre?" },
-        { n: "3/3", question: "Do we actually feel the speed? Router, Wi-Fi and plan tier" },
-      ],
-      soon: "Coming soon",
-      cta: "Get the series by email →",
     },
     whatYouGet: {
       title: "What you get",
       items: [
         {
-          title: "One Insight a week",
-          text: "One topic, explained: the key figures with sources, what it means for operators, contractors and businesses, and what to watch.",
+          title: "The daily update",
+          text: "Every weekday morning, the main market items, each linked to its source, with a few lines of comment on what it means.",
         },
         {
-          title: "The daily brief",
-          text: "3–5 points every morning on grwire.com, each linked to its source. The week's most important ones go into the email.",
+          title: "Our Insights",
+          text: "When we publish an Insight, it goes into that day's email: one topic explained, with the key figures and their sources.",
         },
         {
           title: "Regulators and tenders",
           text: "EETT consultations with closing dates, and tenders above €500k from KIMDIS and Diavgeia: buyer, object, value, deadline.",
+        },
+        {
+          title: "No ads",
+          text: "We carry no advertising or sponsored content. GR Wire is published by Tareno Systems.",
         },
       ],
     },
@@ -223,8 +209,7 @@ export const LANDING_COPY = {
       ],
     },
     cta2: {
-      title: "Once a week, five minutes.",
-      intro: "We start with the fibre series. Regulation topics follow.",
+      title: "Every morning, five minutes.",
     },
     footer: {
       wordmark: "GR WIRE",
@@ -235,29 +220,32 @@ export const LANDING_COPY = {
     },
     privacy: {
       title: "Privacy policy",
-      // subscribe-flow.md, "Privacy page line (EN)" — verbatim, nothing added.
-      body: "We keep only your email address and the date you agreed, to send you GR Wire's weekly email. We don't share it with anyone except the service that sends the emails for us. You can unsubscribe or ask us to delete your data at any time.",
+      // subscribe-copy-v2.md, "Privacy line" — verbatim; `details` is the controller/processor/retention list.
+      body: "Tareno Systems keeps only your email address and the date you agreed, to send you GR Wire's daily email. We don't share it with anyone except the service that sends the emails for us. You can unsubscribe or ask us to delete your data at any time.",
+      details: [
+        "Data controller: Tareno Systems (Dimitris Roussos), tarenosystems.com.",
+        "Processor: Amazon SES (Amazon Web Services), EU region (Frankfurt), used only to send the emails.",
+        "Sign-ups that are never confirmed are deleted within 7 days.",
+        "We don't track opens or clicks in our emails, and there are no ads.",
+      ],
+      contactLabel: "To have your data deleted, or with any question:",
       backLink: "← Back to the homepage",
     },
     unsubscribe: {
       title: "Unsubscribe from GR Wire's email",
-      intro: "Click the button below to unsubscribe from GR Wire's weekly email. This can't be undone.",
+      intro: "Click the button below to unsubscribe from GR Wire's daily email. This can't be undone.",
       button: "Unsubscribe",
       missingToken: "This unsubscribe link isn't valid.",
       backLink: "← Back to the homepage",
     },
     confirmed: {
       title: "Your subscription is confirmed",
-      body: "You're on the list. You'll receive GR Wire's weekly email, and you can unsubscribe at any time.",
+      body: "You're subscribed. Your first email arrives on the next weekday morning.",
       backLink: "← Back to the homepage",
     },
     statusMessages: STATUS_MESSAGES.en,
   },
 };
-
-// Privacy policy explicitly leaves the data-controller identity open (subscribe-flow.md doesn't
-// name one yet) — recorded here only as a build-time note, never rendered.
-// Data controller: TBD.
 
 export function getLandingCopy(lang) {
   return LANDING_COPY[lang === "en" ? "en" : "el"];

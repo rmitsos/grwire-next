@@ -83,36 +83,6 @@ export async function SubscribePage({ lang }) {
                 {copy.hero.fromLinkedIn.after}
               </p>
             </div>
-            <aside className="teaser" aria-label={copy.series.title}>
-              <span className="chip" style={{ "--c": "var(--sec-telecom-fibre)", border: 0, padding: 0 }}>
-                {copy.hero.chip}
-              </span>
-              <p className="teaser-q">{copy.series.items[0].question}</p>
-              <p className="teaser-note">{copy.hero.teaserNote}</p>
-              <span className="soon">{copy.hero.teaserSoon}</span>
-            </aside>
-          </div>
-        </section>
-
-        <section className="block">
-          <div className="wrap">
-            <p className="kicker">{copy.series.kicker}</p>
-            <h2>{copy.series.title}</h2>
-            <p className="intro">{copy.series.intro}</p>
-            <div className="series-grid">
-              {copy.series.items.map((item) => (
-                <div className="step" key={item.n}>
-                  <span className="step-n">{item.n}</span>
-                  <h3>{item.question}</h3>
-                  <span className="soon">{copy.series.soon}</span>
-                </div>
-              ))}
-            </div>
-            {signupOpen && (
-              <a className="cta-link" href="#subscribe">
-                {copy.series.cta}
-              </a>
-            )}
           </div>
         </section>
 
@@ -179,7 +149,6 @@ export async function SubscribePage({ lang }) {
           <div className="wrap">
             <div>
               <h2>{copy.cta2.title}</h2>
-              <p className="intro">{copy.cta2.intro}</p>
             </div>
             {signupForm("cta2")}
           </div>
