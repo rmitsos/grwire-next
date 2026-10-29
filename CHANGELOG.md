@@ -13,6 +13,38 @@
 - Insights #1 (AI in Greek SMEs) and #2 (fibre switch), EL + EN, published: the DRAFT/ΠΡΟΣΧΕΔΙΟ marker is removed from each file's first comment, so the pages are indexable, drop the draft label and appear in the sitemap.
 
 ### Added
+- Round-6c (culture_csr exception, final): sponsorship and award words (χορηγία/χορηγός forms,
+  βραβεύ*, εθελοντικ*) override the network/business/operator-name exception entirely
+  (`hasCultureOverrideTerm`), so "Χορηγός του φεστιβάλ η Cosmote" is dropped. A € figure alone no
+  longer rescues a title; it does only together with σύμβαση, επένδυση, εξαγορά, διαγωνισμός or
+  δίκτυο (inflected). The έκθεση-as-report protections are unchanged. Also: έκθεσης (genitive
+  singular) and χορηγοί (plural) were missing from the term lists and are added.
+- Round-6b: (1) new `culture_csr` noise group in `noiseRejectReason` (title-only, all sources, so it
+  drops at scan time and in every feed and section): έκθεση, Τέχνη, πολιτισμ*, χορηγία/χορηγός,
+  φεστιβάλ*, βραβεύ*, εθελοντ*. Kept when the title has a network/business keyword (spec
+  section lists + telco network-angle terms, minus the ambiguous εργ*, ιστο*, παροχ*, νοικοκυρι*;
+  "δικτύωση" is ignored) or a € figure. "Έκθεση" meaning "report" is kept when the only hit is
+  έκθεση and the title has a report cue (ετήσια, αξιολόγηση, BEREC, ΟΟΣΑ ...) or reads
+  "έκθεση του/της <ACRONYM>" (ΔΕΗ excluded). χορήγηση and τεχνητή are not matched.
+  (2) Homepage-only fresh-score floor `HOMEPAGE_FRESH_MIN_SCORE` = 5: non-backfill items under 5 are
+  dropped in `checkEligible` (stage `below_fresh_floor`); backfill keeps its own floors; section pages
+  and other feeds are unchanged. Review dump header gains `rules.homepageFreshMinScore`.
+- Round-6 homepage fill (replaces the round-4 "fill to 12" rule): the backfill now tops up to a
+  target of 10 (`HOMEPAGE_TARGET_ITEMS`) and never pads below its floors, so empty slots stay
+  empty. Items up to 7 days old backfill at score >= 10 (`BACKFILL_MIN_SCORE`); items 8-21 days
+  old (`TIER1_BACKFILL_MAX_AGE_HOURS`, "still open") backfill only when they come from a tier-1
+  source and the title is a formal act (action-word gate: Δημόσια Διαβούλευση, Πρόσκληση,
+  Απόφαση ...) at score >= 20 after the boost (`TIER1_BACKFILL_MIN_SCORE`); those are marked
+  `article.homepageBackfillTier1`. Agenda items and event pieces never backfill, whatever their
+  score. Fresh items always rank above backfilled ones and may still exceed 10
+  (`HOMEPAGE_MAX_ITEMS` 20); the pool is ordered score desc, then newest first.
+  `HOMEPAGE_BACKFILL_MIN_ITEMS` is removed. New helpers in `public-data.js`
+  (`homepageBackfillWindowHours`, `homepageBackfillIneligibleReason`) feed `review-dump.js`, which
+  gains the `backfill_ineligible` drop stage (reasons `agenda_item`, `event_piece`,
+  `below_backfill_floor`), `homepageBackfillTier1` on homepage items and
+  `header.rules.homepageTargetItems`. The r5 rules are unchanged (agenda beats action words unless
+  the title starts with the formal act; agenda detection on all sources; fuel-drop check on
+  headlines only; a company name alone qualifies for deals).
 - Round-4 feed rules: homepage backfill (fills to 12 items from up to 7-day-old coverage when
   fewer than 12 are <72h old, `article.homepageBackfill`); event/conference-piece suppression
   (`isEventPiece`/`hasFigureOrDecisionSignal` in `feed-rules.js`) with a homepage ban (never lead,

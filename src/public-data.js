@@ -7,9 +7,13 @@ import { cleanOutgoingLink, publicSourceName, readFeedSummary } from "./public-l
 import { SOURCES } from "../config/sources.js";
 import {
   BACKFILL_MAX_AGE_HOURS,
+  BACKFILL_MIN_SCORE,
+  TIER1_BACKFILL_MAX_AGE_HOURS,
+  TIER1_BACKFILL_MIN_SCORE,
   DEFAULT_DAY_CAP_PER_SOURCE,
   DEFAULT_HOME_CAP_PER_SOURCE,
-  HOMEPAGE_BACKFILL_MIN_ITEMS,
+  HOMEPAGE_TARGET_ITEMS,
+  HOMEPAGE_FRESH_MIN_SCORE,
   HOMEPAGE_MAX_ITEMS,
   SECTION_HOMEPAGE_CAPS,
   SECTION_NAV_WINDOW_DAYS,
@@ -280,14 +284,20 @@ export async function getNavVisibility({ now = Date.now() } = {}) {
  * Also enforces, across lead + recent + columns together:
  *  - sources-spec.md §3 max_age_hours.news: only items published within the
  *    last 72h are homepage-eligible (items with no publishedAt never are) —
- *    EXCEPT round-4's backfill: whenever fewer than HOMEPAGE_BACKFILL_MIN_ITEMS
- *    (12) items actually end up on the homepage after all caps/rules below
- *    (not just when fewer than 12 are <72h old — a well-supplied fresh set
- *    can still be whittled down under 12 by home_cap/section caps/event/Cyprus
- *    rules), items up to BACKFILL_MAX_AGE_HOURS (7 days) old fill the
- *    remainder, highest-scoring first (ties: newest), marked
- *    `homepageBackfill: true`. Backfill items still go through every other
- *    rule/cap below.
+ *    EXCEPT the backfill (round 4, reworked in round 6): whenever fewer than
+ *    HOMEPAGE_TARGET_ITEMS (10) items actually end up on the homepage after
+ *    all caps/rules below, older items fill the remainder, highest-scoring
+ *    first (ties: newest), marked `homepageBackfill: true`. Items up to
+ *    BACKFILL_MAX_AGE_HOURS (7 days) old qualify from score
+ *    BACKFILL_MIN_SCORE (10); tier-1 items that pass the action-word gate
+ *    (hasTier1ActionWord) qualify up to TIER1_BACKFILL_MAX_AGE_HOURS (21
+ *    days) from score TIER1_BACKFILL_MIN_SCORE (20) — those older than 7
+ *    days are also marked `homepageBackfillTier1: true`. Agenda items and
+ *    event pieces never backfill, and nothing pads below the floors: if
+ *    fewer than 10 qualify the slots stay empty. Backfill items still go
+ *    through every other rule/cap below.
+ *  - round-6b: a fresh item scoring under HOMEPAGE_FRESH_MIN_SCORE (5) is
+ *    dropped from the homepage ("below_fresh_floor"); other feeds keep it.
  *  - §2 home_cap per source (default DEFAULT_HOME_CAP_PER_SOURCE).
  *  - §1 homepage_cap per spec section (SECTION_HOMEPAGE_CAPS, keyed by
  *    homepageSectionOf(article) — the article's primary *spec* section,
@@ -308,14 +318,18 @@ export async function getNavVisibility({ now = Date.now() } = {}) {
  */
 export function buildHomepageSections(articles = [], { now = Date.now(), onDrop } = {}) {
   const { fresh, older } = splitByFreshness(articles, { now });
-  // Always computed, not just when fresh.length < 12: caps/rules below (home_cap,
-  // section caps, event/Cyprus rules) routinely shrink a 30+-item fresh set down
-  // to well under 12 shown, and the backfill fill loop further down needs this
-  // pool regardless of how many fresh items existed going in.
+  // Always computed, not just when fresh is short: caps/rules below (home_cap,
+  // section caps, event/Cyprus rules) routinely shrink a large fresh set to
+  // under the target, and the fill loop further down needs this pool
+  // regardless of how many fresh items existed going in.
   const backfillPool = older
-    .filter((article) => isFresh(article, now, BACKFILL_MAX_AGE_HOURS))
+    .filter(isBackfillCandidate(now))
     .sort((a, b) => (b.score || 0) - (a.score || 0) || Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0))
-    .map((article) => ({ ...article, homepageBackfill: true }));
+    .map((article) => ({
+      ...article,
+      homepageBackfill: true,
+      ...(isFresh(article, now, BACKFILL_MAX_AGE_HOURS) ? {} : { homepageBackfillTier1: true }),
+    }));
 
   const shown = new Set();
   const perSourceCount = new Map();
@@ -342,6 +356,12 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop 
   const checkEligible = (article, { forLead = false } = {}) => {
     if (totalCount >= HOMEPAGE_MAX_ITEMS) return { ok: false, stage: "total_cap" };
     if (article.metadata?.sectionOnly) return { ok: false, stage: "section_only" };
+    // round-6b: a fresh (non-backfill) item under the floor never takes a
+    // homepage slot; section pages are unaffected. Backfill items have their
+    // own floors (isBackfillCandidate).
+    if (!article.homepageBackfill && (article.score || 0) < HOMEPAGE_FRESH_MIN_SCORE) {
+      return { ok: false, stage: "below_fresh_floor" };
+    }
     if (isCyprusOnly(article)) return { ok: false, stage: "cyprus_only" };
     // round-5: agenda items (any tier) are checked before the tier-1
     // action-word gate below — agenda overrides a tier-1 action word per
@@ -415,18 +435,46 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop 
     if (eligible(article)) columns[primaryCategory].push(take(article));
   }
 
-  // round-4 homepage backfill: every fresh article has already been offered
-  // a slot above (lead/recent/columns); top up from the up-to-7-day-old
-  // backfill pool whenever that left totalCount under the 12-item floor —
-  // whether because too few fresh items existed, or because caps/rules
-  // thinned out a large fresh set.
+  // homepage backfill (round 4, target 10 / no padding since round 6): every
+  // fresh article has already been offered a slot above (lead/recent/
+  // columns); top up from the backfill pool only while totalCount is under
+  // HOMEPAGE_TARGET_ITEMS — and stop there, leaving any remaining slots empty.
   for (const article of backfillPool) {
-    if (totalCount >= HOMEPAGE_BACKFILL_MIN_ITEMS) break;
+    if (totalCount >= HOMEPAGE_TARGET_ITEMS) break;
     if (shown.has(canonicalizeUrl(article.url))) continue;
     if (eligible(article)) recent.push(take(article));
   }
 
   return { lead, recent, columns };
+}
+
+/**
+ * Max age (hours) an older article may still be backfilled onto the homepage:
+ * 21 days for a tier-1 source's item that passes the action-word gate (formal
+ * act: consultation/invitation/decision), 7 days for everything else.
+ */
+export function homepageBackfillWindowHours(article) {
+  const tier = SOURCE_BY_ID.get(article?.sourceId)?.tier;
+  return tier === 1 && hasTier1ActionWord(article?.title)
+    ? TIER1_BACKFILL_MAX_AGE_HOURS
+    : BACKFILL_MAX_AGE_HOURS;
+}
+
+// round-6 backfill never pads: agenda items and event pieces never qualify,
+// and an item must clear the floor of its own age band — 10 within 7 days,
+// 20 (after the action-word boost) for the 8-to-21-day tier-1 band. Returns
+// why an article within its age window is kept out of the backfill, or null
+// when it qualifies (the review dump reports the reason).
+export function homepageBackfillIneligibleReason(article, now = Date.now()) {
+  if (isAgendaItem(article.title)) return "agenda_item";
+  if (isEventPiece(article.title)) return "event_piece";
+  const minScore = isFresh(article, now, BACKFILL_MAX_AGE_HOURS) ? BACKFILL_MIN_SCORE : TIER1_BACKFILL_MIN_SCORE;
+  return (article.score || 0) >= minScore ? null : "below_backfill_floor";
+}
+
+function isBackfillCandidate(now) {
+  return (article) => isFresh(article, now, homepageBackfillWindowHours(article))
+    && homepageBackfillIneligibleReason(article, now) === null;
 }
 
 // round-4 lead-preference scoring: Tier 1/3 sources and a figure/decision

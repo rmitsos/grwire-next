@@ -353,7 +353,7 @@ test("buildHomepageSections caps deals at SECTION_HOMEPAGE_CAPS['deals-companies
     url: `https://x.test/deal-${i}`,
     title: `Εξαγορά εταιρείας αρ. ${i} στην Ελλάδα`,
     categories: ["deals"],
-    sourceId: `deal-source-${i}`,
+    sourceId: `deal-source-${i}`, score: 5,
     publishedAt: new Date(now - i * 3_600_000).toISOString(),
   }));
   const sections = buildHomepageSections(articles, { now });
@@ -366,7 +366,7 @@ test("buildHomepageSections total converges to exactly homepage.max_items (20) w
   let n = 0;
   const unique = () => `https://x.test/cap-${n++}`;
   const mk = (category, title) => ({
-    url: unique(), title, categories: [category], sourceId: unique(),
+    url: unique(), title, categories: [category], sourceId: unique(), score: 5,
     publishedAt: new Date(now - n * 60_000).toISOString(),
   });
 
@@ -426,7 +426,7 @@ test("isFresh requires a publishedAt within the last 72 hours", () => {
 
 test("buildHomepageSections only shows items published within the last 72 hours", () => {
   const now = new Date("2026-10-25T12:00:00Z").getTime();
-  const fresh = { url: "https://x.test/fresh", title: "Νέο έργο δικτύου στην Ελλάδα", categories: ["energy"], sourceId: "s1", publishedAt: "2026-10-24T12:00:00Z" };
+  const fresh = { url: "https://x.test/fresh", title: "Νέο έργο δικτύου στην Ελλάδα", categories: ["energy"], sourceId: "s1", score: 5, publishedAt: "2026-10-24T12:00:00Z" };
   const stale = { url: "https://x.test/stale", title: "Παλιό έργο δικτύου στην Ελλάδα", categories: ["energy"], sourceId: "s2", publishedAt: "2026-10-10T12:00:00Z" };
   const noDate = { url: "https://x.test/nodate", title: "Έργο χωρίς ημερομηνία στην Ελλάδα", categories: ["energy"], sourceId: "s3" };
   const sections = buildHomepageSections([fresh, stale, noDate], { now });
