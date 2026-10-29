@@ -15,7 +15,9 @@ import {
   HOMEPAGE_TARGET_ITEMS,
   HOMEPAGE_FRESH_MIN_SCORE,
   HOMEPAGE_MAX_ITEMS,
+  CATEGORY_TO_SPEC_SECTION,
   SECTION_HOMEPAGE_CAPS,
+  SECTION_SHARE_MAX,
   SECTION_NAV_WINDOW_DAYS,
   SECTION_SHARE_CAP,
   athensDayKey,
@@ -109,11 +111,36 @@ function prepareRows(rows, { now = Date.now(), onDrop } = {}) {
     onDrop?.(row, { stage: "noise", ...reason });
     return false;
   });
-  const dayCapped = applyDayCap(withoutNoise, { now, onDrop: (row) => onDrop?.(row, { stage: "day_cap" }) });
+  const displayable = withoutNoise.filter((row) => {
+    const stage = undisplayableStage(row);
+    if (!stage) return true;
+    onDrop?.(row, { stage });
+    return false;
+  });
+  const dayCapped = applyDayCap(displayable, { now, onDrop: (row) => onDrop?.(row, { stage: "day_cap" }) });
   const deduped = collapseDuplicateArticles(dayCapped, { onDrop: (row) => onDrop?.(row, { stage: "duplicate" }) });
   return deduped.map(reclassifyRow)
     .flatMap((row) => dropTelcoWithoutNetworkAngle(row, onDrop))
-    .flatMap((row) => dropDealsWithoutCompany(row, onDrop));
+    .flatMap((row) => dropDealsWithoutCompany(row, onDrop))
+    .filter((row) => {
+      // round-7: the rules (read-time reclassification) found no category at all — e.g. the
+      // water/sewage negative removed the only match — so there is nothing to place it under.
+      if (row.categories.length) return true;
+      onDrop?.(row, { stage: "no_category" });
+      return false;
+    });
+}
+
+// round-7 display gates that need no ranking, applied to stored rows at read time:
+//  - undated: a row with no (parseable) publish date is never shown (the DB read orders by
+//    COALESCE(published_at, updated_at), so such rows used to float among today's items);
+//  - google_news_unresolved: a news.google.com redirect that cannot be resolved to the
+//    publisher URL (the same cleanOutgoingLink the homepage uses) is not shown on any page.
+function undisplayableStage(row) {
+  const published = row.published_at ? new Date(row.published_at).getTime() : NaN;
+  if (Number.isNaN(published)) return "undated";
+  if (cleanOutgoingLink(row.canonical_url, row.metadata).viaGoogleNews) return "google_news_unresolved";
+  return null;
 }
 
 function pickRows(prepared, { category, limit = 80, onDrop } = {}) {
@@ -130,13 +157,15 @@ export function selectArticles(rows, { category, limit = 80, now = Date.now(), o
 }
 
 // round-4 telco rule: telecom-fibre is only a valid category when the item
-// actually names a network/technology angle or operator (hasTelecomNetworkAngle)
+// actually names a network/technology angle or operator in its headline (hasTelecomNetworkAngle)
 // — a "telecommunications company" story that never gets more specific than
 // that (e.g. a generic AI-tools piece from a telco, a consumer-gadget piece)
 // loses the telco category, and is dropped outright if it had no other one.
 function dropTelcoWithoutNetworkAngle(row, onDrop) {
   if (!row.categories.includes("telco")) return [row];
-  if (hasTelecomNetworkAngle(`${row.title || ""} ${row.summary || ""}`)) return [row];
+  // go-live: the HEADLINE must carry the network angle. A summary that mentions a network in passing
+  // (data-centre or AI pieces that name an operator) no longer keeps a story on /telco.
+  if (hasTelecomNetworkAngle(row.title || "")) return [row];
   const categories = row.categories.filter((c) => c !== "telco");
   if (!categories.length) {
     onDrop?.(row, { stage: "telco_no_network_angle" });
@@ -222,9 +251,35 @@ export async function getLatestArticles({ category, query, limit = 80 } = {}) {
   }
 }
 
+/**
+ * round-7 (empty columns): the homepage is laid out from the SAME rows and the
+ * SAME selection the section pages use. `articles` is the global limit-100 list;
+ * `sections[slug]` is exactly what getLatestArticles({ category: slug, limit: 100 })
+ * returns for that section page (selectArticles with that category and limit).
+ */
+export function selectHomepageInputs(rows, { now = Date.now() } = {}) {
+  const articles = selectArticles(rows, { limit: 100, now });
+  const sections = Object.fromEntries(Object.keys(PUBLIC_CATEGORIES).map((category) => [
+    category,
+    selectArticles(rows, { category, limit: 100, now }),
+  ]));
+  return { articles, sections };
+}
+
 export async function getHomepageData() {
-  const [articles, story] = await Promise.all([getLatestArticles({ limit: 100 }), getLatestStory()]);
-  return { articles, story, ...buildHomepageSections(articles) };
+  const [rows, story] = await Promise.all([readHomepageRows(), getLatestStory()]);
+  const { articles, sections } = selectHomepageInputs(rows);
+  return { articles, story, ...buildHomepageSections(articles, { sections }) };
+}
+
+async function readHomepageRows() {
+  try {
+    return await readArticleRows({ limit: 100 });
+  } catch (error) {
+    // Rethrow so a cached page keeps its last good copy instead of caching an empty one.
+    console.error("[public] article read failed:", error?.message || error);
+    throw error;
+  }
 }
 
 // round-4 §7: /tenders and /regulators are hidden from nav/sitemap until
@@ -261,25 +316,32 @@ export function navVisibilityFromRows(rows, { now = Date.now() } = {}) {
 
 let navCache;
 
-export async function getNavVisibility({ now = Date.now() } = {}) {
+export async function getNavVisibility({ now = Date.now(), strict = false } = {}) {
   // Every public page renders the shared nav; computing it is a full read-rules pass over the
   // newest rows, so share one result per process for a minute (a static build renders dozens).
-  if (navCache && now - navCache.at < RECENT_ROWS_TTL_MS) return navCache.promise;
+  if (navCache && now - navCache.at < RECENT_ROWS_TTL_MS) {
+    return strict ? navCache.promise : navCache.promise.catch(() => computeNavVisibility([], { now }));
+  }
   const promise = readArticleRows({ limit: 100 }).then((rows) => navVisibilityFromRows(rows, { now }));
   navCache = { at: now, promise };
   try {
     return await promise;
   } catch {
     if (navCache?.promise === promise) navCache = undefined;
+    // strict (the sitemap): rethrow so a revalidating page keeps its last good copy instead of
+    // caching a sitemap without /tenders and /regulators for an hour.
+    if (strict) throw new Error("nav visibility read failed");
     return computeNavVisibility([], { now });
   }
 }
 
 /**
  * Lays out the homepage without repeating an article across sections. Each
- * article is placed once: as the lead, in "recent", or in the column for its
- * single highest-scoring category (categories[0], already rank-ordered by
- * rankItems). Section pages still list every matching article separately.
+ * article is placed once: as the lead, in a section column or in "recent".
+ * Since round 7 the columns are filled first, from the same per-section lists the
+ * section pages show (`sections`), and the final list is held to the section caps
+ * once per article, under its primary section (see trimToSectionCaps). Section pages still list every
+ * matching article separately.
  *
  * Also enforces, across lead + recent + columns together:
  *  - sources-spec.md §3 max_age_hours.news: only items published within the
@@ -316,7 +378,7 @@ export async function getNavVisibility({ now = Date.now() } = {}) {
  * Skipped items are never replaced with padding: a slot that runs out of
  * eligible articles is just left shorter than its usual capacity.
  */
-export function buildHomepageSections(articles = [], { now = Date.now(), onDrop } = {}) {
+export function buildHomepageSections(articles = [], { now = Date.now(), onDrop, sections } = {}) {
   const { fresh, older } = splitByFreshness(articles, { now });
   // Always computed, not just when fresh is short: caps/rules below (home_cap,
   // section caps, event/Cyprus rules) routinely shrink a large fresh set to
@@ -419,6 +481,27 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop 
     lead = take(best);
   }
 
+  // round-7 (empty columns): a column is the top of its section page, not what
+  // is left over once "recent" has taken everything. Each column first takes
+  // the best fresh items of its own section (the same prepared list the
+  // section page shows, in the same order — `sections[slug]`, or the articles
+  // tagged with that category when the caller has no per-section lists),
+  // reserving half of the section's homepage cap (rounded up); "recent" then
+  // takes what the caps still allow. An article still appears only once.
+  const freshUrls = new Set(fresh.map((article) => canonicalizeUrl(article.url)));
+  const columns = Object.fromEntries(Object.keys(PUBLIC_CATEGORIES).map((category) => [category, []]));
+  for (const category of Object.keys(columns)) {
+    const sectionCap = SECTION_HOMEPAGE_CAPS[CATEGORY_TO_SPEC_SECTION[category]] ?? COLUMN_MAX_ITEMS;
+    const reserve = Math.min(COLUMN_MAX_ITEMS, Math.ceil(sectionCap / 2));
+    const candidates = sections?.[category] ?? articles.filter((article) => article.categories?.includes(category));
+    for (const article of candidates) {
+      if (columns[category].length >= reserve) break;
+      if (!freshUrls.has(canonicalizeUrl(article.url))) continue;
+      if (shown.has(canonicalizeUrl(article.url))) continue;
+      if (eligible(article)) columns[category].push(take(article));
+    }
+  }
+
   const recent = [];
   for (const article of fresh) {
     if (recent.length >= 12) break;
@@ -426,13 +509,36 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop 
     if (eligible(article)) recent.push(take(article));
   }
 
-  const columns = Object.fromEntries(Object.keys(PUBLIC_CATEGORIES).map((category) => [category, []]));
-  for (const article of fresh) {
-    if (shown.has(canonicalizeUrl(article.url))) continue;
-    const primaryCategory = article.categories?.[0];
-    if (!primaryCategory || !columns[primaryCategory]) continue;
-    if (columns[primaryCategory].length >= 5) continue;
-    if (eligible(article)) columns[primaryCategory].push(take(article));
+  // Any column still short of five fills from its own section's list, then
+  // from anything else tagged for the section, within the caps.
+  for (const category of Object.keys(columns)) {
+    const candidates = sections?.[category] ?? articles.filter((article) => article.categories?.includes(category));
+    for (const article of candidates) {
+      if (columns[category].length >= COLUMN_MAX_ITEMS) break;
+      if (!freshUrls.has(canonicalizeUrl(article.url))) continue;
+      if (shown.has(canonicalizeUrl(article.url))) continue;
+      if (eligible(article)) columns[category].push(take(article));
+    }
+  }
+
+  // go-live (short columns): a column that is still short of its reserve after the fresh passes
+  // fills from its own section's list, from items published within the 7-day backfill window,
+  // under the same score floors (homepageBackfillIneligibleReason) and the same caps
+  // (eligible), and only while the homepage is under HOMEPAGE_TARGET_ITEMS. A column with nothing even then stays empty; the page hides it and links to the
+  // section page instead.
+  for (const category of Object.keys(columns)) {
+    const sectionCap = SECTION_HOMEPAGE_CAPS[CATEGORY_TO_SPEC_SECTION[category]] ?? COLUMN_MAX_ITEMS;
+    const reserve = Math.min(COLUMN_MAX_ITEMS, Math.ceil(sectionCap / 2));
+    const candidates = sections?.[category] ?? articles.filter((article) => article.categories?.includes(category));
+    for (const article of candidates) {
+      if (columns[category].length >= reserve || totalCount >= HOMEPAGE_TARGET_ITEMS) break;
+      const url = canonicalizeUrl(article.url);
+      if (freshUrls.has(url) || shown.has(url)) continue;
+      if (!isFresh(article, now, BACKFILL_MAX_AGE_HOURS)) continue;
+      if (homepageBackfillIneligibleReason(article, now) !== null) continue;
+      const backfilled = { ...article, homepageBackfill: true };
+      if (eligible(backfilled)) columns[category].push(take(backfilled));
+    }
   }
 
   // homepage backfill (round 4, target 10 / no padding since round 6): every
@@ -445,7 +551,84 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop 
     if (eligible(article)) recent.push(take(article));
   }
 
-  return { lead, recent, columns };
+  // round-7 (section caps): enforce the caps on the finished list, then let
+  // the backfill pool refill — never above HOMEPAGE_TARGET_ITEMS, never below
+  // the backfill floors, and only with an article that keeps every section
+  // within its caps.
+  const trimmedResult = trimToSectionCaps({ lead, recent, columns }, { onDrop: reportDrop });
+  if (!trimmedResult.trimmed.length) return { lead, recent, columns };
+  const trimmedRecent = trimmedResult.recent;
+  const trimmedColumns = trimmedResult.columns;
+  const finalList = () => [trimmedResult.lead, ...trimmedRecent, ...Object.values(trimmedColumns).flat()].filter(Boolean);
+  shown.clear();
+  perSourceCount.clear();
+  perSpecSectionCount.clear();
+  totalCount = 0;
+  for (const article of finalList()) take(article);
+  const trimmedUrls = new Set(trimmedResult.trimmed.map((article) => canonicalizeUrl(article.url)));
+  for (const article of backfillPool) {
+    if (totalCount >= HOMEPAGE_TARGET_ITEMS) break;
+    const url = canonicalizeUrl(article.url);
+    if (shown.has(url) || trimmedUrls.has(url)) continue;
+    if (sectionOverCap([...finalList(), article])) continue;
+    if (eligible(article)) trimmedRecent.push(take(article));
+  }
+  return { lead: trimmedResult.lead, recent: trimmedRecent, columns: trimmedColumns };
+}
+
+const COLUMN_MAX_ITEMS = 5;
+
+// The one spec section an article counts toward on the FINAL homepage list:
+// its primary section, homepageSectionOf(article) (first public category
+// mapped to a spec section, or the regulators/tenders keyword override — the
+// same rule that files it under a section page's main tag). Extra tags on a
+// multi-tag story never use up slots in the other sections' caps.
+function primarySpecSection(article) {
+  return homepageSectionOf(article) || null;
+}
+
+/**
+ * round-7 (section caps): the per-section caps in the eligibility check above
+ * run while the list is being built; columns, top-ups and backfill can still
+ * push a section over. This enforces the §1 homepage_cap and the §5 35% share
+ * on the FINAL list (lead + recent + columns, after backfill). Each article
+ * counts ONCE, under its primary spec section (primarySpecSection), never once
+ * per tag.
+ * The share is of the list as it stands, but never of fewer than
+ * HOMEPAGE_TARGET_ITEMS (10) slots, so a thin day is not collapsed to one story
+ * per section (a section may always show floor(35% x 10) = 3). The lead is
+ * never removed; a backfill story, then the lowest-scoring, then the oldest
+ * article of an over-cap section goes first, and the check repeats until the list is within caps.
+ */
+export function sectionOverCap(list, { protectedArticle } = {}) {
+  const shareCap = Math.floor(SECTION_SHARE_MAX * Math.max(list.length, HOMEPAGE_TARGET_ITEMS));
+  for (const specSection of Object.keys(SECTION_HOMEPAGE_CAPS)) {
+    const inSection = list.filter((article) => primarySpecSection(article) === specSection);
+    const cap = Math.min(SECTION_HOMEPAGE_CAPS[specSection], shareCap);
+    if (inSection.length <= cap) continue;
+    const removable = inSection.filter((article) => article !== protectedArticle);
+    if (!removable.length) continue;
+    // An older backfill story goes before a fresh one, then the lowest score, then the oldest.
+    const victim = removable.sort((a, b) => Number(Boolean(b.homepageBackfill)) - Number(Boolean(a.homepageBackfill))
+      || (a.score || 0) - (b.score || 0)
+      || Date.parse(a.publishedAt || 0) - Date.parse(b.publishedAt || 0))[0];
+    return { specSection, victim };
+  }
+  return null;
+}
+
+export function trimToSectionCaps({ lead, recent, columns }, { onDrop } = {}) {
+  const trimmed = [];
+  for (;;) {
+    const all = [lead, ...recent, ...Object.values(columns).flat()].filter(Boolean);
+    const over = sectionOverCap(all, { protectedArticle: lead });
+    if (!over) return { lead, recent, columns, trimmed };
+    const { victim, specSection } = over;
+    if (onDrop) onDrop(victim, { stage: "section_cap_final", specSection });
+    trimmed.push(victim);
+    recent = recent.filter((article) => article !== victim);
+    columns = Object.fromEntries(Object.entries(columns).map(([category, list]) => [category, list.filter((article) => article !== victim)]));
+  }
 }
 
 /**
@@ -532,10 +715,12 @@ export async function searchStories({ query, limit = 50 } = {}) {
 function toArticle(row) {
   const source = SOURCE_BY_ID.get(row.source_id);
   const link = cleanOutgoingLink(row.canonical_url, row.metadata);
-  const feed = readFeedSummary(row.title, row.summary);
-  const publisher = row.metadata?.publisher || feed.publisher;
   let hostname;
   try { hostname = new URL(link.url).hostname.replace(/^www\./, ""); } catch { hostname = undefined; }
+  const feed = readFeedSummary(row.title, row.summary, {
+    publishers: [source?.name, hostname, row.metadata?.publisher, ...(row.metadata?.relatedPublishers || [])],
+  });
+  const publisher = row.metadata?.publisher || feed.publisher;
   return {
     id: row.id,
     url: link.url,

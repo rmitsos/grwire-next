@@ -70,9 +70,14 @@ export function buildPublicSitemapEntries(base, navVisibility) {
   });
 }
 
+// Without this the sitemap is prerendered once at build time (its last-modified equals the deploy
+// time), so /regulators and /tenders could never appear after the deploy, however many items
+// they gain. Revalidating hourly keeps the >=3-items rule dynamic, like the nav on every page.
+export const revalidate = 3600;
+
 export default async function sitemap() {
   const base = process.env.NEXT_PUBLIC_SITE_URL || "https://grwire.com";
-  const pages = buildPublicSitemapEntries(base, await getNavVisibility());
+  const pages = buildPublicSitemapEntries(base, await getNavVisibility({ strict: true }));
 
   const subscribe = {
     url: `${base}${LANDING_ROUTES.el.subscribe}`,

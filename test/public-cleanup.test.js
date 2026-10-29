@@ -14,7 +14,11 @@ import robots from "../src/app/robots.js";
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (relativePath) => readFileSync(path.join(ROOT, relativePath), "utf8");
 
-function row({ url, title, sourceId = "src-x", publishedAt = new Date().toISOString(), metadata = {}, summary = "" }) {
+// Fixed timestamps: rows sharing a score are ordered by publish time, so a default taken from
+// `new Date()` (millisecond-different per call) made the order of same-score rows non-deterministic.
+const FIXED_PUBLISHED_AT = "2026-10-28T10:00:00.000Z";
+
+function row({ url, title, sourceId = "src-x", publishedAt = FIXED_PUBLISHED_AT, metadata = {}, summary = "" }) {
   return {
     canonical_url: url, title, summary, published_at: publishedAt,
     source_id: sourceId, source_url: url, score: 77, categories: [], relevance: [], metadata,
@@ -60,12 +64,15 @@ test("public articles: clean link, ' - Source' title suffix stripped, source nam
   const rows = [row({
     url: "https://www.capital.gr/x/story?utm_source=rss&utm_medium=feed",
     title: "Η Cosmote επεκτείνει το δίκτυο FTTH σε νέους δήμους - Capital.gr",
+    publishedAt: "2026-10-28T10:00:00.000Z",
     metadata: { publisher: "Capital.gr" },
   }), row({
     url: "https://news.google.com/rss/articles/CBMiOpaque?oc=5",
     title: "Η Nova επεκτείνει το δίκτυο FTTH σε νέους δήμους – Insider.gr",
     sourceId: "src-y",
-    metadata: { publisher: "Insider.gr" },
+    publishedAt: "2026-10-28T09:00:00.000Z",
+    // Resolvable (original URL in the data): shown with the publisher link; an unresolvable one is dropped (round 7).
+    metadata: { publisher: "Insider.gr", originalUrl: "https://www.insider.gr/story/nova-ftth?utm_source=rss" },
   })];
   const articles = selectArticles(rows, { category: "telco" });
   assert.equal(articles.length, 2);
@@ -75,7 +82,8 @@ test("public articles: clean link, ' - Source' title suffix stripped, source nam
   assert.equal(first.sourceName, "Capital.gr");
   assert.equal(first.viaGoogleNews, false);
   assert.equal(second.title, "Η Nova επεκτείνει το δίκτυο FTTH σε νέους δήμους");
-  assert.equal(second.viaGoogleNews, true);
+  assert.equal(second.url, "https://www.insider.gr/story/nova-ftth");
+  assert.equal(second.viaGoogleNews, false);
   assert.equal(second.sourceName, "Insider.gr");
 });
 

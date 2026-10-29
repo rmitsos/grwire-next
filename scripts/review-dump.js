@@ -15,7 +15,7 @@ import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { SOURCES } from "../config/sources.js";
 import { scanMarket } from "../src/pipeline.js";
-import { selectArticles, buildHomepageSections, computeNavVisibility, homepageBackfillIneligibleReason, homepageBackfillWindowHours, PUBLIC_CATEGORIES } from "../src/public-data.js";
+import { selectArticles, selectHomepageInputs, buildHomepageSections, computeNavVisibility, homepageBackfillIneligibleReason, homepageBackfillWindowHours, PUBLIC_CATEGORIES } from "../src/public-data.js";
 import {
   HOMEPAGE_MAX_ITEMS,
   SECTION_HOMEPAGE_CAPS,
@@ -186,7 +186,7 @@ export function buildReviewDump(report, { now = Date.now(), branch = null, commi
   // band's backfill floor), or (if the 10-item target was reached without
   // needing it) "backfill_not_needed".
   const homepageArticles = selectArticles(rows, { limit: 100, now });
-  const homepage = buildHomepageSections(homepageArticles, { now, onDrop: recordDrop });
+  const homepage = buildHomepageSections(homepageArticles, { now, onDrop: recordDrop, sections: selectHomepageInputs(rows, { now }).sections });
   const shownUrls = new Set(
     [homepage.lead, ...homepage.recent, ...Object.values(homepage.columns).flat()]
       .filter(Boolean).map((article) => article.url),

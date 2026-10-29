@@ -6,7 +6,7 @@ export const metadata = buildLandingMetadata({
   lang: "en",
   routeKey: "confirmed",
   title: "GR Wire — Subscription confirmed",
-  description: "Your subscription to GR Wire's weekly email is confirmed.",
+  description: "Your subscription to GR Wire's daily email is confirmed.",
   noindex: true,
 });
 

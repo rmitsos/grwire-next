@@ -1,7 +1,7 @@
 import { stripTrailingSiteSuffix } from "./article-quality.js";
 import {
   matchesAnyTerm, specSectionKeywordMatch, SECTOR_ORGANIZATIONS,
-  hasTier1ActionWord, agendaScoreCap,
+  hasTier1ActionWord, agendaScoreCap, isWaterSewageStory,
 } from "./feed-rules.js";
 
 function normalise(value = "") {
@@ -67,7 +67,7 @@ function includesAny(text, terms = []) {
 // used as "this is actually a telecom story" signals that override the
 // electricity-grid exclusions below (see TELCO_ENTITIES/TELECOM_SIGNALS).
 const TELCO_ENTITIES = ["ΟΤΕ", "OTE", "Cosmote", "COSMOTE", "Vodafone", "Nova", "United Group", "Intracom Telecom", "Intracom", "ΔΕΗ Fiber", "PPC Fiber", "ΕΕΤΤ", "EETT", "Grid Telecom"];
-const TELCO_STRONG_TOPICS = ["FTTH", "fiber", "fibre", "5G", "οπτική ίνα", "ευρυζων", "telecom", "τηλεπικοινων", "spectrum", "data center", "subsea cable", "network deployment", "carrier billing", "mobile billing", "mobile-billed", "electronic communications", "telecommunications bill", "Code of Conduct", "κώδικας δεοντολογίας", "υπηρεσίες αυξημένης χρέωσης", "χρεώσεις κινητής", "ΕΕΤΤ", "EETT", "Intracom Telecom", "roaming", "περιαγωγ", "numbering", "αριθμοδοτ"];
+const TELCO_STRONG_TOPICS = ["FTTH", "fiber", "fibre", "5G", "οπτική ίνα", "ευρυζων", "telecom", "τηλεπικοινων", "spectrum", "subsea cable", "network deployment", "carrier billing", "mobile billing", "mobile-billed", "electronic communications", "telecommunications bill", "Code of Conduct", "κώδικας δεοντολογίας", "υπηρεσίες αυξημένης χρέωσης", "χρεώσεις κινητής", "ΕΕΤΤ", "EETT", "Intracom Telecom", "roaming", "περιαγωγ", "numbering", "αριθμοδοτ"];
 const ENERGY_STRONG_TOPICS = ["substation", "interconnection", "grid", "storage", "BESS", "υποσταθ", "διασύνδεσ", "αποθήκευση", "offshore wind"];
 const INFRA_STRONG_TOPICS = ["data center", "subsea cable", "railway", "motorway", "metro", "port", "airport", "σιδηρόδρομ", "αυτοκινητόδρομ", "μετρό", "λιμάν", "αεροδρόμ", "ΣΔΙΤ", "PPP", "concession"];
 
@@ -155,6 +155,11 @@ export function scoreItem(item, rawRule) {
 
   if (includesAny(combined, GLOBAL_EXCLUSIONS)) {
     return { ruleId: rule.id, label: rule.label, category: rule.category, score: 0, accepted: false, reasons: ["excluded lifestyle/rental/retail content"] };
+  }
+
+  // round-7: a water/sewage utility story is not an infrastructure-and-works match.
+  if (rule.category === "infrastructure" && isWaterSewageStory({ title: item.title || "" })) {
+    return { ruleId: rule.id, label: rule.label, category: rule.category, score: 0, accepted: false, reasons: ["water/sewage utility story"] };
   }
 
   if (includesAny(title, rule.entities)) {
@@ -364,7 +369,7 @@ export const DEFAULT_WATCH_RULES = Object.freeze([
       { term: "δίκτυο μεταφοράς", unless: TELECOM_SIGNALS_OVER_ELECTRICITY },
       { term: "καλώδιο ρεύματος", unless: TELECOM_SIGNALS_OVER_ELECTRICITY },
     ],
-    requiredTopics: ["FTTH", "fiber", "fibre", "οπτική ίνα", "5G", "spectrum", "data center", "subsea cable", "network deployment", "δικτυακή ανάπτυξη", "telecom", "telecommunications", "τηλεπικοινων", "electronic communications", "carrier billing", "mobile billing", "mobile-billed", "telecommunications bill", "Code of Conduct", "κώδικας δεοντολογίας", "υπηρεσίες αυξημένης χρέωσης", "χρεώσεις κινητής", "Intracom Telecom", "roaming", "περιαγωγ", "numbering", "αριθμοδοτ"],
+    requiredTopics: ["FTTH", "fiber", "fibre", "οπτική ίνα", "5G", "spectrum", "subsea cable", "network deployment", "δικτυακή ανάπτυξη", "telecom", "telecommunications", "τηλεπικοινων", "electronic communications", "carrier billing", "mobile billing", "mobile-billed", "telecommunications bill", "Code of Conduct", "κώδικας δεοντολογίας", "υπηρεσίες αυξημένης χρέωσης", "χρεώσεις κινητής", "Intracom Telecom", "roaming", "περιαγωγ", "numbering", "αριθμοδοτ"],
     minimumStrongTopics: 1,
     preferredDomains: ["eett.gr", "cosmote.gr", "vodafone.gr", "nova.gr", "ot.gr", "intracom-telecom.com", "dei.gr"],
     threshold: 4,

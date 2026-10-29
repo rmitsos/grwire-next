@@ -342,9 +342,11 @@ test("SECTION_SHARE_CAP is floor(0.35 * homepage.max_items), derived from max_it
   assert.equal(SECTION_SHARE_CAP, 7);
 });
 
-test("SECTION_HOMEPAGE_CAPS (§1 homepage_cap) sums to homepage.max_items (20)", () => {
+test("SECTION_HOMEPAGE_CAPS (§1 homepage_cap) sum to at most homepage.max_items (20); go-live: energy is 3", () => {
   const total = Object.values(SECTION_HOMEPAGE_CAPS).reduce((sum, cap) => sum + cap, 0);
-  assert.equal(total, HOMEPAGE_MAX_ITEMS);
+  assert.ok(total <= HOMEPAGE_MAX_ITEMS);
+  assert.equal(SECTION_HOMEPAGE_CAPS["energy-grids"], 3);
+  assert.equal(total, 19);
 });
 
 test("buildHomepageSections caps deals at SECTION_HOMEPAGE_CAPS['deals-companies']=2: 6 fresh items -> 2 on homepage", () => {
@@ -361,7 +363,7 @@ test("buildHomepageSections caps deals at SECTION_HOMEPAGE_CAPS['deals-companies
   assert.equal(total, 2, `expected exactly 2 deals items on the homepage, got ${total}`);
 });
 
-test("buildHomepageSections total converges to exactly homepage.max_items (20) when every §1 section is oversupplied", () => {
+test("buildHomepageSections total converges to the sum of the section caps (19), (round 7: counted once, under the primary section) when every §1 section is oversupplied", () => {
   const now = new Date("2026-10-25T12:00:00Z").getTime();
   let n = 0;
   const unique = () => `https://x.test/cap-${n++}`;
@@ -384,7 +386,9 @@ test("buildHomepageSections total converges to exactly homepage.max_items (20) w
   const sections = buildHomepageSections(articles, { now });
   const total = (sections.lead ? 1 : 0) + sections.recent.length
     + Object.values(sections.columns).reduce((sum, column) => sum + column.length, 0);
-  assert.equal(total, HOMEPAGE_MAX_ITEMS, `expected exactly ${HOMEPAGE_MAX_ITEMS} total homepage items, got ${total}`);
+  const capTotal = Object.values(SECTION_HOMEPAGE_CAPS).reduce((sum, cap) => sum + cap, 0);
+  assert.equal(total, capTotal, `expected exactly ${capTotal} (the sum of the section caps) homepage items, got ${total}`);
+  assert.ok(total <= HOMEPAGE_MAX_ITEMS);
 });
 
 // --- 2b. homepageSectionOf --------------------------------------------------

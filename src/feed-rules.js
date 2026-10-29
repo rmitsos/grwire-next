@@ -21,7 +21,7 @@ export const SECTION_SHARE_CAP = Math.floor(SECTION_SHARE_MAX * HOMEPAGE_MAX_ITE
 // see CATEGORY_TO_SPEC_SECTION/homepageSectionOf below for the mapping).
 export const SECTION_HOMEPAGE_CAPS = Object.freeze({
   "telecom-fibre": 4,
-  "energy-grids": 4,
+  "energy-grids": 3,
   "infrastructure-works": 3,
   "regulators-policy": 3,
   "tenders-contracts": 4,
@@ -460,6 +460,52 @@ function consumerFuelNoiseTerm(title) {
   return NOISE_HARD_REJECT.consumer_fuel.find((term) => matchesAnyTerm(title, [term])) || null;
 }
 
+// round-7: stock-market pieces. A headline that opens "Χρηματιστήριο:" or
+// "Χρηματιστήριο –" is a market commentary (naftemporiki files these under
+// /finance/markets/), not sector news, whatever company it names. Genuine
+// company deal stories (e.g. "ΓΕΚ ΤΕΡΝΑ: Μαγνήτης διεθνών κεφαλαίων 5,3 δισ.")
+// carry neither the opening nor the URL path, so they are untouched. The
+// headline is matched accent-insensitively; the dash may be hyphen, en or em.
+const MARKET_HEADLINE_RE = /^\s*χρηματιστηριο(?:\s+αθηνων)?\s*[:\-–—]/u;
+// go-live: "ΧΑ:" / "ΧΑ –" (Athens Exchange shorthand) opening a headline, and the same shorthand
+// ("στο ΧΑ", "του ΧΑ") next to a session-report word. Genuine deal stories name the exchange in
+// passing ("εισαγωγή στο ΧΑ" alone) and carry no session word, so they stay.
+const MARKET_XA_OPEN_RE = /^\s*(?:χα|xa|χ\.α\.)\s*[:\-–—]/u;
+const MARKET_XA_SESSION_RE = /(?:^|[^\p{L}])(?:στο|του|το|απο το)\s+(?:χα|χ\.α\.)(?![\p{L}])/u;
+const MARKET_SESSION_WORDS = ["αντιδραση", "συνωστισμο", "κλεισιμο", "συνεδριαση", "τζιρο", "ανοδο", "πτωση", "ρεκορ", "δεικτη", "μετοχες", "μετοχων"];
+const MARKET_URL_RES = [
+  /^https?:\/\/(?:[^/]*\.)?naftemporiki\.gr\/finance\/markets\//i,
+  // ot.gr, capital.gr, bankingnews, etc. file market commentary under /xrimatistirio
+  /^https?:\/\/[^/]+\/(?:[a-z0-9-]+\/)?(?:xrimatistirio|chrimatistirio|stock-market|stocks-and-markets)(?:[-_/]|$)/i,
+  /^https?:\/\/(?:[^/]*\.)?ot\.gr\/(?:\d{4}\/\d{2}\/\d{2}\/)?(?:xrimatistirio|markets)(?:[-_/]|$)/i,
+];
+
+export function isStockMarketPiece(item = {}) {
+  const title = normaliseText(item.title || "");
+  if (MARKET_HEADLINE_RE.test(title) || MARKET_XA_OPEN_RE.test(title)) return true;
+  if (MARKET_XA_SESSION_RE.test(title) && MARKET_SESSION_WORDS.some((word) => title.includes(word))) return true;
+  return [item.url, item.canonical_url].some((url) => typeof url === "string" && MARKET_URL_RES.some((re) => re.test(url.trim().replace(/[?#].*$/, ""))));
+}
+
+// go-live: bank/broker consumer promotions ("Πειραιώς: νέο στεγαστικό με επιτόκιο 3%") and a short
+// list of named editorial blocks. A bank in a title is not enough (project finance, bond deals and
+// results are news): it takes a bank name AND a retail-product word. Named blocks are exact
+// phrases Dimitris has asked to keep out, reviewed in the live check of 29 Oct 2026.
+const BANK_TERMS = ["τραπεζα πειραιωσ", "πειραιωσ", "eurobank", "alpha bank", "εθνικη τραπεζα", "optima bank", "τραπεζα κυπρου", "attica bank"];
+const RETAIL_PRODUCT_TERMS = ["στεγαστικ", "καταναλωτικ", "πιστωτικ", "προθεσμιακ", "προσφορα", "προσφορες", "καμπανια", "cashback", "επιτοκιο", "πιστωτικη καρτα", "πιστωτικες καρτες", "ασφαλιστικο προιον"];
+const BLOCKED_TITLE_PHRASES = ["project continuum"];
+
+export function isBankPromo(item = {}) {
+  const title = normaliseText(item.title || "");
+  if (!BANK_TERMS.some((term) => title.includes(term))) return false;
+  return RETAIL_PRODUCT_TERMS.some((term) => title.includes(term));
+}
+
+export function isBlockedEditorial(item = {}) {
+  const title = normaliseText(item.title || "");
+  return BLOCKED_TITLE_PHRASES.some((phrase) => title.includes(phrase));
+}
+
 /**
  * Returns `{ group, term }` for the first noise_hard_reject term matched in
  * `item.title` + `item.summary`, or for the rules-based
@@ -469,6 +515,10 @@ function consumerFuelNoiseTerm(title) {
 export function noiseRejectReason(item = {}) {
   const title = item.title || "";
   const text = `${title} ${item.summary || ""}`;
+  if (isStockMarketPiece(item)) return { group: "stock_market_headline", term: null };
+  if (isSponsoredContent(item)) return { group: "sponsored", term: null };
+  if (isBlockedEditorial(item)) return { group: "advertorial_blocklist", term: null };
+  if (isBankPromo(item)) return { group: "bank_promo", term: null };
   for (const [group, terms] of Object.entries(NOISE_HARD_REJECT)) {
     if (group === "consumer_fuel") continue;
     for (const term of terms) {
@@ -485,6 +535,61 @@ export function noiseRejectReason(item = {}) {
   if (isEnvironmentOnlyNoise(text)) return { group: "environment_only", term: null };
   if (isCultureCsrNoise(title)) return { group: "culture_csr", term: null };
   return null;
+}
+
+// round-7: water / sewage utility stories are not infrastructure-and-works news
+// for this product (the §1 infrastructure negatives list ύδρευση/αποχέτευση).
+// The round-6 check never ran in code, and the Mykonos port story ("Νέο
+// σύστημα ανακύκλωσης νερού στο λιμάνι της Μυκόνου") says "νερού"/"λιμάνι", not
+// "ύδρευση", so it cleared the infrastructure rule on the "λιμάν" token alone.
+// The HEADLINE decides: a water term in the title makes it a water story unless
+// the same title also names major network works (rail, motorway, metro,
+// airport, data centre, subsea cable), which stay infrastructure.
+const WATER_SEWAGE_TITLE_TERMS = [
+  "νερο", "νερου", "νερα", "νερων", "υδρευσ*", "αποχετευσ*", "λυματ*", "βιολογικ* καθαρισμ*", "αφαλατωσ*", "υδατ*", "ευδαπ", "ευαθ",
+  "water", "wastewater", "sewage", "desalination",
+];
+const WATER_SEWAGE_WORKS_EXCEPTIONS = [
+  "σιδηροδρομ*", "αυτοκινητοδρομ*", "μετρο", "αεροδρομ*", "railway", "motorway", "airport", "data center", "καλωδ*", "subsea cable",
+];
+
+export function isWaterSewageStory(item = {}) {
+  const title = item.title || "";
+  if (!matchesAnyTerm(title, WATER_SEWAGE_TITLE_TERMS)) return false;
+  return !matchesAnyTerm(title, WATER_SEWAGE_WORKS_EXCEPTIONS);
+}
+
+// round-7: sponsored / advertorial content is never shown. It is detected
+// from explicit markers only — a URL path segment, a metadata flag, or a
+// sponsorship label at the start of the title/summary or a stock advertorial
+// phrase — never from the headline's subject alone (an energy-technology
+// headline is not evidence of sponsorship). A lone "sponsored" mid-sentence
+// ("sponsored by …") is deliberately not a marker.
+const SPONSORED_URL_RE = /\/(?:sponsored|advertorial|promoted|paid-(?:content|post)|partner-content|brand-content|branded-content|xorigoumeno|prowthitiko)(?:[-_/]|$)/i;
+const SPONSORED_LABEL_RE = /^[\s\[\(|*–—:\-]*(?:sponsored|advertorial|paid (?:content|post)|promoted|χορηγουμεν\S*|διαφημιστικ\S*|προωθητικ\S*|επι πληρωμη)(?:\s*[\]\)|:.–—\-]|\s*$)/u;
+const SPONSORED_PHRASES = [
+  "sponsored content", "sponsored post", "paid content", "paid post", "paid partnership", "promoted content",
+  "χορηγουμενο περιεχομενο", "χορηγουμενο αρθρο", "διαφημιστικο δημοσιευμα", "διαφημιστικο περιεχομενο",
+  "προωθητικο περιεχομενο", "προωθητικο δημοσιευμα", "επι πληρωμη δημοσιευμα", "advertorial",
+];
+
+export function sponsoredReason(item = {}) {
+  for (const url of [item.url, item.canonical_url]) {
+    if (typeof url === "string" && SPONSORED_URL_RE.test(url.replace(/[?#].*$/, ""))) return "url";
+  }
+  const meta = item.metadata || {};
+  if (meta.sponsored === true || meta.advertorial === true || meta.isSponsored === true) return "metadata";
+  const labels = [meta.articleSection, meta.section, ...(Array.isArray(meta.categories) ? meta.categories : []), ...(Array.isArray(meta.tags) ? meta.tags : [])];
+  if (labels.some((label) => typeof label === "string" && SPONSORED_LABEL_RE.test(normaliseText(label)))) return "metadata";
+  const title = normaliseText(item.title || "");
+  const summary = normaliseText(item.summary || "");
+  if (SPONSORED_LABEL_RE.test(title) || SPONSORED_LABEL_RE.test(summary)) return "label";
+  if (matchesAnyTerm(`${item.title || ""} ${item.summary || ""}`, SPONSORED_PHRASES)) return "phrase";
+  return null;
+}
+
+export function isSponsoredContent(item = {}) {
+  return sponsoredReason(item) !== null;
 }
 
 /** Europe/Athens calendar day (YYYY-MM-DD) for a publishedAt value, or for `now` if absent. */
@@ -590,7 +695,7 @@ export function isCyprusOnly(article = {}) {
 // generic topic terms) is not enough on its own.
 const TELCO_NETWORK_ANGLE_TERMS = [
   "δικτυ*", "οπτικ*", "ftth", "fttx", "fttb", "fttc", "5g", "φασμα*", "κεραι*", "παροχ*",
-  "εεττ", "καλωδι*", "υποθαλασσ*", "data center", "datacenter", "κεντρ* δεδομενων",
+  "εεττ", "καλωδι*", "υποθαλασσ*",
   "δορυφορ*", "χαλκ*",
   "οτε", "telekom", "cosmote", "vodafone", "nova", "united fiber", "united group",
   "δεη fiber", "grid telecom",

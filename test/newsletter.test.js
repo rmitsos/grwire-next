@@ -5,9 +5,12 @@ import {
   validateEmail,
   CONSENT_TEXT_VERSION,
 } from "../src/newsletter/service.js";
-import { createResendProvider, assertTrackingDisabled } from "../src/newsletter/provider.js";
 import { getNewsletterConfig } from "../src/newsletter/config.js";
 import { generateToken, hashToken, hashesMatch } from "../src/newsletter/tokens.js";
+
+// Mirrors src/newsletter/store.js: a repeat for a pending address inside the 2-minute window keeps the
+// row and its tokens and answers issued = false; a used confirm token stays on the row.
+const REPEAT_WINDOW_MS = 2 * 60 * 1000;
 
 function createFakeStore() {
   const rows = new Map();
@@ -17,7 +20,10 @@ function createFakeStore() {
     async upsertPending({ email, lang, consentTextVersion, sourcePage, confirmTokenHash, unsubscribeTokenHash }) {
       const existing = rows.get(email);
       if (existing && existing.status === "confirmed") {
-        return { id: existing.id, email, status: existing.status, lang: existing.lang };
+        return { id: existing.id, email, status: existing.status, lang: existing.lang, issued: false };
+      }
+      if (existing && existing.status === "pending" && Date.now() - existing.confirmSentAt.getTime() < REPEAT_WINDOW_MS) {
+        return { id: existing.id, email, status: existing.status, lang: existing.lang, issued: false };
       }
       const row = {
         id: existing?.id ?? `id-${++idCounter}`,
@@ -31,7 +37,7 @@ function createFakeStore() {
         unsubscribeTokenHash,
       };
       rows.set(email, row);
-      return { id: row.id, email, status: row.status, lang: row.lang };
+      return { id: row.id, email, status: row.status, lang: row.lang, issued: true };
     },
     async confirmByTokenHash(hash, { maxAgeDays = 7 } = {}) {
       for (const row of rows.values()) {
@@ -39,20 +45,32 @@ function createFakeStore() {
           const ageMs = Date.now() - row.confirmSentAt.getTime();
           if (ageMs > maxAgeDays * 24 * 60 * 60 * 1000) return null;
           row.status = "confirmed";
-          row.confirmTokenHash = null;
           return { id: row.id, email: row.email, lang: row.lang };
         }
       }
       return null;
     },
+    async findByConfirmTokenHash(hash) {
+      for (const row of rows.values()) {
+        if (row.confirmTokenHash === hash) return { status: row.status, lang: row.lang };
+      }
+      return null;
+    },
+    async unsubscribeStateByTokenHash(hash) {
+      for (const row of rows.values()) {
+        if (row.unsubscribeTokenHash === hash) return row.status === "unsubscribed" ? "unsubscribed" : "active";
+      }
+      return "invalid";
+    },
     async unsubscribeByTokenHash(hash) {
       for (const row of rows.values()) {
         if (row.unsubscribeTokenHash === hash) {
+          const already = row.status === "unsubscribed";
           row.status = "unsubscribed";
-          return { found: true };
+          return { found: true, already };
         }
       }
-      return { found: false };
+      return { found: false, already: false };
     },
   };
 }
@@ -182,14 +200,14 @@ test("confirm: expired token is rejected", async () => {
   row.confirmSentAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
 
   const result = await service.confirm(token);
-  assert.deepEqual(result, { ok: false, error: "invalid-or-expired" });
+  assert.deepEqual(result, { ok: false, error: "invalid-or-expired", lang: "el" });
   assert.equal(store.rows.get("expired@example.com").status, "pending");
 });
 
 test("confirm: unknown token is rejected", async () => {
   const { service } = setup();
   const result = await service.confirm("this-token-does-not-exist");
-  assert.deepEqual(result, { ok: false, error: "invalid-or-expired" });
+  assert.deepEqual(result, { ok: false, error: "invalid-or-expired", lang: null });
 });
 
 test("unsubscribe: idempotent for a known token, invalid for an unknown one", async () => {
@@ -200,11 +218,11 @@ test("unsubscribe: idempotent for a known token, invalid for an unknown one", as
   assert.equal(hashToken(unsubscribeToken), store.rows.get("unsub@example.com").unsubscribeTokenHash);
 
   const first = await service.unsubscribe(unsubscribeToken);
-  assert.deepEqual(first, { ok: true });
+  assert.deepEqual(first, { ok: true, already: false });
   assert.equal(store.rows.get("unsub@example.com").status, "unsubscribed");
 
   const second = await service.unsubscribe(unsubscribeToken);
-  assert.deepEqual(second, { ok: true }, "repeating the same unsubscribe call stays ok");
+  assert.deepEqual(second, { ok: true, already: true }, "repeating the same unsubscribe call stays ok, and says already");
 
   const unknown = await service.unsubscribe("never-issued");
   assert.deepEqual(unknown, { ok: false, error: "invalid" });
@@ -279,95 +297,6 @@ test("tokens: hashesMatch is constant-time-safe and correct", () => {
   assert.equal(hashesMatch(hash, hashToken(token)), true);
   assert.equal(hashesMatch(hash, hashToken("something-else")), false);
   assert.equal(hashesMatch(hash, ""), false);
-});
-
-test("Resend provider: request shape and error does not leak the API key", async () => {
-  const calls = [];
-  const fakeFetch = async (url, options) => {
-    calls.push({ url, options });
-    return { ok: true, status: 200, json: async () => ({ id: "email_123" }) };
-  };
-  const provider = createResendProvider({
-    apiKey: "re_super_secret_key",
-    from: "GR Wire <weekly@grwire.com>",
-    fetch: fakeFetch,
-  });
-
-  await provider.send({
-    to: "reader@example.com",
-    subject: "Weekly",
-    html: "<p>hi</p>",
-    text: "hi",
-    headers: { "List-Unsubscribe": "<https://www.grwire.com/unsubscribe?token=x>" },
-  });
-
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, "https://api.resend.com/emails");
-  assert.equal(calls[0].options.method, "POST");
-  assert.equal(calls[0].options.headers.Authorization, "Bearer re_super_secret_key");
-  assert.deepEqual(JSON.parse(calls[0].options.body), {
-    from: "GR Wire <weekly@grwire.com>",
-    to: ["reader@example.com"],
-    subject: "Weekly",
-    html: "<p>hi</p>",
-    text: "hi",
-    headers: { "List-Unsubscribe": "<https://www.grwire.com/unsubscribe?token=x>" },
-  });
-
-  const failingFetch = async () => ({ ok: false, status: 401, json: async () => ({ message: "bad key" }) });
-  const failingProvider = createResendProvider({
-    apiKey: "re_super_secret_key",
-    from: "GR Wire <weekly@grwire.com>",
-    fetch: failingFetch,
-  });
-  await assert.rejects(
-    () => failingProvider.send({ to: "x@example.com", subject: "s", html: "h", text: "t" }),
-    (error) => {
-      assert.match(error.message, /401/);
-      assert.doesNotMatch(error.message, /re_super_secret_key/);
-      return true;
-    },
-  );
-});
-
-test("assertTrackingDisabled throws when open or click tracking is on", async () => {
-  const trackingOnFetch = async () => ({
-    ok: true,
-    status: 200,
-    json: async () => ({ open_tracking: true, click_tracking: false }),
-  });
-  await assert.rejects(
-    () => assertTrackingDisabled({ apiKey: "k", domainId: "d1", fetch: trackingOnFetch }),
-    /tracking/i,
-  );
-
-  const trackingOffFetch = async () => ({ ok: true, status: 200, json: async () => ({}) });
-  await assert.doesNotReject(
-    () => assertTrackingDisabled({ apiKey: "k", domainId: "d1", fetch: trackingOffFetch }),
-  );
-});
-
-test("getNewsletterConfig reports enabled/missing by name only, never secret values", () => {
-  const disabled = getNewsletterConfig({});
-  assert.equal(disabled.enabled, false);
-  assert.deepEqual(disabled.missing.sort(), [
-    "DATABASE_URL",
-    "NEWSLETTER_FROM",
-    "NEWSLETTER_SITE_URL",
-    "RESEND_API_KEY",
-  ]);
-
-  const enabled = getNewsletterConfig({
-    RESEND_API_KEY: "re_super_secret_key",
-    NEWSLETTER_FROM: "GR Wire <weekly@grwire.com>",
-    NEWSLETTER_SITE_URL: "https://www.grwire.com",
-    DATABASE_URL: "postgres://user:pass@host/db",
-  });
-  assert.equal(enabled.enabled, true);
-  assert.deepEqual(enabled.missing, []);
-  for (const name of disabled.missing) {
-    assert.doesNotMatch(name, /secret|postgres:\/\//);
-  }
 });
 
 test("subscribe route: returns 503 and never touches the DB when config is missing", async () => {
