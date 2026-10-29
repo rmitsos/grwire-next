@@ -519,6 +519,26 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop,
     }
   }
 
+  // go-live (short columns): a column that is still short of its reserve after the fresh passes
+  // fills from its own section's list, from items published within the 7-day backfill window,
+  // under the same score floors (homepageBackfillIneligibleReason) and the same caps
+  // (eligible), and only while the homepage is under HOMEPAGE_TARGET_ITEMS. A column with nothing even then stays empty; the page hides it and links to the
+  // section page instead.
+  for (const category of Object.keys(columns)) {
+    const sectionCap = SECTION_HOMEPAGE_CAPS[CATEGORY_TO_SPEC_SECTION[category]] ?? COLUMN_MAX_ITEMS;
+    const reserve = Math.min(COLUMN_MAX_ITEMS, Math.ceil(sectionCap / 2));
+    const candidates = sections?.[category] ?? articles.filter((article) => article.categories?.includes(category));
+    for (const article of candidates) {
+      if (columns[category].length >= reserve || totalCount >= HOMEPAGE_TARGET_ITEMS) break;
+      const url = canonicalizeUrl(article.url);
+      if (freshUrls.has(url) || shown.has(url)) continue;
+      if (!isFresh(article, now, BACKFILL_MAX_AGE_HOURS)) continue;
+      if (homepageBackfillIneligibleReason(article, now) !== null) continue;
+      const backfilled = { ...article, homepageBackfill: true };
+      if (eligible(backfilled)) columns[category].push(take(backfilled));
+    }
+  }
+
   // homepage backfill (round 4, target 10 / no padding since round 6): every
   // fresh article has already been offered a slot above (lead/recent/
   // columns); top up from the backfill pool only while totalCount is under

@@ -16,6 +16,14 @@ export async function HomePage({ lang }) {
   // Columns take the best of each section first, so on a thin day "recent" can be empty while the
   // columns are full; an empty "Latest" block next to filled columns would only look broken.
   const hasColumnItems = Object.values(data.columns ?? {}).some((list) => list.length);
+  // A column with nothing to show, even after the 7-day fill, is not drawn as an empty box: it is
+  // listed in one line below the grid with a link to its section page. A section the nav holds
+  // back (fewer than 3 items) is neither drawn nor linked.
+  const columnSlugs = { filled: [], empty: [] };
+  for (const slug of Object.keys(PUBLIC_CATEGORIES)) {
+    if ((data.columns[slug] ?? []).length) columnSlugs.filled.push(slug);
+    else if (navVisibility[slug]?.shown !== false) columnSlugs.empty.push(slug);
+  }
   const showLatest = data.recent.length > 0 || !hasColumnItems;
 
   return (
@@ -60,23 +68,25 @@ export async function HomePage({ lang }) {
       )}
 
       <section className="pub-grid">
-        {Object.keys(PUBLIC_CATEGORIES).map((slug) => {
-          const articles = data.columns[slug] ?? [];
-          const hidden = navVisibility[slug]?.shown === false;
-          // A section the nav hides (fewer than 3 items) is not advertised here either: no
-          // empty column and no "view all" link to a page that is held back.
-          if (hidden && !articles.length) return null;
-          return (
-            <article className="pub-column" key={slug}>
-              <div className="pub-heading">
-                <div><span className="pub-label">GR WIRE</span><h2>{sectionTitle(slug, lang)}</h2></div>
-                {!hidden && <Link href={sectionPath(lang, slug)}>{copy.viewAll}</Link>}
-              </div>
-              <WireList articles={articles} lang={lang} />
-            </article>
-          );
-        })}
+        {columnSlugs.filled.map((slug) => (
+          <article className="pub-column" key={slug}>
+            <div className="pub-heading">
+              <div><span className="pub-label">GR WIRE</span><h2>{sectionTitle(slug, lang)}</h2></div>
+              {navVisibility[slug]?.shown !== false && <Link href={sectionPath(lang, slug)}>{copy.viewAll}</Link>}
+            </div>
+            <WireList articles={data.columns[slug]} lang={lang} />
+          </article>
+        ))}
       </section>
+
+      {columnSlugs.empty.length > 0 && (
+        <p className="pub-more-sections">
+          <span className="pub-label">{copy.moreSections}</span>{" "}
+          {columnSlugs.empty.map((slug, index) => (
+            <span key={slug}>{index > 0 && " · "}<Link href={sectionPath(lang, slug)}>{sectionTitle(slug, lang)} →</Link></span>
+          ))}
+        </p>
+      )}
     </PublicShell>
   );
 }

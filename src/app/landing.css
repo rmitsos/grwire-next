@@ -272,6 +272,8 @@
 .pub-empty p { margin: 0; }
 .pub-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; padding: 50px 0 10px; }
 .pub-column { min-width: 0; }
+.pub-more-sections { padding: 8px 0 24px; margin: 0; font-size: 15px; }
+.pub-more-sections a { text-decoration: none; }
 .pub-column .pub-heading h2 { font-size: 20px; }
 .pub-column .wire-item { grid-template-columns: 1fr; gap: 4px; }
 .pub-column .wire-item h3 { font-size: 16px; }

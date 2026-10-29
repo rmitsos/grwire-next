@@ -21,7 +21,7 @@ export const SECTION_SHARE_CAP = Math.floor(SECTION_SHARE_MAX * HOMEPAGE_MAX_ITE
 // see CATEGORY_TO_SPEC_SECTION/homepageSectionOf below for the mapping).
 export const SECTION_HOMEPAGE_CAPS = Object.freeze({
   "telecom-fibre": 4,
-  "energy-grids": 4,
+  "energy-grids": 3,
   "infrastructure-works": 3,
   "regulators-policy": 3,
   "tenders-contracts": 4,
