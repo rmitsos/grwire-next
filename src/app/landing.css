@@ -303,3 +303,9 @@
   .search-form { grid-template-columns: 1fr; }
   .story-evidence { grid-template-columns: 1fr; }
 }
+
+/* 404 page (src/app/global-not-found.js): both languages are in the HTML, <html lang> picks one. */
+html[lang="el"] .nf-en,
+html[lang="en"] .nf-el {
+  display: none;
+}

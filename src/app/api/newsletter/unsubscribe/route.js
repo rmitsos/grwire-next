@@ -21,6 +21,11 @@ export function isOneClickUnsubscribe(rawBody) {
   return rawBody.trim() === "List-Unsubscribe=One-Click";
 }
 
+export function unsubscribeStatus(result) {
+  if (!result?.ok) return "invalid-unsubscribe";
+  return result.already ? "already-unsubscribed" : "done";
+}
+
 export function unsubscribeRedirectPath(rawBody) {
   return new URLSearchParams(rawBody).get("lang") === "en" ? "/en/unsubscribe" : "/unsubscribe";
 }
@@ -41,13 +46,14 @@ export async function POST(request) {
   const rawBody = await request.text();
 
   const runtime = createNewsletterRuntime();
-  await runtime.service.unsubscribe(token);
+  const result = await runtime.service.unsubscribe(token);
 
   if (isOneClickUnsubscribe(rawBody)) {
     return new Response("Unsubscribed", { status: 200 });
   }
 
   const url = new URL(unsubscribeRedirectPath(rawBody), request.url);
-  url.searchParams.set("status", "done");
+  // The page says what happened: done, already unsubscribed, or a link that isn't valid.
+  url.searchParams.set("status", unsubscribeStatus(result));
   return Response.redirect(url, 303);
 }

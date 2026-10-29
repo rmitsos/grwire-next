@@ -36,6 +36,9 @@ const STATUS_MESSAGES = {
     "invalid-link": { tone: "error", text: "Ο σύνδεσμος επιβεβαίωσης δεν είναι έγκυρος ή έχει λήξει." },
     error: { tone: "error", text: "Κάτι πήγε στραβά. Δοκιμάστε ξανά." },
     done: { tone: "ok", text: "Έχετε διαγραφεί από τη λίστα." },
+    "already-confirmed": { tone: "ok", text: "Η εγγραφή σας έχει ήδη επιβεβαιωθεί. Δεν χρειάζεται να κάνετε κάτι άλλο." },
+    "already-unsubscribed": { tone: "ok", text: "Έχετε ήδη διαγραφεί από τη λίστα." },
+    "invalid-unsubscribe": { tone: "error", text: "Ο σύνδεσμος διαγραφής δεν είναι έγκυρος." },
   },
   en: {
     "check-inbox": { tone: "ok", text: "Almost done. Check your inbox and click the confirmation link." },
@@ -45,6 +48,9 @@ const STATUS_MESSAGES = {
     "invalid-link": { tone: "error", text: "This confirmation link is invalid or has expired." },
     error: { tone: "error", text: "Something went wrong. Please try again." },
     done: { tone: "ok", text: "You have been unsubscribed." },
+    "already-confirmed": { tone: "ok", text: "Your subscription is already confirmed. There's nothing more to do." },
+    "already-unsubscribed": { tone: "ok", text: "You have already been unsubscribed." },
+    "invalid-unsubscribe": { tone: "error", text: "This unsubscribe link isn't valid." },
   },
 };
 
@@ -74,6 +80,10 @@ export const LANDING_COPY = {
       freeNote: "Δωρεάν. Χωρίς διαφημίσεις.",
       consentText: CONSENT_TEXT.el,
       privacyLinkLabel: "Πολιτική απορρήτου",
+      // Shown in place of the browser's own (English) validation bubbles.
+      emailMissing: "Συμπληρώστε το email σας.",
+      emailInvalid: "Αυτή η διεύθυνση δεν φαίνεται σωστή. Δοκιμάστε ξανά.",
+      consentRequired: "Πρέπει να αποδεχτείτε τους όρους για να εγγραφείτε.",
     },
     whatYouGet: {
       title: "Τι λαμβάνετε",
@@ -145,6 +155,12 @@ export const LANDING_COPY = {
       body: "Η εγγραφή σας επιβεβαιώθηκε. Το πρώτο email έρχεται το επόμενο εργάσιμο πρωί.",
       backLink: "← Πίσω στην αρχική",
     },
+    notFound: {
+      title: "Η σελίδα δεν βρέθηκε",
+      body: "Ο σύνδεσμος που ακολουθήσατε δεν οδηγεί σε σελίδα του GR Wire. Μπορεί να έχει αλλάξει ή να έχει γραφτεί λάθος.",
+      backLink: "← Πίσω στην αρχική",
+      metaTitle: "GR Wire — Η σελίδα δεν βρέθηκε",
+    },
     statusMessages: STATUS_MESSAGES.el,
   },
   en: {
@@ -172,6 +188,9 @@ export const LANDING_COPY = {
       freeNote: "Free. No ads.",
       consentText: CONSENT_TEXT.en,
       privacyLinkLabel: "Privacy policy",
+      emailMissing: "Please enter your email address.",
+      emailInvalid: "That address doesn't look right. Please try again.",
+      consentRequired: "Please accept the consent terms to subscribe.",
     },
     whatYouGet: {
       title: "What you get",
@@ -242,6 +261,12 @@ export const LANDING_COPY = {
       title: "Your subscription is confirmed",
       body: "You're subscribed. Your first email arrives on the next weekday morning.",
       backLink: "← Back to the homepage",
+    },
+    notFound: {
+      title: "Page not found",
+      body: "That link doesn't lead to a page on GR Wire. It may have moved, or been mistyped.",
+      backLink: "← Back to the homepage",
+      metaTitle: "GR Wire — Page not found",
     },
     statusMessages: STATUS_MESSAGES.en,
   },

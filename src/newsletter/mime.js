@@ -8,7 +8,7 @@ function encodeWord(value) {
   return `=?UTF-8?B?${Buffer.from(value, "utf8").toString("base64")}?=`;
 }
 
-function formatAddress(name, address) {
+export function formatAddress(name, address) {
   if (!name) return address;
   const encoded = encodeWord(name);
   const display = encoded === name ? `"${name.replace(/(["\\])/g, "\\$1")}"` : encoded;

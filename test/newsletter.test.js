@@ -8,6 +8,10 @@ import {
 import { getNewsletterConfig } from "../src/newsletter/config.js";
 import { generateToken, hashToken, hashesMatch } from "../src/newsletter/tokens.js";
 
+// Mirrors src/newsletter/store.js: a repeat for a pending address inside the 2-minute window keeps the
+// row and its tokens and answers issued = false; a used confirm token stays on the row.
+const REPEAT_WINDOW_MS = 2 * 60 * 1000;
+
 function createFakeStore() {
   const rows = new Map();
   let idCounter = 0;
@@ -16,7 +20,10 @@ function createFakeStore() {
     async upsertPending({ email, lang, consentTextVersion, sourcePage, confirmTokenHash, unsubscribeTokenHash }) {
       const existing = rows.get(email);
       if (existing && existing.status === "confirmed") {
-        return { id: existing.id, email, status: existing.status, lang: existing.lang };
+        return { id: existing.id, email, status: existing.status, lang: existing.lang, issued: false };
+      }
+      if (existing && existing.status === "pending" && Date.now() - existing.confirmSentAt.getTime() < REPEAT_WINDOW_MS) {
+        return { id: existing.id, email, status: existing.status, lang: existing.lang, issued: false };
       }
       const row = {
         id: existing?.id ?? `id-${++idCounter}`,
@@ -30,7 +37,7 @@ function createFakeStore() {
         unsubscribeTokenHash,
       };
       rows.set(email, row);
-      return { id: row.id, email, status: row.status, lang: row.lang };
+      return { id: row.id, email, status: row.status, lang: row.lang, issued: true };
     },
     async confirmByTokenHash(hash, { maxAgeDays = 7 } = {}) {
       for (const row of rows.values()) {
@@ -38,20 +45,32 @@ function createFakeStore() {
           const ageMs = Date.now() - row.confirmSentAt.getTime();
           if (ageMs > maxAgeDays * 24 * 60 * 60 * 1000) return null;
           row.status = "confirmed";
-          row.confirmTokenHash = null;
           return { id: row.id, email: row.email, lang: row.lang };
         }
       }
       return null;
     },
+    async findByConfirmTokenHash(hash) {
+      for (const row of rows.values()) {
+        if (row.confirmTokenHash === hash) return { status: row.status, lang: row.lang };
+      }
+      return null;
+    },
+    async unsubscribeStateByTokenHash(hash) {
+      for (const row of rows.values()) {
+        if (row.unsubscribeTokenHash === hash) return row.status === "unsubscribed" ? "unsubscribed" : "active";
+      }
+      return "invalid";
+    },
     async unsubscribeByTokenHash(hash) {
       for (const row of rows.values()) {
         if (row.unsubscribeTokenHash === hash) {
+          const already = row.status === "unsubscribed";
           row.status = "unsubscribed";
-          return { found: true };
+          return { found: true, already };
         }
       }
-      return { found: false };
+      return { found: false, already: false };
     },
   };
 }
@@ -181,14 +200,14 @@ test("confirm: expired token is rejected", async () => {
   row.confirmSentAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
 
   const result = await service.confirm(token);
-  assert.deepEqual(result, { ok: false, error: "invalid-or-expired" });
+  assert.deepEqual(result, { ok: false, error: "invalid-or-expired", lang: "el" });
   assert.equal(store.rows.get("expired@example.com").status, "pending");
 });
 
 test("confirm: unknown token is rejected", async () => {
   const { service } = setup();
   const result = await service.confirm("this-token-does-not-exist");
-  assert.deepEqual(result, { ok: false, error: "invalid-or-expired" });
+  assert.deepEqual(result, { ok: false, error: "invalid-or-expired", lang: null });
 });
 
 test("unsubscribe: idempotent for a known token, invalid for an unknown one", async () => {
@@ -199,11 +218,11 @@ test("unsubscribe: idempotent for a known token, invalid for an unknown one", as
   assert.equal(hashToken(unsubscribeToken), store.rows.get("unsub@example.com").unsubscribeTokenHash);
 
   const first = await service.unsubscribe(unsubscribeToken);
-  assert.deepEqual(first, { ok: true });
+  assert.deepEqual(first, { ok: true, already: false });
   assert.equal(store.rows.get("unsub@example.com").status, "unsubscribed");
 
   const second = await service.unsubscribe(unsubscribeToken);
-  assert.deepEqual(second, { ok: true }, "repeating the same unsubscribe call stays ok");
+  assert.deepEqual(second, { ok: true, already: true }, "repeating the same unsubscribe call stays ok, and says already");
 
   const unknown = await service.unsubscribe("never-issued");
   assert.deepEqual(unknown, { ok: false, error: "invalid" });

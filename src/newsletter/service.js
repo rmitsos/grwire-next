@@ -55,7 +55,7 @@ export function createNewsletterService({ store, provider, siteUrl, now, randomT
   async function sendConfirmationEmail({ email, lang, confirmToken, unsubscribeToken }) {
     // lang=en lets /api/newsletter/confirm localize its redirect even when the token turns out
     // to be invalid or expired, when a DB lookup can no longer tell us the subscriber's language.
-    const langParam = lang === "en" ? "&lang=en" : "";
+    const langParam = lang === "en" ? "&lang=en" : "&lang=el";
     const confirmUrl = `${siteUrl}/api/newsletter/confirm?token=${encodeURIComponent(confirmToken)}${langParam}`;
     const links = unsubscribeLinks(email, lang, unsubscribeToken);
     const { subject, html, text } = confirmationEmail({ lang, confirmUrl, unsubscribeUrl: links.pageUrl, siteUrl });
@@ -89,7 +89,9 @@ export function createNewsletterService({ store, provider, siteUrl, now, randomT
 
     // Already confirmed: leave the row untouched and send nothing. Same response either way,
     // so this endpoint can't be used to probe which addresses are already on the list.
-    if (row.status !== "confirmed") {
+    // issued === false: the same pending address was submitted again within the 2-minute window
+    // (double click, retry). The first email and its link stay valid, so no second one goes out.
+    if (row.status !== "confirmed" && row.issued !== false) {
       await sendConfirmationEmail({ email: normalizedEmail, lang: row.lang, confirmToken, unsubscribeToken });
     }
     return { ok: true, status: "check-inbox" };
@@ -97,8 +99,16 @@ export function createNewsletterService({ store, provider, siteUrl, now, randomT
 
   async function confirm(token) {
     if (typeof token !== "string" || !token) return { ok: false, error: "invalid-or-expired" };
-    const row = await store.confirmByTokenHash(hashToken(token), { maxAgeDays: 7 });
-    if (!row) return { ok: false, error: "invalid-or-expired" };
+    const tokenHash = hashToken(token);
+    const row = await store.confirmByTokenHash(tokenHash, { maxAgeDays: 7 });
+    if (!row) {
+      // Not accepted: tell "already confirmed" (a re-click) from an invalid or expired link. `lang`
+      // is the subscriber's language when the token is known, so the next page matches it.
+      const known = store.findByConfirmTokenHash ? await store.findByConfirmTokenHash(tokenHash) : null;
+      const lang = known?.lang === "en" ? "en" : known?.lang === "el" ? "el" : null;
+      if (known?.status === "confirmed") return { ok: true, already: true, lang: lang || "el" };
+      return { ok: false, error: "invalid-or-expired", lang };
+    }
     // Welcome email, once, on confirmation. The confirmation itself never fails because of it.
     if (unsubscribeTokenFor) {
       try {
@@ -115,7 +125,14 @@ export function createNewsletterService({ store, provider, siteUrl, now, randomT
   async function unsubscribe(token) {
     if (typeof token !== "string" || !token) return { ok: false, error: "invalid" };
     const result = await store.unsubscribeByTokenHash(hashToken(token));
-    return result?.found ? { ok: true } : { ok: false, error: "invalid" };
+    if (!result?.found) return { ok: false, error: "invalid" };
+    return { ok: true, already: Boolean(result.already) };
+  }
+
+  // Read-only, for the unsubscribe page: 'active' (show the button), 'unsubscribed' or 'invalid'.
+  async function unsubscribeState(token) {
+    if (typeof token !== "string" || !token || !store.unsubscribeStateByTokenHash) return "invalid";
+    return store.unsubscribeStateByTokenHash(hashToken(token));
   }
 
   // Raw `unsubscribeToken` must have just been issued for this subscriber (tokens are stored
@@ -152,5 +169,5 @@ export function createNewsletterService({ store, provider, siteUrl, now, randomT
     return provider.send({ to: subscriber.email, subject, html, text, headers: buildListUnsubscribeHeaders(links.apiUrl), tag: "digest" });
   }
 
-  return { subscribe, confirm, unsubscribe, buildListUnsubscribeHeaders, sendToSubscriber, sendDigest };
+  return { subscribe, confirm, unsubscribe, unsubscribeState, buildListUnsubscribeHeaders, sendToSubscriber, sendDigest };
 }

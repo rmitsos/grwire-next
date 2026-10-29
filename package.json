@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "test": "node --test",
-    "check": "node --check src/newsletter/ses.js && node --check src/newsletter/digest.js && node --check src/newsletter/emails.js && node --check src/index.js && node --check scripts/scan.js && node --check scripts/review-dump.js",
+    "check": "node --check src/newsletter/ses.js && node --check src/newsletter/digest.js && node --check src/newsletter/emails.js && node --check src/newsletter/page-state.js && node --check src/landing/form-validation.js && node --check src/landing/not-found-lang.js && node --check src/index.js && node --check scripts/scan.js && node --check scripts/review-dump.js",
     "scan": "node scripts/scan.js"
   },
   "dependencies": {

@@ -54,7 +54,7 @@ test("SigV4: matches an independent computation of the AWS algorithm", () => {
     `AWS4-HMAC-SHA256 Credential=AKID/20261029/eu-central-1/ses/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date, Signature=${sig}`);
 });
 
-test("SES provider: SESv2 raw send, From address only in FromEmailAddress, no secret in body or error", async () => {
+test("SES provider: SESv2 raw send, From with display name in FromEmailAddress and the raw header, no secret in body or error", async () => {
   const calls = [];
   const provider = createSesProvider({
     accessKeyId: "AKIAEXAMPLE", secretAccessKey: "SECRETEXAMPLEVALUE", from: "news@mail.grwire.com", fromName: "GR Wire",
@@ -67,7 +67,7 @@ test("SES provider: SESv2 raw send, From address only in FromEmailAddress, no se
   assert.match(calls[0].options.headers.authorization, /^AWS4-HMAC-SHA256 Credential=AKIAEXAMPLE\/\d{8}\/eu-central-1\/ses\/aws4_request/);
   assert.equal("host" in calls[0].options.headers, false);
   const body = JSON.parse(calls[0].options.body);
-  assert.equal(body.FromEmailAddress, "news@mail.grwire.com");
+  assert.equal(body.FromEmailAddress, '"GR Wire" <news@mail.grwire.com>');
   assert.deepEqual(body.EmailTags, [{ Name: "type", Value: "digest" }]);
   assert.equal(JSON.stringify(body).includes("SECRETEXAMPLEVALUE"), false);
   const raw = Buffer.from(body.Content.Raw.Data, "base64").toString("utf8");

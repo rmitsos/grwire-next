@@ -1,31 +1,29 @@
-// Required because the app now has multiple root layouts (src/app/(site), (landing-el),
-// (landing-en)) — there's no single layout Next can compose a 404 page from for a URL that
-// matches none of them. See next.config.mjs experimental.globalNotFound.
+import "./landing.css";
+import { landingFontVariables } from "@/landing/fonts";
+import { NOT_FOUND_LANG_SCRIPT } from "@/landing/not-found-lang";
+import { NotFoundView } from "@/components/landing/NotFoundView";
+
+// Required because the app has multiple root layouts (src/app/(site), (landing-el), (landing-en)):
+// Next can't wrap a 404 in any one of them, so every 404 (unknown URL or notFound()) renders this
+// page. It is branded (GR Wire header and footer) and exists in both languages in the HTML; a
+// one-line script at the top of <body> sets <html lang> from the requested path before first paint
+// and the CSS (landing.css, .nf-el / .nf-en) shows only that language. Without JS both show.
+// See next.config.mjs experimental.globalNotFound.
 export const metadata = {
-  title: "GR Wire · Page not found",
+  title: "GR Wire — Η σελίδα δεν βρέθηκε · Page not found",
   robots: { index: false, follow: false },
 };
 
 export default function GlobalNotFound() {
   return (
-    <html lang="en">
-      <body
-        style={{
-          margin: 0,
-          minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-          fontFamily: "Arial, Helvetica, sans-serif",
-          background: "#f3f2ec",
-          color: "#10211b",
-        }}
-      >
-        <div style={{ textAlign: "center", padding: 24 }}>
-          <h1 style={{ fontSize: 28, margin: "0 0 12px" }}>Page not found</h1>
-          <p style={{ margin: "0 0 20px", color: "#69766f" }}>The page you are looking for does not exist.</p>
-          <a href="/" style={{ color: "#0c6b4f", fontWeight: 700, textDecoration: "none" }}>
-            Back to GR Wire →
-          </a>
+    <html lang="el" className={landingFontVariables} suppressHydrationWarning>
+      <body className="landing">
+        <script dangerouslySetInnerHTML={{ __html: NOT_FOUND_LANG_SCRIPT }} />
+        <div className="nf-el">
+          <NotFoundView lang="el" />
+        </div>
+        <div className="nf-en">
+          <NotFoundView lang="en" />
         </div>
       </body>
     </html>

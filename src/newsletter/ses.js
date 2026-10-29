@@ -3,7 +3,7 @@
 // static AWS_SES_* pair: an IAM user that may only call ses:SendEmail on the one identity with a
 // ses:FromAddress condition (see docs/golive/ses-iam-policy.json). Secrets never appear in errors.
 import { createHash, createHmac } from "node:crypto";
-import { buildRawEmail } from "./mime.js";
+import { buildRawEmail, formatAddress } from "./mime.js";
 
 const sha256Hex = (data) => createHash("sha256").update(data).digest("hex");
 const hmac = (key, data) => createHmac("sha256", key).update(data).digest();
@@ -45,7 +45,8 @@ export function createSesProvider({
       const date = now();
       const raw = buildRawEmail({ from, fromName, to, replyTo, subject, html, text, headers, date, messageId: `${to}${date.getTime()}` });
       const body = JSON.stringify({
-        FromEmailAddress: from,
+        // Display name here too: SES shows this value as From, whatever the raw message header says.
+        FromEmailAddress: formatAddress(fromName, from),
         Destination: { ToAddresses: [to] },
         Content: { Raw: { Data: Buffer.from(raw, "utf8").toString("base64") } },
         ...(configurationSetName ? { ConfigurationSetName: configurationSetName } : {}),

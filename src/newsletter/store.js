@@ -57,6 +57,9 @@ async function createSubscriberSchema(sql) {
 // Expects `email` already lowercased/trimmed by the caller (see newsletter/service.js#validateEmail).
 export function createSubscriberStore(sql) {
   return {
+    // A repeat for the same pending address within 2 minutes (double click, retry) keeps the row, and its
+    // confirmation token, exactly as it was and returns issued = false: the caller sends no second email.
+    // The check lives in the single SQL statement, so two simultaneous requests can't both issue a token.
     async upsertPending({ email, lang, consentTextVersion, sourcePage, confirmTokenHash, unsubscribeTokenHash }) {
       await ensureSubscriberSchema(sql);
       const rows = await sql`
@@ -70,22 +73,23 @@ export function createSubscriberStore(sql) {
         )
         ON CONFLICT (email) DO UPDATE SET
           status = CASE WHEN subscribers.status = 'confirmed' THEN subscribers.status ELSE 'pending' END,
-          lang = CASE WHEN subscribers.status = 'confirmed' THEN subscribers.lang ELSE EXCLUDED.lang END,
-          consent_text_version = CASE WHEN subscribers.status = 'confirmed'
+          lang = CASE WHEN (subscribers.status = 'confirmed' OR (subscribers.status = 'pending' AND subscribers.confirm_sent_at > now() - INTERVAL '2 minutes'))
+            THEN subscribers.lang ELSE EXCLUDED.lang END,
+          consent_text_version = CASE WHEN (subscribers.status = 'confirmed' OR (subscribers.status = 'pending' AND subscribers.confirm_sent_at > now() - INTERVAL '2 minutes'))
             THEN subscribers.consent_text_version ELSE EXCLUDED.consent_text_version END,
-          consented_at = CASE WHEN subscribers.status = 'confirmed'
+          consented_at = CASE WHEN (subscribers.status = 'confirmed' OR (subscribers.status = 'pending' AND subscribers.confirm_sent_at > now() - INTERVAL '2 minutes'))
             THEN subscribers.consented_at ELSE EXCLUDED.consented_at END,
-          source_page = CASE WHEN subscribers.status = 'confirmed'
+          source_page = CASE WHEN (subscribers.status = 'confirmed' OR (subscribers.status = 'pending' AND subscribers.confirm_sent_at > now() - INTERVAL '2 minutes'))
             THEN subscribers.source_page ELSE EXCLUDED.source_page END,
-          confirm_token_hash = CASE WHEN subscribers.status = 'confirmed'
+          confirm_token_hash = CASE WHEN (subscribers.status = 'confirmed' OR (subscribers.status = 'pending' AND subscribers.confirm_sent_at > now() - INTERVAL '2 minutes'))
             THEN subscribers.confirm_token_hash ELSE EXCLUDED.confirm_token_hash END,
-          confirm_sent_at = CASE WHEN subscribers.status = 'confirmed'
+          confirm_sent_at = CASE WHEN (subscribers.status = 'confirmed' OR (subscribers.status = 'pending' AND subscribers.confirm_sent_at > now() - INTERVAL '2 minutes'))
             THEN subscribers.confirm_sent_at ELSE EXCLUDED.confirm_sent_at END,
-          unsubscribe_token_hash = CASE WHEN subscribers.status = 'confirmed'
+          unsubscribe_token_hash = CASE WHEN (subscribers.status = 'confirmed' OR (subscribers.status = 'pending' AND subscribers.confirm_sent_at > now() - INTERVAL '2 minutes'))
             THEN subscribers.unsubscribe_token_hash ELSE EXCLUDED.unsubscribe_token_hash END,
           unsubscribed_at = CASE WHEN subscribers.status = 'confirmed' THEN subscribers.unsubscribed_at ELSE NULL END,
           updated_at = now()
-        RETURNING id, email, status, lang
+        RETURNING id, email, status, lang, (confirm_sent_at = now()) AS issued
       `;
       return rows[0];
     },
@@ -94,13 +98,28 @@ export function createSubscriberStore(sql) {
       await ensureSubscriberSchema(sql);
       const rows = await sql`
         UPDATE subscribers
-        SET status = 'confirmed', confirmed_at = now(), confirm_token_hash = NULL, updated_at = now()
+        SET status = 'confirmed', confirmed_at = now(), updated_at = now()
         WHERE confirm_token_hash = ${hash}
           AND status = 'pending'
           AND confirm_sent_at >= now() - (${maxAgeDays} * INTERVAL '1 day')
         RETURNING id, email, lang
       `;
       return rows[0] || null;
+    },
+
+    // Read-only: what became of a confirm link that confirmByTokenHash did not accept.
+    async findByConfirmTokenHash(hash) {
+      await ensureSubscriberSchema(sql);
+      const rows = await sql`SELECT status, lang FROM subscribers WHERE confirm_token_hash = ${hash}`;
+      return rows[0] || null;
+    },
+
+    // Read-only, for the unsubscribe page: 'active' | 'unsubscribed' | 'invalid'.
+    async unsubscribeStateByTokenHash(hash) {
+      await ensureSubscriberSchema(sql);
+      const rows = await sql`SELECT status FROM subscribers WHERE unsubscribe_token_hash = ${hash}`;
+      if (!rows[0]) return "invalid";
+      return rows[0].status === "unsubscribed" ? "unsubscribed" : "active";
     },
 
     async unsubscribeByTokenHash(hash) {
@@ -111,9 +130,9 @@ export function createSubscriberStore(sql) {
         WHERE unsubscribe_token_hash = ${hash} AND status <> 'unsubscribed'
         RETURNING id
       `;
-      if (updated[0]) return { found: true };
+      if (updated[0]) return { found: true, already: false };
       const existing = await sql`SELECT id FROM subscribers WHERE unsubscribe_token_hash = ${hash}`;
-      return { found: Boolean(existing[0]) };
+      return { found: Boolean(existing[0]), already: Boolean(existing[0]) };
     },
 
     // Run daily by /api/cron/newsletter-cleanup: unconfirmed sign-ups are deleted after 7 days.
