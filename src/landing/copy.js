@@ -19,8 +19,8 @@ const SECTION_LABELS = {
   telco: { el: "Τηλεπικοινωνίες & Οπτικές Ίνες", en: "Telecom & fibre" },
   energy: { el: "Ενέργεια & Δίκτυα", en: "Energy & grids" },
   infrastructure: { el: "Υποδομές & Έργα", en: "Infrastructure & works" },
-  tenders: { el: "Διαγωνισμοί & Συμβάσεις", en: "Tenders & contracts" },
   regulators: { el: "Ρυθμιστές & Πολιτική", en: "Regulators & policy" },
+  tenders: { el: "Διαγωνισμοί & Συμβάσεις", en: "Tenders & contracts" },
   deals: { el: "Συμφωνίες & Εταιρείες", en: "Deals & companies" },
 };
 
