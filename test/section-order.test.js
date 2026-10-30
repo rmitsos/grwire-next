@@ -75,3 +75,9 @@ test("footer and sitemap use the same order", () => {
   assert.deepEqual(paths.filter((p) => ORDER.includes(p)), ORDER);
   assert.deepEqual(paths.filter((p) => p.startsWith("en/") && ORDER.includes(p.slice(3))).map((p) => p.slice(3)), ORDER);
 });
+
+test("--header-h: 81px on desktop (measured header 80.6px), mobile stays 97px", () => {
+  const css = read("src/app/landing.css");
+  assert.match(css, /@media \(min-width: 901px\) \{\s*:root \{ --header-h: 81px; \}/);
+  assert.match(css, /@media \(max-width: 900px\) \{[\s\S]*?:root \{ --header-h: 97px; \}/);
+});
