@@ -32,12 +32,19 @@ function fakeSql() {
     const text = strings.join("?");
     calls.push({ text, values });
     if (/INSERT INTO articles/.test(text)) {
-      const [url, title, summary, publishedAt, sourceId, sourceUrl, score, categories, relevance, metadata, sourceKind] = values;
+      const [url, title, summary, publishedAt, sourceId, sourceUrl, score, categories, relevance, metadata, sourceKind, priority] = values;
       if (articles.has(url)) return []; // ON CONFLICT (canonical_url) DO NOTHING
       assert.match(text, /ON CONFLICT \(canonical_url\) DO NOTHING/);
       const id = `id-${articles.size + 1}`;
-      articles.set(url, { id, canonical_url: url, title, summary, published_at: publishedAt, source_id: sourceId, source_url: sourceUrl, score, categories, relevance: JSON.parse(relevance), metadata: JSON.parse(metadata), source_kind: sourceKind });
+      articles.set(url, { id, canonical_url: url, title, summary, published_at: publishedAt, source_id: sourceId, source_url: sourceUrl, score, categories, relevance: JSON.parse(relevance), metadata: JSON.parse(metadata), source_kind: sourceKind, priority });
       return [{ id }];
+    }
+    if (/UPDATE articles SET priority/.test(text)) {
+      const [priority, url, again] = values;
+      const row = articles.get(url);
+      if (!row || row.priority === again) return [];
+      row.priority = priority;
+      return [{ id: row.id }];
     }
     if (/INSERT INTO article_organizations/.test(text)) { links.push(values); return []; }
     throw new Error(`unexpected statement: ${text}`);
@@ -201,7 +208,7 @@ test("curated filters: stock-market, promo and CSR/culture items are rejected, a
 test("curated store: writes the ingest columns plus source_kind='curated', tier 1, section category", async () => {
   const db = fakeSql();
   const { items } = validateCuratedBatch([good()], { now: NOW });
-  assert.deepEqual(await storeCuratedItems(db.sql, items), { inserted: 1, duplicates: 0 });
+  assert.deepEqual(await storeCuratedItems(db.sql, items), { inserted: 1, duplicates: 0, upgraded: 0 });
   const [row] = [...db.articles.values()];
   assert.equal(row.source_kind, "curated");
   assert.equal(row.canonical_url, "https://www.xblog.gr/i-telekom-lansarei-fiber-router-7/");
@@ -213,7 +220,7 @@ test("curated store: writes the ingest columns plus source_kind='curated', tier 
   assert.equal(row.relevance[0].category, "telco");
   assert.equal(row.score, CURATED_SCORE);
   const insert = db.calls.find((call) => /INSERT INTO articles/.test(call.text)).text;
-  for (const column of ["canonical_url", "title", "summary", "published_at", "source_id", "source_url", "score", "categories", "relevance", "metadata", "source_kind"]) {
+  for (const column of ["canonical_url", "title", "summary", "published_at", "source_id", "source_url", "score", "categories", "relevance", "metadata", "source_kind", "priority"]) {
     assert.match(insert, new RegExp(column));
   }
 });
@@ -232,10 +239,10 @@ test("curated endpoint: first send inserts, re-sending the same file is a no-op"
   const body = [good(), good({ url: "https://www.naftemporiki.gr/business/2178950/nova/", source: "naftemporiki", title_el: "Nova: Διπλασιάστηκαν οι πελάτες FTTH, επενδύσεις €249,2 εκατ." })];
   const first = await handleCuratedRequest(request(body), options);
   assert.equal(first.status, 200);
-  assert.deepEqual(await first.json(), { ok: true, inserted: 2, duplicates: 0, rejected: [] });
+  assert.deepEqual(await first.json(), { ok: true, inserted: 2, duplicates: 0, upgraded: 0, rejected: [] });
   assert.equal(state.revalidated, 1);
   const second = await handleCuratedRequest(request(body), options);
-  assert.deepEqual(await second.json(), { ok: true, inserted: 0, duplicates: 2, rejected: [] });
+  assert.deepEqual(await second.json(), { ok: true, inserted: 0, duplicates: 2, upgraded: 0, rejected: [] });
   assert.equal(state.revalidated, 1, "nothing new, nothing to rebuild");
   assert.equal(db.articles.size, 2);
 });
@@ -287,6 +294,7 @@ test("curated migration is additive and idempotent, in both the runtime schema a
   for (const file of ["../src/database.js", "../db/schema.sql"]) {
     const source = readFileSync(new URL(file, import.meta.url), "utf8");
     assert.match(source, /ALTER TABLE articles ADD COLUMN IF NOT EXISTS source_kind TEXT(?! NOT NULL)/, file);
+    assert.match(source, /ALTER TABLE articles ADD COLUMN IF NOT EXISTS priority TEXT(?! NOT NULL)/, file);
     assert.match(source, /CREATE INDEX IF NOT EXISTS articles_source_kind_idx/, file);
     assert.doesNotMatch(source, /DROP (TABLE|COLUMN)/i, file);
   }

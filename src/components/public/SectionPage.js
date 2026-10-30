@@ -24,7 +24,7 @@ export async function SectionPage({ lang, category }) {
           <div><span className="pub-label">{copy.section.recentLabel}</span><h2>{copy.section.recentTitle}</h2></div>
           <span>{copy.section.items(fresh.length)}</span>
         </div>
-        <WireList articles={fresh} lang={lang} empty={articles.length ? copy.emptyRecent : copy.empty} />
+        <WireList articles={fresh} lang={lang} showHeadline empty={articles.length ? copy.emptyRecent : copy.empty} />
       </section>
       {older.length > 0 && (
         <section className="pub-section">

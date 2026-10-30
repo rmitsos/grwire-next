@@ -11,6 +11,7 @@ import { detectArticleOrganizations } from "./article-organizations.js";
  * are identifiable and removable:  DELETE FROM articles WHERE source_kind = 'curated';
  */
 export const CURATED_SOURCE_KIND = "curated";
+export const CURATED_PRIORITY_HEADLINE = "headline";
 export const CURATED_MAX_ITEMS = 50;
 export const CURATED_MAX_BODY_BYTES = 256 * 1024;
 // A neutral stored score. Curated rows never depend on it: the read-time rules keep it and the
@@ -24,7 +25,7 @@ export const CURATED_LIMITS = Object.freeze({
   source: { min: 2, max: 60 },
 });
 
-const ALLOWED_FIELDS = new Set(["title_el", "summary_el", "url", "source", "published_at", "section"]);
+const ALLOWED_FIELDS = new Set(["title_el", "summary_el", "url", "source", "published_at", "section", "priority"]);
 // Spec section id (the API's `section`) -> public category slug stored in articles.categories.
 const SLUG_BY_SECTION = Object.freeze(
   Object.fromEntries(Object.entries(CATEGORY_TO_SPEC_SECTION).map(([slug, section]) => [section, slug])),
@@ -136,6 +137,8 @@ export function validateCuratedItem(raw, { now = Date.now() } = {}) {
     sourceId: `${CURATED_SOURCE_KIND}:${source.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "")}`,
     section: raw.section,
     category,
+    // Optional editor flag. Only "headline" is meaningful; any other value (or none) is ignored, not rejected.
+    priority: raw.priority === CURATED_PRIORITY_HEADLINE ? CURATED_PRIORITY_HEADLINE : null,
   };
   // Same hard rejections the scanner and the read-time rules apply: stock-market pieces, sponsored
   // and promo content, culture/CSR items, and the rest of noiseRejectReason.
@@ -156,11 +159,13 @@ function textField(value, { min, max }) {
 /**
  * Writes validated items the way ingest-service.js writes scanned ones (same columns, same
  * article_organizations links) plus source_kind = 'curated'. An existing canonical_url is left
- * untouched (ON CONFLICT DO NOTHING), so re-sending a file is a no-op. Returns { inserted, duplicates }.
+ * untouched (ON CONFLICT DO NOTHING), so re-sending a file is a no-op, except that an incoming
+ * priority "headline" is set on the existing row. Returns { inserted, duplicates, upgraded }.
  */
 export async function storeCuratedItems(sql, items) {
   let inserted = 0;
   let duplicates = 0;
+  let upgraded = 0;
   for (const item of items) {
     const relevance = [{
       ruleId: "curated", label: "Curated", category: item.category, score: CURATED_SCORE, accepted: true,
@@ -177,16 +182,29 @@ export async function storeCuratedItems(sql, items) {
     const rows = await sql`
       INSERT INTO articles
         (canonical_url, title, summary, published_at, source_id, source_url,
-         score, categories, relevance, metadata, source_kind)
+         score, categories, relevance, metadata, source_kind, priority)
       VALUES
         (${item.url}, ${item.title}, ${item.summary}, ${item.publishedAt},
          ${item.sourceId}, ${item.url}, ${CURATED_SCORE},
          ${[item.category]}, ${JSON.stringify(relevance)}::jsonb,
-         ${JSON.stringify(metadata)}::jsonb, ${CURATED_SOURCE_KIND})
+         ${JSON.stringify(metadata)}::jsonb, ${CURATED_SOURCE_KIND}, ${item.priority})
       ON CONFLICT (canonical_url) DO NOTHING
       RETURNING id
     `;
-    if (!rows.length) { duplicates += 1; continue; }
+    if (!rows.length) {
+      duplicates += 1;
+      // A re-send with priority "headline" upgrades the existing row (never the other way round,
+      // and a re-send without the flag changes nothing).
+      if (item.priority === CURATED_PRIORITY_HEADLINE) {
+        const upgradedRows = await sql`
+          UPDATE articles SET priority = ${CURATED_PRIORITY_HEADLINE}, updated_at = now()
+          WHERE canonical_url = ${item.url} AND priority IS DISTINCT FROM ${CURATED_PRIORITY_HEADLINE}
+          RETURNING id
+        `;
+        upgraded += upgradedRows.length;
+      }
+      continue;
+    }
     inserted += 1;
     for (const match of detectArticleOrganizations({ title: item.title, summary: item.summary })) {
       await sql`
@@ -197,5 +215,5 @@ export async function storeCuratedItems(sql, items) {
       `;
     }
   }
-  return { inserted, duplicates };
+  return { inserted, duplicates, upgraded };
 }

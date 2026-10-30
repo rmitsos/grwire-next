@@ -114,6 +114,8 @@ ALTER TABLE articles ADD COLUMN IF NOT EXISTS relevance JSONB NOT NULL DEFAULT '
 -- Additive (NULL for every scanned row): 'curated' marks editor-uploaded items (POST /api/curated).
 -- Remove them all with: DELETE FROM articles WHERE source_kind = 'curated';
 ALTER TABLE articles ADD COLUMN IF NOT EXISTS source_kind TEXT;
+-- Additive, nullable: 'headline' pins an editor-flagged story for 48h (POST /api/curated, field `priority`).
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS priority TEXT;
 CREATE INDEX IF NOT EXISTS articles_categories_idx ON articles USING GIN (categories);
 CREATE INDEX IF NOT EXISTS articles_source_idx ON articles (source_id);
 CREATE INDEX IF NOT EXISTS articles_source_kind_idx ON articles (source_kind) WHERE source_kind IS NOT NULL;

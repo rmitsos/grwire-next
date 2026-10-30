@@ -28,6 +28,7 @@ export const PUBLIC_COPY = {
     empty: "Δεν υπάρχουν ακόμη ειδήσεις σε αυτήν την ενότητα.",
     emptyRecent: "Δεν υπάρχουν ειδήσεις τις τελευταίες 72 ώρες.",
     emptySearch: "Δεν βρέθηκαν αποτελέσματα.",
+    headlineLabel: "Κύρια είδηση",
     viaGoogleNews: "μέσω Google News (ο αρχικός σύνδεσμος δεν είναι διαθέσιμος)",
     section: {
       label: "GR WIRE",
@@ -96,6 +97,7 @@ export const PUBLIC_COPY = {
     empty: "No stories in this section yet.",
     emptyRecent: "No stories in the last 72 hours.",
     emptySearch: "No matching stories were found.",
+    headlineLabel: "Headline",
     viaGoogleNews: "via Google News (original link not available)",
     section: {
       label: "GR WIRE",

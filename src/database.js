@@ -55,6 +55,8 @@ async function createSchema(sql) {
   await sql`ALTER TABLE articles ADD COLUMN IF NOT EXISTS relevance JSONB NOT NULL DEFAULT '[]'`;
   // Additive (NULL for every scanned row): 'curated' marks editor-uploaded items (POST /api/curated).
   await sql`ALTER TABLE articles ADD COLUMN IF NOT EXISTS source_kind TEXT`;
+  // Additive, nullable (NULL for every existing row): 'headline' pins an editor-flagged story for 48h (POST /api/curated).
+  await sql`ALTER TABLE articles ADD COLUMN IF NOT EXISTS priority TEXT`;
   await sql`
     CREATE TABLE IF NOT EXISTS article_organizations (
       article_id UUID NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
