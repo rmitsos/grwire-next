@@ -24,7 +24,7 @@ export async function handleCuratedRequest(request, { env, getSql, revalidate = 
   const batch = validateCuratedBatch(body, { now });
   if (batch.error) return json({ ok: false, error: batch.error }, 400);
 
-  let stored = { inserted: 0, duplicates: 0 };
+  let stored = { inserted: 0, duplicates: 0, upgraded: 0 };
   if (batch.items.length) {
     try {
       const sql = await getSql();
@@ -33,12 +33,13 @@ export async function handleCuratedRequest(request, { env, getSql, revalidate = 
       console.error("[curated] store failed:", error?.name || "Error", error?.code || "");
       return json({ ok: false, error: "Could not store items" }, 500);
     }
-    if (stored.inserted) revalidate();
+    if (stored.inserted || stored.upgraded) revalidate();
   }
   return json({
     ok: true,
     inserted: stored.inserted,
     duplicates: stored.duplicates + batch.duplicates,
+    upgraded: stored.upgraded || 0,
     rejected: batch.rejected,
   });
 }

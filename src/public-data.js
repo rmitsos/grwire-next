@@ -36,6 +36,27 @@ import {
   splitByFreshness,
 } from "./feed-rules.js";
 
+// Editor-flagged headline stories (POST /api/curated, priority "headline") are pinned for 48h from
+// their publish time: lead of the homepage, first in their section column and at the top of their
+// section page. After that normal date order and selection apply.
+export const HEADLINE_WINDOW_MS = 48 * 3_600_000;
+export function isActiveHeadline(item, now = Date.now()) {
+  if (item?.priority !== "headline") return false;
+  const published = Date.parse(item.published_at ?? item.publishedAt ?? "");
+  return Number.isFinite(published) && published <= now + 10 * 60_000 && now - published <= HEADLINE_WINDOW_MS;
+}
+const publishedMs = (item) => Date.parse(item.published_at ?? item.publishedAt ?? "") || 0;
+// Active headlines first, newest first; everything else keeps its order (Array#sort is stable).
+export function headlinesFirst(list, now = Date.now()) {
+  if (!list.some((item) => isActiveHeadline(item, now))) return list;
+  return [...list].sort((a, b) => {
+    const ah = isActiveHeadline(a, now);
+    const bh = isActiveHeadline(b, now);
+    if (ah !== bh) return ah ? -1 : 1;
+    return ah ? publishedMs(b) - publishedMs(a) : 0;
+  });
+}
+
 const SOURCE_BY_ID = new Map(SOURCES.map((source) => [source.id, source]));
 
 // Ingest runs repeatedly and the day cap (sources-spec.md §5/§2) must also
@@ -144,17 +165,21 @@ function undisplayableStage(row) {
   return null;
 }
 
-function pickRows(prepared, { category, limit = 80, onDrop } = {}) {
+function pickRows(prepared, { category, limit = 80, onDrop, now = Date.now() } = {}) {
   let cleaned = prepared;
   if (category) {
     cleaned = cleaned.filter((row) => row.categories.includes(category));
     cleaned = enforceEventCapPerSection(cleaned, onDrop);
   }
-  return cleaned.slice(0, limit).map(toArticle);
+  // Pinned headlines go first (before the limit, so they are never cut off), flagged for the label.
+  return headlinesFirst(cleaned, now).slice(0, limit).map((row) => {
+    const article = toArticle(row);
+    return isActiveHeadline(row, now) ? { ...article, headline: true } : article;
+  });
 }
 
 export function selectArticles(rows, { category, limit = 80, now = Date.now(), onDrop } = {}) {
-  return pickRows(prepareRows(rows, { now, onDrop }), { category, limit, onDrop });
+  return pickRows(prepareRows(rows, { now, onDrop }), { category, limit, onDrop, now });
 }
 
 // round-4 telco rule: telecom-fibre is only a valid category when the item
@@ -493,6 +518,11 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop,
     : backfillPool.filter((article) => checkEligible(article, { forLead: true }).ok);
   if (leadCandidates.length) {
     const [best] = [...leadCandidates].sort((a, b) => {
+      // An active headline (last 48h) outranks the normal lead preference; several: newest wins.
+      const headlineA = isActiveHeadline(a, now);
+      const headlineB = isActiveHeadline(b, now);
+      if (headlineA !== headlineB) return headlineA ? -1 : 1;
+      if (headlineA) return publishedMs(b) - publishedMs(a);
       const preferenceDiff = leadPreferenceScore(b) - leadPreferenceScore(a);
       if (preferenceDiff) return preferenceDiff;
       return (b.score || 0) - (a.score || 0) || Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0);
@@ -511,7 +541,7 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop,
   const columns = Object.fromEntries(Object.keys(PUBLIC_CATEGORIES).map((category) => [category, []]));
   for (const category of Object.keys(columns)) {
     const columnCap = columnCapOf(category);
-    const candidates = sections?.[category] ?? articles.filter((article) => article.categories?.includes(category));
+    const candidates = headlinesFirst(sections?.[category] ?? articles.filter((article) => article.categories?.includes(category)), now);
     for (const article of candidates) {
       if (columns[category].length >= columnCap) break;
       if (article.categories?.[0] !== category) continue;
@@ -635,7 +665,9 @@ export function sectionOverCap(list, { protectedArticle } = {}) {
     if (!removable.length) continue;
     // A scanned story goes before a curated one (an editor's pick; /api/curated), then an older
     // backfill story before a fresh one, then the lowest score, then the oldest.
-    const victim = removable.sort((a, b) => Number(Boolean(a.metadata?.curated)) - Number(Boolean(b.metadata?.curated))
+    // An active headline (priority: "headline", flagged when selected) goes last of all.
+    const victim = removable.sort((a, b) => Number(Boolean(a.headline)) - Number(Boolean(b.headline))
+      || Number(Boolean(a.metadata?.curated)) - Number(Boolean(b.metadata?.curated))
       || Number(Boolean(b.homepageBackfill)) - Number(Boolean(a.homepageBackfill))
       || (a.score || 0) - (b.score || 0)
       || Date.parse(a.publishedAt || 0) - Date.parse(b.publishedAt || 0))[0];
@@ -759,6 +791,7 @@ function toArticle(row) {
     sourceId: row.source_id,
     sourceName: publicSourceName({ publisher, configuredName: source?.name, url: link.url }),
     score: Number(row.score),
+    priority: row.priority === "headline" ? "headline" : null,
     categories: row.categories || [],
     relevance: row.relevance || [],
     // An item is section-only while its link still points at news.google.com (unresolved);
