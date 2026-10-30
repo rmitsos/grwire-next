@@ -314,7 +314,8 @@ html:has(> body.landing) { scroll-padding-top: calc(var(--header-h) + 12px); }
 .home-signup h2 { font: 700 27px/1.25 var(--serif); color: var(--paper); margin: 10px 0 14px; }
 .home-signup p { margin: 0; color: #c9cfd3; }
 .home-signup .sub-form { border-color: #2a3946; color: var(--ink); max-width: none; }
-.home-signup .sub-form .consent { color: var(--muted); }
+.home-signup .sub-form .consent,
+.home-signup .sub-form .free-note { color: var(--muted); }
 .home-signup .signup-closed { color: var(--ink); }
 .pub-column .pub-heading h2 { font-size: 20px; }
 .pub-column .wire-item { grid-template-columns: 1fr; gap: 4px; }

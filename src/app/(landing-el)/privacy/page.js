@@ -6,7 +6,7 @@ export const metadata = buildLandingMetadata({
   lang: "el",
   routeKey: "privacy",
   title: "GR Wire — Πολιτική απορρήτου",
-  description: "Τι στοιχεία κρατάμε όταν εγγράφεστε στο ημερήσιο email του GR Wire, ποιος τα επεξεργάζεται και για πόσο.",
+  description: "Τι στοιχεία κρατάμε όταν εγγράφεστε στο email του GR Wire κάθε εργάσιμη, ποιος τα επεξεργάζεται και για πόσο.",
 });
 
 export default function Page() {

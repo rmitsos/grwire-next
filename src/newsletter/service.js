@@ -1,15 +1,15 @@
 import { hashToken } from "./tokens.js";
 import { confirmationEmail, welcomeEmail, digestEmail } from "./emails.js";
 
-export const CONSENT_TEXT_VERSION = "2026-10-29-v2";
+export const CONSENT_TEXT_VERSION = "2026-10-30-v3";
 
 // subscribe-copy-v2.md, "Consent line" row (29 Oct 2026). The privacy-policy link is rendered next to it.
 export const CONSENT_TEXT = {
   el:
-    "Με την εγγραφή συμφωνείτε να λαμβάνετε το ημερήσιο email του GR Wire από την Tareno Systems. Θα σας στείλουμε " +
+    "Με την εγγραφή συμφωνείτε να λαμβάνετε το email του GR Wire κάθε εργάσιμη από την Tareno Systems. Θα σας στείλουμε " +
     "πρώτα ένα email για να επιβεβαιώσετε τη διεύθυνσή σας. Μπορείτε να διαγραφείτε όποτε θέλετε, με ένα κλικ.",
   en:
-    "By subscribing you agree to receive GR Wire's daily email from Tareno Systems. We'll first send a message " +
+    "By subscribing you agree to receive GR Wire's weekday email from Tareno Systems. We'll first send a message " +
     "so you can confirm your address. You can unsubscribe at any time with one click.",
 };
 

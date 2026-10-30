@@ -5,7 +5,7 @@ export const metadata = buildLandingMetadata({
   lang: "en",
   routeKey: "unsubscribe",
   title: "GR Wire — Unsubscribe",
-  description: "Unsubscribe from GR Wire's daily email.",
+  description: "Unsubscribe from GR Wire's weekday email.",
   noindex: true,
 });
 

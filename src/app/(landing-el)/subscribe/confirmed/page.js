@@ -6,7 +6,7 @@ export const metadata = buildLandingMetadata({
   lang: "el",
   routeKey: "confirmed",
   title: "GR Wire — Η εγγραφή επιβεβαιώθηκε",
-  description: "Η εγγραφή σας στο ημερήσιο email του GR Wire επιβεβαιώθηκε.",
+  description: "Η εγγραφή σας στο email του GR Wire κάθε εργάσιμη επιβεβαιώθηκε.",
   noindex: true,
 });
 

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHmac, createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { getNewsletterConfig } from "../src/newsletter/config.js";
 import { createSesProvider, signRequest } from "../src/newsletter/ses.js";
 import { buildRawEmail } from "../src/newsletter/mime.js";
@@ -133,8 +134,58 @@ test("copy: v2 wording, daily not weekly, no series teaser, controller and 7-day
   assert.equal(LANDING_COPY.el.hero.headlineMain, "Τηλεπικοινωνίες στην Ελλάδα: δίκτυα σταθερής και κινητής, και δορυφορική επικοινωνία, κάθε πρωί.");
   assert.equal(LANDING_COPY.en.subscribeForm.freeNote, "Free. No ads.");
   assert.equal(LANDING_COPY.el.subscribeForm.freeNote, "Δωρεάν. Χωρίς διαφημίσεις.");
-  assert.equal(CONSENT_TEXT_VERSION, "2026-10-29-v2");
-  assert.match(CONSENT_TEXT.el, /ημερήσιο email του GR Wire από την Tareno Systems/);
+  assert.equal(CONSENT_TEXT_VERSION, "2026-10-30-v3");
+  assert.match(CONSENT_TEXT.el, /το email του GR Wire κάθε εργάσιμη από την Tareno Systems/);
+  assert.match(CONSENT_TEXT.en, /GR Wire's weekday email from Tareno Systems/);
+});
+
+test("copy alignment: no \"daily email\" / ημερήσιο email wording is left on the public pages, consent or privacy text", () => {
+  for (const lang of ["el", "en"]) {
+    const dump = JSON.stringify(LANDING_COPY[lang]) + CONSENT_TEXT[lang];
+    assert.doesNotMatch(dump, /daily email|ημερήσιο email|ημερήσια ενημέρωση για τις τηλεπικοινωνίες/i, lang);
+  }
+  assert.match(LANDING_COPY.en.privacy.body, /GR Wire's weekday email/);
+  assert.match(LANDING_COPY.el.privacy.body, /το email του GR Wire κάθε εργάσιμη/);
+  assert.match(LANDING_COPY.en.unsubscribe.intro, /GR Wire's weekday email/);
+  assert.match(LANDING_COPY.el.unsubscribe.intro, /από το email του GR Wire κάθε εργάσιμη/);
+});
+
+const siteUrl = "https://www.grwire.com/";
+
+test("confirmation email: first paragraph is the weekday wording in EL and EN; button, ignore line and footer are kept", () => {
+  const unsubscribeUrl = "https://p.grwire.com/u/x";
+  const confirmUrl = "https://p.grwire.com/c/x";
+  const en = confirmationEmail({ lang: "en", confirmUrl, unsubscribeUrl, siteUrl });
+  const el = confirmationEmail({ lang: "el", confirmUrl, unsubscribeUrl, siteUrl });
+  assert.match(en.html, /You asked to receive GR Wire, a short weekday email on Greek communication networks, energy, tenders and regulation\./);
+  assert.match(el.html, /Ζητήσατε να λαμβάνετε το GR Wire, ένα σύντομο email κάθε εργάσιμη για τα ελληνικά δίκτυα επικοινωνιών, την ενέργεια, τους διαγωνισμούς και τη ρύθμιση\./);
+  for (const mail of [en, el]) {
+    assert.doesNotMatch(mail.html + mail.text, /satellite|δορυφορικ|daily update|ημερήσια ενημέρωση/);
+    assert.ok(mail.html.includes(confirmUrl));
+  }
+  assert.match(en.html, /Confirm subscription/);
+  assert.match(en.html, /If this wasn't you, just ignore this message and you won't hear from us again\./);
+  assert.match(el.html, /Επιβεβαίωση εγγραφής/);
+  assert.match(el.html, /Αν δεν το ζητήσατε εσείς, αγνοήστε αυτό το μήνυμα\./);
+});
+
+test("digest email: the heading is the new title in EL and EN, the subject keeps its prefix and date", () => {
+  const stories = [{ title: "T", summary: "S", url: "https://x.gr/a", sourceName: "X", publishedAt: "2026-10-30T08:00:00+02:00" }];
+  const args = { stories, comment: "", unsubscribeUrl: "https://p.grwire.com/u/x", siteUrl, date: new Date("2026-10-30T06:00:00Z") };
+  const en = digestEmail({ lang: "en", ...args });
+  const el = digestEmail({ lang: "el", ...args });
+  assert.match(en.html, /Greek networks, energy and tenders today/);
+  assert.match(el.html, /Δίκτυα, ενέργεια και διαγωνισμοί στην Ελλάδα σήμερα/);
+  assert.doesNotMatch(en.html + en.text, /Today's market news/);
+  assert.doesNotMatch(el.html + el.text, /Τα νέα της αγοράς/);
+  assert.match(en.subject, /^GR Wire · /);
+  assert.doesNotMatch(en.subject + el.subject, /market|αγοράς/);
+});
+
+test("css: the home signup 'Free. No ads.' line uses var(--muted) on the white form, like the consent line", () => {
+  const css = readFileSync(new URL("../src/app/landing.css", import.meta.url), "utf8");
+  assert.match(css, /\.home-signup \.sub-form \.free-note\s*\{\s*color: var\(--muted\);/);
+  assert.match(css, /--muted:\s*#5e6a73/);
 });
 
 test("tokens: unsubscribe token is per address, stable, and independent of case", () => {
