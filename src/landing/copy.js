@@ -135,7 +135,7 @@ export const LANDING_COPY = {
     privacy: {
       title: "Πολιτική απορρήτου",
       // subscribe-copy-v2.md, "Privacy line" — verbatim; `details` is the controller/processor/retention list.
-      body: "Η Tareno Systems κρατά μόνο τη διεύθυνση email σας και την ημερομηνία που συμφωνήσατε, για να σας στέλνει το ημερήσιο email του GR Wire. Δεν τη μοιραζόμαστε με τρίτους, εκτός από την υπηρεσία που στέλνει τα email για λογαριασμό μας. Μπορείτε να διαγραφείτε ή να ζητήσετε τη διαγραφή των στοιχείων σας όποτε θέλετε.",
+      body: "Η Tareno Systems κρατά μόνο τη διεύθυνση email σας και την ημερομηνία που συμφωνήσατε, για να σας στέλνει το email του GR Wire κάθε εργάσιμη. Δεν τη μοιραζόμαστε με τρίτους, εκτός από την υπηρεσία που στέλνει τα email για λογαριασμό μας. Μπορείτε να διαγραφείτε ή να ζητήσετε τη διαγραφή των στοιχείων σας όποτε θέλετε.",
       details: [
         "Υπεύθυνος επεξεργασίας: Tareno Systems (Δημήτρης Ρούσσος), tarenosystems.com.",
         "Εκτελών την επεξεργασία: Amazon SES (Amazon Web Services), περιοχή ΕΕ (Φρανκφούρτη), μόνο για την αποστολή των email.",
@@ -147,7 +147,7 @@ export const LANDING_COPY = {
     },
     unsubscribe: {
       title: "Διαγραφή από το email του GR Wire",
-      intro: "Πατήστε το παρακάτω κουμπί για να διαγραφείτε από το ημερήσιο email του GR Wire. Η ενέργεια αυτή δεν μπορεί να αναιρεθεί.",
+      intro: "Πατήστε το παρακάτω κουμπί για να διαγραφείτε από το email του GR Wire κάθε εργάσιμη. Η ενέργεια αυτή δεν μπορεί να αναιρεθεί.",
       button: "Διαγραφή",
       missingToken: "Ο σύνδεσμος διαγραφής δεν είναι έγκυρος.",
       backLink: "← Πίσω στην αρχική",
@@ -243,7 +243,7 @@ export const LANDING_COPY = {
     privacy: {
       title: "Privacy policy",
       // subscribe-copy-v2.md, "Privacy line" — verbatim; `details` is the controller/processor/retention list.
-      body: "Tareno Systems keeps only your email address and the date you agreed, to send you GR Wire's daily email. We don't share it with anyone except the service that sends the emails for us. You can unsubscribe or ask us to delete your data at any time.",
+      body: "Tareno Systems keeps only your email address and the date you agreed, to send you GR Wire's weekday email. We don't share it with anyone except the service that sends the emails for us. You can unsubscribe or ask us to delete your data at any time.",
       details: [
         "Data controller: Tareno Systems (Dimitris Roussos), tarenosystems.com.",
         "Processor: Amazon SES (Amazon Web Services), EU region (Frankfurt), used only to send the emails.",
@@ -255,7 +255,7 @@ export const LANDING_COPY = {
     },
     unsubscribe: {
       title: "Unsubscribe from GR Wire's email",
-      intro: "Click the button below to unsubscribe from GR Wire's daily email. This can't be undone.",
+      intro: "Click the button below to unsubscribe from GR Wire's weekday email. This can't be undone.",
       button: "Unsubscribe",
       missingToken: "This unsubscribe link isn't valid.",
       backLink: "← Back to the homepage",

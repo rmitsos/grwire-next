@@ -6,7 +6,7 @@ export const metadata = buildLandingMetadata({
   lang: "en",
   routeKey: "privacy",
   title: "GR Wire — Privacy policy",
-  description: "What data we keep when you subscribe to GR Wire's daily email, who processes it and for how long.",
+  description: "What data we keep when you subscribe to GR Wire's weekday email, who processes it and for how long.",
 });
 
 export default function Page() {
