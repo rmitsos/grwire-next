@@ -101,14 +101,15 @@ test("emails: Tareno-branded, no provider names, no remote images or tracking, u
       digestEmail({ lang, stories, comment: "Ένα σχόλιο <b>", unsubscribeUrl, siteUrl, date: new Date("2026-10-29T06:30:00Z") }),
     ];
     for (const m of mails) {
-      assert.match(m.html, /GR WIRE/);
+      assert.match(m.html, /<img src="https:\/\/www\.grwire\.com\/brand\/email-logo\.png" width="240" height="60" alt="GR Wire" style="display:block;border:0">/);
+      assert.match(m.text, /^GR Wire · Tareno Systems\n/);
       assert.match(m.html, /Tareno Systems/);
       assert.match(m.text, /Tareno Systems \(tarenosystems\.com\)/);
       assert.match(m.html, new RegExp(`href="${unsubscribeUrl.replace(/[.?]/g, "\\$&")}"`));
       assert.match(m.text, new RegExp(unsubscribeUrl.replace(/[.?]/g, "\\$&")));
       assert.doesNotMatch(m.html + m.text, /resend|mailerlite|amazon|powered by/i);
-      assert.doesNotMatch(m.html, /<img\b/i);
-      assert.doesNotMatch(m.html, /src="http/i);
+      assert.equal((m.html.match(/<img\b/gi) || []).length, 1, "only the logo image");
+      assert.deepEqual(m.html.match(/src="[^"]*"/g), [`src="${siteUrl}/brand/email-logo.png"`]);
     }
   }
   const digest = digestEmail({ lang: "el", stories, comment: "x <script>", unsubscribeUrl, siteUrl });
@@ -116,6 +117,8 @@ test("emails: Tareno-branded, no provider names, no remote images or tracking, u
   assert.match(digest.html, /x=1&amp;y=2/);
   assert.match(confirmationEmail({ lang: "el", confirmUrl: "u", unsubscribeUrl, siteUrl }).subject, /^Επιβεβαιώστε την εγγραφή σας στο GR Wire$/);
   assert.equal(welcomeEmail({ lang: "en", unsubscribeUrl, siteUrl }).subject, "Welcome to GR Wire");
+  assert.match(welcomeEmail({ lang: "en", unsubscribeUrl, siteUrl }).html, /Thanks for subscribing\. Every weekday morning you'll get a short email on Greek communication networks, energy, tenders and regulation\. Each item comes with its source and a few lines of comment\. No ads\. You can unsubscribe with one click from any email\./);
+  assert.match(welcomeEmail({ lang: "el", unsubscribeUrl, siteUrl }).html, /Ευχαριστούμε που εγγραφήκατε\. Κάθε εργάσιμη το πρωί θα λαμβάνετε ένα σύντομο email για τα ελληνικά δίκτυα επικοινωνιών, την ενέργεια, τους διαγωνισμούς και τη ρύθμιση\. Κάθε είδηση με την πηγή της και λίγες γραμμές σχολίου\. Χωρίς διαφημίσεις\. Μπορείτε να διαγραφείτε με ένα κλικ από οποιοδήποτε email\./);
 });
 
 test("copy: v2 wording, daily not weekly, no series teaser, controller and 7-day deletion on the privacy page", () => {
@@ -162,7 +165,7 @@ test("service: confirmation carries the branded email and RFC 8058 headers; conf
   assert.equal(sent.length, 1);
   assert.equal(sent[0].subject, "Confirm your GR Wire subscription");
   assert.equal(sent[0].headers["List-Unsubscribe"], `<https://p.grwire.com/api/newsletter/unsubscribe?token=${encodeURIComponent(token)}>`);
-  assert.match(sent[0].html, /GR WIRE/);
+  assert.match(sent[0].html, /<img src="https:\/\/p\.grwire\.com\/brand\/email-logo\.png" [^>]*alt="GR Wire"/);
   const res = await service.confirm("whatever");
   assert.deepEqual(res, { ok: true, lang: "en" });
   assert.equal(sent.length, 2);
