@@ -145,6 +145,17 @@ html:has(> body.landing) { scroll-padding-top: calc(var(--header-h) + 12px); }
 .simple-page form { margin: 24px 0; }
 .simple-page .back-link { color: var(--signal); font-weight: 700; text-decoration: none; }
 
+/* Desktop: the section nav sits on its own full-width row under the wordmark / language / subscribe
+   row and never hides an item. All eight links (six sections, Insights, Search) measured one line at
+   1024px in Greek (~942px of the 952px available), so 13px with a 10px gap is the floor. */
+@media (min-width: 901px) {
+  :root { --header-h: 96px; }
+  .site-header .wrap { flex-wrap: wrap; height: auto; gap: 0 16px; }
+  .site-header .wordmark { margin-right: auto; min-height: 56px; }
+  .nav-sections { order: 3; flex: 0 0 100%; gap: 10px; font-size: 13px; padding: 0 0 12px; margin: -4px 0 0; overflow: visible; }
+  .nav-sections a { flex: 0 0 auto; }
+}
+
 /* mobile */
 @media (max-width: 900px) {
   .landing .wrap { padding: 0 18px; }

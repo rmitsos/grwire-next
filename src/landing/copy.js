@@ -10,8 +10,8 @@ export const NAV_SECTIONS = [
   { slug: "telco", path: "/telco", color: "var(--sec-telecom-fibre)" },
   { slug: "energy", path: "/energy", color: "var(--sec-energy-grids)" },
   { slug: "infrastructure", path: "/infrastructure", color: "var(--sec-infrastructure-works)" },
-  { slug: "tenders", path: "/tenders", color: "var(--sec-tenders-contracts)" },
   { slug: "regulators", path: "/regulators", color: "var(--sec-regulators-policy)" },
+  { slug: "tenders", path: "/tenders", color: "var(--sec-tenders-contracts)" },
   { slug: "deals", path: "/deals", color: "var(--sec-deals-companies)" },
 ];
 
