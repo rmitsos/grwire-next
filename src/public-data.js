@@ -77,11 +77,8 @@ export function applyDayCap(rows, { now = Date.now(), onDrop } = {}) {
 }
 
 export const PUBLIC_CATEGORIES = {
-  deals: {
-    name: "Deals & companies",
-    deck: "Operators, utilities, tower, fibre, grid and infrastructure companies: deals, results, M&A and investment.",
-    specId: "deals-companies",
-  },
+  // Fixed display order: the homepage columns, the nav, the footer and the section tiles all follow it
+  // (NAV_SECTIONS in src/landing/copy.js uses the same order). Never sorted by freshness.
   telco: {
     name: "Telecom Infrastructure",
     deck: "Fibre, mobile networks, regulation and digital infrastructure.",
@@ -97,15 +94,20 @@ export const PUBLIC_CATEGORIES = {
     deck: "Construction, concessions, transport, data centres and strategic projects.",
     specId: "infrastructure-works",
   },
+  regulators: {
+    name: "Regulators & policy",
+    deck: "ΕΕΤΤ, ΡΑΑΕΥ and ministry decisions, consultations, regulation and spectrum policy.",
+    specId: "regulators-policy",
+  },
   tenders: {
     name: "Tenders & contracts",
     deck: "ΚΗΜΔΗΣ/Διαύγεια tenders and contracts, and press coverage of a specific tender.",
     specId: "tenders-contracts",
   },
-  regulators: {
-    name: "Regulators & policy",
-    deck: "ΕΕΤΤ, ΡΑΑΕΥ and ministry decisions, consultations, regulation and spectrum policy.",
-    specId: "regulators-policy",
+  deals: {
+    name: "Deals & companies",
+    deck: "Operators, utilities, tower, fibre, grid and infrastructure companies: deals, results, M&A and investment.",
+    specId: "deals-companies",
   },
 };
 

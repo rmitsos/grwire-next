@@ -49,11 +49,12 @@ export function buildInsightSitemapEntries(base, elInsights, enInsights) {
 
 // Pure: the wire pages in both languages. /tenders and /regulators (and their /en twins) are
 // left out until their section has >=3 items in the last 30 days (the pages still resolve,
-// they're just not advertised). Tenders stays before Regulators, per the nav order.
+// they're just not advertised). Same order as the nav: Regulators before Tenders.
 export function buildPublicSitemapEntries(base, navVisibility) {
-  const sections = ["deals", "telco", "energy", "infrastructure"];
-  if (navVisibility.tenders?.shown) sections.push("tenders");
+  const sections = ["telco", "energy", "infrastructure"];
   if (navVisibility.regulators?.shown) sections.push("regulators");
+  if (navVisibility.tenders?.shown) sections.push("tenders");
+  sections.push("deals");
   const pagePairs = [
     { el: LANDING_ROUTES.el.home, en: LANDING_ROUTES.en.home, priority: 1 },
     ...sections.map((slug) => ({ el: sectionPath("el", slug), en: sectionPath("en", slug), priority: 0.8 })),

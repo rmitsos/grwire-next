@@ -10,8 +10,8 @@ export const NAV_SECTIONS = [
   { slug: "telco", path: "/telco", color: "var(--sec-telecom-fibre)" },
   { slug: "energy", path: "/energy", color: "var(--sec-energy-grids)" },
   { slug: "infrastructure", path: "/infrastructure", color: "var(--sec-infrastructure-works)" },
-  { slug: "tenders", path: "/tenders", color: "var(--sec-tenders-contracts)" },
   { slug: "regulators", path: "/regulators", color: "var(--sec-regulators-policy)" },
+  { slug: "tenders", path: "/tenders", color: "var(--sec-tenders-contracts)" },
   { slug: "deals", path: "/deals", color: "var(--sec-deals-companies)" },
 ];
 
@@ -19,8 +19,8 @@ const SECTION_LABELS = {
   telco: { el: "Τηλεπικοινωνίες & Οπτικές Ίνες", en: "Telecom & fibre" },
   energy: { el: "Ενέργεια & Δίκτυα", en: "Energy & grids" },
   infrastructure: { el: "Υποδομές & Έργα", en: "Infrastructure & works" },
-  tenders: { el: "Διαγωνισμοί & Συμβάσεις", en: "Tenders & contracts" },
   regulators: { el: "Ρυθμιστές & Πολιτική", en: "Regulators & policy" },
+  tenders: { el: "Διαγωνισμοί & Συμβάσεις", en: "Tenders & contracts" },
   deals: { el: "Συμφωνίες & Εταιρείες", en: "Deals & companies" },
 };
 
