@@ -23,6 +23,7 @@
 - Insights #1 (AI in Greek SMEs) and #2 (fibre switch), EL + EN, published: the DRAFT/ΠΡΟΣΧΕΔΙΟ marker is removed from each file's first comment, so the pages are indexable, drop the draft label and appear in the sitemap.
 
 ### Added
+- Insight #3 (Telekom capex vs. Starlink), EL + EN, drafted, not published: new `content/insights/03-starlink-capex.{el,en}.md`, slug `starlink-capex` added to the front of `INSIGHT_ORDER` (`src/insights/content.js`). Correlates Telekom's announced 2026 capex target (>€600M, FTTH/5G named as priorities, no category breakdown) with press reporting of Starlink gaining fixed-broadband share with no local network, and with Insight #2's fibre/VDSL price-parity and one-in-three adoption finding. The Starlink/Ookla and Telekom FWA subscriber figures are attributed to the efsyn.gr report that cites them (not independently verified) per the Method note. Carries the ΠΡΟΣΧΕΔΙΟ/DRAFT marker in its first comment, so it is noindexed and excluded from the sitemap until the marker is removed. `test/insights.test.js` updated for the third slug (order, static params, a dedicated draft-status test); `npm test` (487) and `npm run build` pass.
 - Round-6c (culture_csr exception, final): sponsorship and award words (χορηγία/χορηγός forms,
   βραβεύ*, εθελοντικ*) override the network/business/operator-name exception entirely
   (`hasCultureOverrideTerm`), so "Χορηγός του φεστιβάλ η Cosmote" is dropped. A € figure alone no
