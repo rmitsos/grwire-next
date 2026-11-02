@@ -118,7 +118,7 @@ test("loader: starlink-capex is a draft (pending approval), in both languages", 
       title:
         "Η Telekom βάζει 600+ εκατ. ευρώ σε ίνα και 5G το 2026. Το Starlink κερδίζει έδαφος χωρίς δικό του δίκτυο στην Ελλάδα",
       sourcesCount: 3,
-      chartSrc: "/insights/03-starlink-fwa-chart.png",
+      chartSrc: "/insights/03-starlink-fwa-chart.el.png",
     },
   };
   for (const lang of ["en", "el"]) {
