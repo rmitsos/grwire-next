@@ -106,7 +106,7 @@ test("listInsights: order is starlink-capex, fibre-switch, ai-greek-smes, in bot
   assert.deepEqual(listInsights("en").map((i) => i.slug), ["starlink-capex", "fibre-switch", "ai-greek-smes"]);
 });
 
-test("loader: starlink-capex is a draft (pending approval), in both languages", () => {
+test("loader: starlink-capex is published (not draft), in both languages", () => {
   const expectedBySlugLang = {
     "starlink-capex:en": {
       title:
@@ -127,7 +127,7 @@ test("loader: starlink-capex is a draft (pending approval), in both languages", 
     assert.ok(insight, `starlink-capex:${lang} should load`);
     assert.equal(insight.title, expected.title);
     assert.equal(insight.sources.length, expected.sourcesCount);
-    assert.equal(insight.draft, true);
+    assert.equal(insight.draft, false);
     assert.equal(insight.chart.src, expected.chartSrc);
   }
 });
