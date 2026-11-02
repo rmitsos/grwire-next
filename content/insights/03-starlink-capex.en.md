@@ -1,4 +1,4 @@
-<!-- GR Wire · Insight #3. DRAFT — pending approval before publication. Facts sourced as listed; sources checked 02/11/2026. -->
+<!-- GR Wire · Insight #3. Facts sourced as listed; sources checked 02/11/2026. -->
 
 **INSIGHT · TELECOM & MARKETS**
 
