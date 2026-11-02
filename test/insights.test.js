@@ -101,9 +101,35 @@ test("loader: fibre-switch source #7 has url null, source #8 has a url (both lan
   }
 });
 
-test("listInsights: order is fibre-switch then ai-greek-smes, in both languages", () => {
-  assert.deepEqual(listInsights("el").map((i) => i.slug), ["fibre-switch", "ai-greek-smes"]);
-  assert.deepEqual(listInsights("en").map((i) => i.slug), ["fibre-switch", "ai-greek-smes"]);
+test("listInsights: order is starlink-capex, fibre-switch, ai-greek-smes, in both languages", () => {
+  assert.deepEqual(listInsights("el").map((i) => i.slug), ["starlink-capex", "fibre-switch", "ai-greek-smes"]);
+  assert.deepEqual(listInsights("en").map((i) => i.slug), ["starlink-capex", "fibre-switch", "ai-greek-smes"]);
+});
+
+test("loader: starlink-capex is a draft (pending approval), in both languages", () => {
+  const expectedBySlugLang = {
+    "starlink-capex:en": {
+      title:
+        "Telekom (OTE) is putting €600M+ into fibre and 5G in 2026. Starlink is gaining ground in Greece with no network of its own",
+      sourcesCount: 3,
+      chartSrc: "/insights/03-starlink-fwa-chart.png",
+    },
+    "starlink-capex:el": {
+      title:
+        "Η Telekom βάζει 600+ εκατ. ευρώ σε ίνα και 5G το 2026. Το Starlink κερδίζει έδαφος χωρίς δικό του δίκτυο στην Ελλάδα",
+      sourcesCount: 3,
+      chartSrc: "/insights/03-starlink-fwa-chart.png",
+    },
+  };
+  for (const lang of ["en", "el"]) {
+    const insight = getInsight("starlink-capex", lang);
+    const expected = expectedBySlugLang[`starlink-capex:${lang}`];
+    assert.ok(insight, `starlink-capex:${lang} should load`);
+    assert.equal(insight.title, expected.title);
+    assert.equal(insight.sources.length, expected.sourcesCount);
+    assert.equal(insight.draft, true);
+    assert.equal(insight.chart.src, expected.chartSrc);
+  }
 });
 
 test("insightPath / insightsIndexPath", () => {
@@ -113,9 +139,13 @@ test("insightPath / insightsIndexPath", () => {
   assert.equal(insightsIndexPath("en"), "/en/insights");
 });
 
-test("insightStaticParams returns both slugs for both languages", () => {
-  assert.deepEqual(insightStaticParams("el"), [{ slug: "fibre-switch" }, { slug: "ai-greek-smes" }]);
-  assert.deepEqual(insightStaticParams("en"), [{ slug: "fibre-switch" }, { slug: "ai-greek-smes" }]);
+test("insightStaticParams returns all slugs for both languages", () => {
+  assert.deepEqual(insightStaticParams("el"), [
+    { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+  ]);
+  assert.deepEqual(insightStaticParams("en"), [
+    { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+  ]);
 });
 
 test("every INSIGHT_ORDER slug has a content file in every INSIGHT_LANGS language", () => {
@@ -448,6 +478,10 @@ test("insight route files exist and generate static params for both slugs", () =
     assert.ok(content.includes("insightStaticParams"));
   }
 
-  assert.deepEqual(insightStaticParams("el"), [{ slug: "fibre-switch" }, { slug: "ai-greek-smes" }]);
-  assert.deepEqual(insightStaticParams("en"), [{ slug: "fibre-switch" }, { slug: "ai-greek-smes" }]);
+  assert.deepEqual(insightStaticParams("el"), [
+    { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+  ]);
+  assert.deepEqual(insightStaticParams("en"), [
+    { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+  ]);
 });
