@@ -7,7 +7,7 @@ import { formatMastheadDate, formatWireDate, getPublicCopy, sectionTitle } from 
 import { LANDING_COPY, NAV_SECTIONS } from "@/landing/copy";
 import { LANDING_ROUTES, sectionPath } from "@/landing/routes";
 import { getHomepageData, getNavVisibility, PUBLIC_CATEGORIES } from "@/public-data";
-import { getInsight, insightPath, insightsIndexPath, listInsights } from "@/insights/content";
+import { INSIGHT_ORDER, getInsight, insightPath, insightsIndexPath, listInsights } from "@/insights/content";
 import { getInsightsCopy } from "@/insights/copy";
 import { getNewsletterConfig } from "@/newsletter/config";
 
@@ -22,7 +22,8 @@ export async function HomePage({ lang }) {
   const copy = getPublicCopy(lang);
   const [data, navVisibility] = await Promise.all([getHomepageData(), getNavVisibility()]);
   // Reads a markdown file, not the DB, so it still renders when the DB is empty/unavailable.
-  const insight = getInsight("fibre-switch", lang);
+  // The promo is the newest insight: the first slug in INSIGHT_ORDER.
+  const insight = getInsight(INSIGHT_ORDER[0], lang);
   // Columns take the best of each section first, so on a thin day "recent" can be empty while the
   // columns are full; an empty "Latest" block next to filled columns would only look broken.
   const hasColumnItems = Object.values(data.columns ?? {}).some((list) => list.length);
