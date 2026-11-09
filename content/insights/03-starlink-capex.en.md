@@ -1,10 +1,10 @@
-<!-- GR Wire · Insight #3. Facts sourced as listed; sources checked 02/11/2026. -->
+<!-- GR Wire · Insight #3. Facts sourced as listed; sources checked 02/11/2026; private 5G section added, sources checked 08/11/2026. -->
 
 **INSIGHT · TELECOM & MARKETS**
 
 # Telekom (OTE) is putting €600M+ into fibre and 5G in 2026. Starlink is gaining ground in Greece with no network of its own
 
-Telekom (OTE) announced a 2026 capex target above €600M, with FTTH expansion and 5G standalone named as priorities. Over the same period, press reporting shows Starlink gaining ground in fixed internet access without having invested in any network inside the country. This piece puts the two facts side by side, without claiming certainties the sources don't give.
+Telekom (OTE) announced a 2026 capex target above €600M, with FTTH expansion and 5G standalone named as priorities. Over the same period, press reporting shows Starlink gaining ground in fixed internet access without having invested in any network inside the country. This piece puts the two facts side by side, without claiming certainties the sources don't give, and looks at the one part of 5G a satellite service doesn't sell: private networks built on a single site.
 
 ---
 
@@ -32,6 +32,14 @@ We have no figure for Starlink's eventual share of the Greek fixed-access market
 
 *Where would you put the next €600M: into more network, or into something else?*
 
+## 5. Private 5G: the part of the network a satellite doesn't sell
+
+The same announcement names 5G standalone as a 2026 priority (ot.gr, 31/10/2026). Standalone 5G is the version operators can carve into dedicated networks for one customer on one site: a port, a mine, a hospital. In Greece these already exist, as one-off projects rather than a market. Vodafone handed over a private mobile network to the Piraeus Port Authority (OLP) and the Piraeus Container Terminal (SEP); Cosmote designed and installed 5G mobile infrastructure about 300 metres underground in the Olympiada mine in Chalkidiki, and ran a 5G pilot at Athens International Airport (capital.gr, 23/05/2023). In July 2026 Cosmote Telekom announced a private 5G SA network at Aretaieio Hospital, covering operating theatres, the training centre and the radiology and radiotherapy departments, under the EU-co-funded 5G-SHEAL project, due to finish in November 2027 (powergame.gr, 06/07/2026). None of these announcements gives what the network cost or what the customer pays.
+
+What they do show is a different kind of capex. A private network is built on the customer's premises, by field crews, for a customer who pays for coverage, capacity and control on that site. That is a product a satellite broadband service is not selling, and it puts the spend next to a named revenue line rather than spreading it across every home in a coverage map.
+
+*If part of the 5G standalone spend went into private networks with a paying customer behind each one, would it still look like capex chasing Starlink?*
+
 ---
 
 ## Chart
@@ -43,5 +51,7 @@ We have no figure for Starlink's eventual share of the Greek fixed-access market
 1. ot.gr, "Telekom: investments above €600 million for FTTH and 5G in 2026," 31/10/2026. https://www.ot.gr/2026/10/31/epixeiriseis/tilepikoinonies/telekom-ependyseis-ano-ton-600-ekat-eyro-gia-ftth-kai-5g-to-2026/
 2. Efimerida ton Syntakton (efsyn.gr), "'Space' is the new clash over the internet in Greece: Elon Musk's Starlink is gaining ground," checked 02/11/2026. https://www.efsyn.gr/oikonomia/1500366/diastimiki-i-nea-sygkroysi-gia-to-internet-stin-ellada-i-starlink-toy-elon-mask-kerdizei-edafos/
 3. GR Wire, Insight #2, "Fibre costs about the same as VDSL. About one in three homes that can get it have it," checked 25/10/2026. https://grwire.com/en/insights/fibre-switch
+4. capital.gr, "The major private 5G network projects running in Greece," 23/05/2023. https://www.capital.gr/oikonomia/3717076/poia-ta-simantika-erga-idiotikou-diktuou-5g-pou-trexoun-stin-ellada/
+5. powergame.gr, "Private 5G SA network at Aretaieio Hospital from COSMOTE TELEKOM under the 5G-SHEAL project," 06/07/2026. https://www.powergame.gr/start-ups-digital/1382647/idiotiko-diktyo-5g-sa-sto-aretaieio-nosokomeio-apo-tin-cosmote-telekom-sto-plaisio-tou-ergou-5g-sheal/
 
-*Method: the figures on Telekom's capex programme and on fibre price/adoption come from the primary sources listed. The Starlink/Ookla figures and the growth in Telekom's 5G FWA connections are secondhand, from the efsyn.gr report, and have not been verified directly with Ookla or Telekom. GR Wire does not publish its own market-share figure for Starlink.*
+*Method: the figures on Telekom's capex programme and on fibre price/adoption come from the primary sources listed. The Starlink/Ookla figures and the growth in Telekom's 5G FWA connections are secondhand, from the efsyn.gr report, and have not been verified directly with Ookla or Telekom. GR Wire does not publish its own market-share figure for Starlink. The private-network projects come from press reports (capital.gr, 2023; powergame.gr, 2026), not from operator disclosures; the Piraeus, Olympiada and airport projects date from 2023 or earlier and their current status was not re-checked.*

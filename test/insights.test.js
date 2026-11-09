@@ -111,13 +111,13 @@ test("loader: starlink-capex is published (not draft), in both languages", () =>
     "starlink-capex:en": {
       title:
         "Telekom (OTE) is putting €600M+ into fibre and 5G in 2026. Starlink is gaining ground in Greece with no network of its own",
-      sourcesCount: 3,
+      sourcesCount: 5,
       chartSrc: "/insights/03-starlink-fwa-chart.png",
     },
     "starlink-capex:el": {
       title:
         "Η Telekom βάζει 600+ εκατ. ευρώ σε ίνα και 5G το 2026. Το Starlink κερδίζει έδαφος χωρίς δικό του δίκτυο στην Ελλάδα",
-      sourcesCount: 3,
+      sourcesCount: 5,
       chartSrc: "/insights/03-starlink-fwa-chart.el.png",
     },
   };
