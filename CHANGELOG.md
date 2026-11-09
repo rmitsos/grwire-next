@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Changed
+- Insight #4 (data centre siting: xAI's Mississippi gas turbines vs. Attica's data centre objections), EL + EN, drafted, not published: new `content/insights/04-datacenter-siting.{el,en}.md`, slug `datacenter-siting` added to the front of `INSIGHT_ORDER`. Carries the ΠΡΟΣΧΕΔΙΟ/DRAFT marker, so it is noindexed and out of the sitemap. The jet-engine origin of xAI's turbines is reported as tech-press only, per the Method note. Six sources, no chart.
+- Homepage insight promo now shows the first non-draft insight in `INSIGHT_ORDER` (was `INSIGHT_ORDER[0]`), so a draft at the front never takes the homepage. Tests: order, static params, a draft test for `datacenter-siting`, and a promo test.
 - Insight #3 (Telekom capex vs. Starlink), EL + EN: new section 5 on private 5G networks (operator-built networks on a single site: Vodafone at Piraeus port OLP/SEP, Cosmote at the Olympiada mine and an Athens airport pilot, per capital.gr 23/05/2023; COSMOTE TELEKOM's 5G SA network at Aretaieio Hospital under the EU-co-funded 5G-SHEAL project, per powergame.gr 06/07/2026). The standfirst gains one clause pointing to it; sources 4 and 5 and a Method line (press reports, older projects' status not re-checked) are added. `test/insights.test.js`: `sourcesCount` 3 → 5.
 - Homepage insight promo now shows the newest insight (`INSIGHT_ORDER[0]`, today `starlink-capex`) instead of the hard-coded `fibre-switch`, so the top block follows the order in `src/insights/content.js`.
 - Curated items and homepage columns (branch `feat/curated-telco`):

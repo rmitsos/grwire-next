@@ -101,9 +101,9 @@ test("loader: fibre-switch source #7 has url null, source #8 has a url (both lan
   }
 });
 
-test("listInsights: order is starlink-capex, fibre-switch, ai-greek-smes, in both languages", () => {
-  assert.deepEqual(listInsights("el").map((i) => i.slug), ["starlink-capex", "fibre-switch", "ai-greek-smes"]);
-  assert.deepEqual(listInsights("en").map((i) => i.slug), ["starlink-capex", "fibre-switch", "ai-greek-smes"]);
+test("listInsights: order is datacenter-siting, starlink-capex, fibre-switch, ai-greek-smes, in both languages", () => {
+  assert.deepEqual(listInsights("el").map((i) => i.slug), ["datacenter-siting", "starlink-capex", "fibre-switch", "ai-greek-smes"]);
+  assert.deepEqual(listInsights("en").map((i) => i.slug), ["datacenter-siting", "starlink-capex", "fibre-switch", "ai-greek-smes"]);
 });
 
 test("loader: starlink-capex is published (not draft), in both languages", () => {
@@ -141,10 +141,10 @@ test("insightPath / insightsIndexPath", () => {
 
 test("insightStaticParams returns all slugs for both languages", () => {
   assert.deepEqual(insightStaticParams("el"), [
-    { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+    { slug: "datacenter-siting" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
   ]);
   assert.deepEqual(insightStaticParams("en"), [
-    { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+    { slug: "datacenter-siting" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
   ]);
 });
 
@@ -479,9 +479,25 @@ test("insight route files exist and generate static params for both slugs", () =
   }
 
   assert.deepEqual(insightStaticParams("el"), [
-    { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+    { slug: "datacenter-siting" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
   ]);
   assert.deepEqual(insightStaticParams("en"), [
-    { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+    { slug: "datacenter-siting" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
   ]);
+});
+
+test("loader: datacenter-siting is a draft with 6 sources and no chart, in both languages", () => {
+  for (const lang of ["en", "el"]) {
+    const insight = getInsight("datacenter-siting", lang);
+    assert.ok(insight, `datacenter-siting:${lang} should load`);
+    assert.equal(insight.draft, true);
+    assert.equal(insight.sources.length, 6);
+    assert.equal(insight.chart?.src ?? null, null);
+  }
+});
+
+test("homepage promo: the first non-draft insight is starlink-capex while datacenter-siting is a draft", () => {
+  for (const lang of ["en", "el"]) {
+    assert.equal(listInsights(lang).find((item) => !item.draft)?.slug, "starlink-capex");
+  }
 });

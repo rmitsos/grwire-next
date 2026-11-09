@@ -4,7 +4,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-export const INSIGHT_ORDER = ["starlink-capex", "fibre-switch", "ai-greek-smes"];
+export const INSIGHT_ORDER = ["datacenter-siting", "starlink-capex", "fibre-switch", "ai-greek-smes"];
 export const INSIGHT_LANGS = ["el", "en"];
 
 const CONTENT_DIR = path.join(process.cwd(), "content", "insights");
