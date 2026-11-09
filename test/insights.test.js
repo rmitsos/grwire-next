@@ -101,9 +101,9 @@ test("loader: fibre-switch source #7 has url null, source #8 has a url (both lan
   }
 });
 
-test("listInsights: order is datacenter-siting, starlink-capex, fibre-switch, ai-greek-smes, in both languages", () => {
-  assert.deepEqual(listInsights("el").map((i) => i.slug), ["datacenter-siting", "starlink-capex", "fibre-switch", "ai-greek-smes"]);
-  assert.deepEqual(listInsights("en").map((i) => i.slug), ["datacenter-siting", "starlink-capex", "fibre-switch", "ai-greek-smes"]);
+test("listInsights: order is grid-large-loads, datacenter-siting, starlink-capex, fibre-switch, ai-greek-smes, in both languages", () => {
+  assert.deepEqual(listInsights("el").map((i) => i.slug), ["grid-large-loads", "datacenter-siting", "starlink-capex", "fibre-switch", "ai-greek-smes"]);
+  assert.deepEqual(listInsights("en").map((i) => i.slug), ["grid-large-loads", "datacenter-siting", "starlink-capex", "fibre-switch", "ai-greek-smes"]);
 });
 
 test("loader: starlink-capex is published (not draft), in both languages", () => {
@@ -141,10 +141,10 @@ test("insightPath / insightsIndexPath", () => {
 
 test("insightStaticParams returns all slugs for both languages", () => {
   assert.deepEqual(insightStaticParams("el"), [
-    { slug: "datacenter-siting" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+    { slug: "grid-large-loads" }, { slug: "datacenter-siting" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
   ]);
   assert.deepEqual(insightStaticParams("en"), [
-    { slug: "datacenter-siting" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+    { slug: "grid-large-loads" }, { slug: "datacenter-siting" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
   ]);
 });
 
@@ -479,10 +479,10 @@ test("insight route files exist and generate static params for both slugs", () =
   }
 
   assert.deepEqual(insightStaticParams("el"), [
-    { slug: "datacenter-siting" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+    { slug: "grid-large-loads" }, { slug: "datacenter-siting" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
   ]);
   assert.deepEqual(insightStaticParams("en"), [
-    { slug: "datacenter-siting" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+    { slug: "grid-large-loads" }, { slug: "datacenter-siting" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
   ]);
 });
 
@@ -496,8 +496,18 @@ test("loader: datacenter-siting is a draft with 6 sources and no chart, in both 
   }
 });
 
-test("homepage promo: the first non-draft insight is starlink-capex while datacenter-siting is a draft", () => {
+test("homepage promo: the first non-draft insight is starlink-capex while grid-large-loads and datacenter-siting are drafts", () => {
   for (const lang of ["en", "el"]) {
     assert.equal(listInsights(lang).find((item) => !item.draft)?.slug, "starlink-capex");
+  }
+});
+
+test("loader: grid-large-loads is a draft with 6 sources and no chart, in both languages", () => {
+  for (const lang of ["en", "el"]) {
+    const insight = getInsight("grid-large-loads", lang);
+    assert.ok(insight, `grid-large-loads:${lang} should load`);
+    assert.equal(insight.draft, true);
+    assert.equal(insight.sources.length, 6);
+    assert.equal(insight.chart?.src ?? null, null);
   }
 });
