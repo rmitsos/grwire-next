@@ -173,6 +173,40 @@ test("a ΡΑΑΕΥ CO2 storage consultation never becomes the homepage lead, eve
   assert.ok(shown.some((a) => a.url === "https://a.test/prinos-ccs"), "the CO2 story is still published, just not as lead");
 });
 
+test("isConsultationNotice: consultation notices yes, decisions taken after a consultation no", async () => {
+  const { isConsultationNotice } = await import("../src/feed-rules.js");
+  assert.equal(isConsultationNotice("Αποτελέσματα Δημόσιας Διαβούλευσης επί επικαιροποιημένης εισήγησης τροποποίησης ΚΔΑΠΕΕΠ"), true);
+  assert.equal(isConsultationNotice("ΕΕΤΤ: Δημόσια διαβούλευση για τη χρήση της ζώνης 26 GHz"), true);
+  assert.equal(isConsultationNotice("Απόφαση ΕΕΤΤ για τη ζώνη 26 GHz μετά τη δημόσια διαβούλευση"), false);
+  assert.equal(isConsultationNotice("Η Cosmote επεκτείνει το δίκτυο FTTH σε νέους δήμους"), false);
+});
+
+test("a regulator's consultation notice never leads, but still publishes; a press article or curated pick about one can lead", async () => {
+  const { buildHomepageSections } = await import("../src/public-data.js");
+  const now = Date.now();
+  const hourAgo = new Date(now - 3_600_000).toISOString();
+  const consultation = {
+    url: "https://a.test/daPEEP-fees",
+    title: "Αποτελέσματα Δημόσιας Διαβούλευσης επί επικαιροποιημένης εισήγησης τροποποίησης ΚΔΑΠΕΕΠ, τέλη €2 εκατ.",
+    summary: "", sourceId: "raaey-energy-announcements", categories: ["regulators"], score: 30,
+    publishedAt: hourAgo, metadata: {},
+  };
+  const plainTelco = {
+    url: "https://a.test/plain-telco", title: "Η Cosmote επεκτείνει το δίκτυο FTTH σε νέους δήμους", summary: "",
+    sourceId: "infocom-telecoms", categories: ["telco"], score: 10, publishedAt: hourAgo, metadata: {},
+  };
+  const result = buildHomepageSections([consultation, plainTelco], { now });
+  assert.equal(result.lead?.url, "https://a.test/plain-telco");
+  const shown = [result.lead, ...result.recent, ...Object.values(result.columns).flat()].filter(Boolean);
+  assert.ok(shown.some((a) => a.url === "https://a.test/daPEEP-fees"), "the consultation notice is still published");
+
+  const curated = { ...consultation, url: "https://a.test/curated-consultation", metadata: { curated: true } };
+  assert.equal(buildHomepageSections([curated, plainTelco], { now }).lead?.url, "https://a.test/curated-consultation", "an editor's pick is exempt");
+
+  const decision = { ...consultation, url: "https://a.test/decision", title: "Απόφαση ΡΑΑΕΥ για τα τέλη ΔΑΠΕΕΠ €2 εκατ. μετά τη διαβούλευση" };
+  assert.equal(buildHomepageSections([decision, plainTelco], { now }).lead?.url, "https://a.test/decision", "a decision can still lead");
+});
+
 test("round-7 sponsored content is dropped only on an explicit marker, never by headline alone", async () => {
   const { sponsoredReason } = await import("../src/feed-rules.js");
   const plain = { title: "Project Continuum: Νέα ενεργειακή τεχνολογία για τα δίκτυα", summary: "Η νέα τεχνολογία αποθήκευσης…", url: "https://energypress.gr/news/project-continuum" };
