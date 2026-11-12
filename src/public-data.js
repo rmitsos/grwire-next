@@ -28,6 +28,7 @@ import {
   homepageSectionOf,
   isAgendaItem,
   isCarbonCaptureStorageStory,
+  isConsultationNotice,
   isCyprusOnly,
   isDealsEligible,
   isEventPiece,
@@ -484,6 +485,11 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop,
       if (!hasFigureOrDecisionSignal(`${article.title || ""} ${article.summary || ""}`)) {
         return { ok: false, stage: "event_piece" };
       }
+    }
+    // A regulator's/ministry's consultation notice never leads (feed-rules.js isConsultationNotice);
+    // an editor's curated pick is exempt.
+    if (forLead && tier === 1 && !article.metadata?.curated && isConsultationNotice(article.title)) {
+      return { ok: false, stage: "consultation_lead" };
     }
     const homeCap = SOURCE_BY_ID.get(article.sourceId)?.homeCap ?? DEFAULT_HOME_CAP_PER_SOURCE;
     if ((perSourceCount.get(article.sourceId) || 0) >= homeCap) return { ok: false, stage: "home_cap" };

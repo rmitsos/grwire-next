@@ -580,6 +580,18 @@ export function isCarbonCaptureStorageStory(item = {}) {
   return matchesAnyTerm(text, CO2_STORAGE_TERMS);
 }
 
+// A consultation notice (an announcement that a consultation opens, or its results) is procedure,
+// not news the audience reads for: dimi chose on 2026-11-12 that a regulator's consultation notice
+// never takes the homepage headline (public-data.js checkEligible, forLead). It still publishes in
+// its column and section. A title that is also a decision ("Απόφαση ... μετά τη διαβούλευση") is a
+// decision, not a consultation notice, and can still lead.
+const CONSULTATION_TERMS = ["διαβουλευσ*", "consultation"];
+const CONSULTATION_DECISION_TERMS = ["αποφασ*", "decision"];
+
+export function isConsultationNotice(title = "") {
+  return matchesAnyTerm(title, CONSULTATION_TERMS) && !matchesAnyTerm(title, CONSULTATION_DECISION_TERMS);
+}
+
 // round-7: sponsored / advertorial content is never shown. It is detected
 // from explicit markers only — a URL path segment, a metadata flag, or a
 // sponsorship label at the start of the title/summary or a stock advertorial
