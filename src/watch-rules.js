@@ -1,7 +1,7 @@
 import { stripTrailingSiteSuffix } from "./article-quality.js";
 import {
   matchesAnyTerm, specSectionKeywordMatch, SECTOR_ORGANIZATIONS,
-  hasTier1ActionWord, agendaScoreCap, isWaterSewageStory,
+  hasTier1ActionWord, agendaScoreCap, isWaterSewageStory, isCarbonCaptureStorageStory,
 } from "./feed-rules.js";
 
 function normalise(value = "") {
@@ -160,6 +160,12 @@ export function scoreItem(item, rawRule) {
   // round-7: a water/sewage utility story is not an infrastructure-and-works match.
   if (rule.category === "infrastructure" && isWaterSewageStory({ title: item.title || "" })) {
     return { ruleId: rule.id, label: rule.label, category: rule.category, score: 0, accepted: false, reasons: ["water/sewage utility story"] };
+  }
+
+  // A CO2/carbon-capture-and-storage story (environmental/climate regulation, not energy-grid
+  // or power-market news) is not an energy-infrastructure match, even from ΡΑΑΕΥ.
+  if (rule.category === "energy" && isCarbonCaptureStorageStory({ title: item.title || "", summary: item.summary || "" })) {
+    return { ruleId: rule.id, label: rule.label, category: rule.category, score: 0, accepted: false, reasons: ["carbon capture/storage: not energy-grid news"] };
   }
 
   if (includesAny(title, rule.entities)) {
