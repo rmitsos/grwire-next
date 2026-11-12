@@ -9,6 +9,7 @@ import { CURATED_SCORE, isCuratedRow } from "./curated.js";
 import {
   BACKFILL_MAX_AGE_HOURS,
   BACKFILL_MIN_SCORE,
+  LEAD_PREFERRED_MAX_AGE_HOURS,
   TIER1_BACKFILL_MAX_AGE_HOURS,
   TIER1_BACKFILL_MIN_SCORE,
   DEFAULT_DAY_CAP_PER_SOURCE,
@@ -522,9 +523,17 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop,
   // falling back to the backfill pool only when no fresh item is eligible.
   let lead = null;
   const freshLeadCandidates = fresh.filter((article) => checkEligible(article, { forLead: true }).ok);
-  const leadCandidates = freshLeadCandidates.length
-    ? freshLeadCandidates
-    : backfillPool.filter((article) => checkEligible(article, { forLead: true }).ok);
+  // Owner's call 2026-11-12: the headline is a story from the last 24 hours whenever one is
+  // eligible (an editor's active headline counts too); only then the rest of the 72h fresh set,
+  // then the backfill pool.
+  const todayLeadCandidates = freshLeadCandidates.filter(
+    (article) => isFresh(article, now, LEAD_PREFERRED_MAX_AGE_HOURS) || isActiveHeadline(article, now),
+  );
+  const leadCandidates = todayLeadCandidates.length
+    ? todayLeadCandidates
+    : freshLeadCandidates.length
+      ? freshLeadCandidates
+      : backfillPool.filter((article) => checkEligible(article, { forLead: true }).ok);
   if (leadCandidates.length) {
     const [best] = [...leadCandidates].sort((a, b) => {
       // An active headline (last 48h) outranks the normal lead preference; several: newest wins.

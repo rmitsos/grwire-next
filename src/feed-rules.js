@@ -664,6 +664,8 @@ export function splitByFreshness(articles = [], { now = Date.now(), maxAgeHours 
 // remaining slots stay empty. Fresh items rank above backfilled ones.
 export const BACKFILL_MAX_AGE_HOURS = 24 * 7;
 export const TIER1_BACKFILL_MAX_AGE_HOURS = 24 * 21;
+// The homepage headline prefers a story from this window (public-data.js buildHomepageSections).
+export const LEAD_PREFERRED_MAX_AGE_HOURS = 24;
 export const HOMEPAGE_TARGET_ITEMS = 10;
 export const BACKFILL_MIN_SCORE = 10;
 export const TIER1_BACKFILL_MIN_SCORE = 20;
