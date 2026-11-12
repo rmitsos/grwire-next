@@ -136,6 +136,43 @@ test("round-7 isWaterSewageStory: water headline vs major works", async () => {
   assert.equal(isWaterSewageStory({ title: "Νέος αυτοκινητόδρομος Πάτρα–Πύργος" }), false);
 });
 
+test("isCarbonCaptureStorageStory: a ΡΑΑΕΥ CO2 storage consultation is not energy-grid news", async () => {
+  const { isCarbonCaptureStorageStory } = await import("../src/feed-rules.js");
+  assert.equal(
+    isCarbonCaptureStorageStory({ title: "ΡΑΑΕΥ: Δημόσια διαβούλευση για την αποθήκευση CO2 στον Πρίνο, επένδυση €200 εκατ." }),
+    true,
+  );
+  assert.equal(isCarbonCaptureStorageStory({ title: "Carbon capture project at Prinos moves to public consultation" }), true);
+  assert.equal(
+    isCarbonCaptureStorageStory({ title: "ΡΑΑΕΥ: απόφαση για νέο σταθμό αποθήκευσης ενέργειας 100 MW" }),
+    false,
+    "battery/grid energy storage is not carbon storage",
+  );
+});
+
+test("a ΡΑΑΕΥ CO2 storage consultation never becomes the homepage lead, even with an investment figure", async () => {
+  const { buildHomepageSections } = await import("../src/public-data.js");
+  const now = Date.now();
+  const co2Consultation = {
+    url: "https://a.test/prinos-ccs",
+    title: "ΡΑΑΕΥ: Δημόσια διαβούλευση για την αποθήκευση CO2 στον Πρίνο, επένδυση €200 εκατ.",
+    summary: "",
+    // Realistic score once the energy-grid forced-category inflation this fix removes no longer
+    // applies: just above the fresh floor, below the plain telecom item below.
+    sourceId: "raaey-energy-announcements", categories: ["energy"], score: 8,
+    publishedAt: new Date(now - 3_600_000).toISOString(), metadata: {},
+  };
+  const plainTelco = {
+    url: "https://a.test/plain-telco", title: "Η Cosmote επεκτείνει το δίκτυο FTTH σε νέους δήμους", summary: "",
+    sourceId: "infocom-telecoms", categories: ["telco"], score: 10,
+    publishedAt: new Date(now - 3_600_000).toISOString(), metadata: {},
+  };
+  const result = buildHomepageSections([co2Consultation, plainTelco], { now });
+  assert.equal(result.lead?.url, "https://a.test/plain-telco", "a plain telecom item should lead over the CO2 consultation");
+  const shown = [result.lead, ...result.recent, ...Object.values(result.columns).flat()].filter(Boolean);
+  assert.ok(shown.some((a) => a.url === "https://a.test/prinos-ccs"), "the CO2 story is still published, just not as lead");
+});
+
 test("round-7 sponsored content is dropped only on an explicit marker, never by headline alone", async () => {
   const { sponsoredReason } = await import("../src/feed-rules.js");
   const plain = { title: "Project Continuum: Νέα ενεργειακή τεχνολογία για τα δίκτυα", summary: "Η νέα τεχνολογία αποθήκευσης…", url: "https://energypress.gr/news/project-continuum" };

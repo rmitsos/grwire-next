@@ -27,6 +27,7 @@ import {
   hasTier1ActionWord,
   homepageSectionOf,
   isAgendaItem,
+  isCarbonCaptureStorageStory,
   isCyprusOnly,
   isDealsEligible,
   isEventPiece,
@@ -725,7 +726,11 @@ function isBackfillCandidate(now) {
 // round-4 lead-preference scoring: Tier 1/3 sources and a figure/decision
 // word in the title/summary make an item a better lead candidate, but never
 // override the hard caps/event/Cyprus rules in checkEligible above.
+// A CO2/carbon-capture-and-storage story never gets this boost: an official
+// source citing a euro/MW figure in a consultation notice is not the kind of
+// concrete market decision this preference is meant to surface as the lead.
 function leadPreferenceScore(article) {
+  if (isCarbonCaptureStorageStory(article)) return 0;
   let score = 0;
   const tier = SOURCE_BY_ID.get(article.sourceId)?.tier;
   if (tier === 1 || tier === 3) score += 2;

@@ -71,7 +71,12 @@ export const SPEC_SECTION_KEYWORDS = Object.freeze({
       "storage", "bess", "grid connection", "curtailment", "transformer*", "high voltage",
       "pipeline", "lng",
     ],
-    negative: [],
+    // CO2/carbon-capture-and-storage: see isCarbonCaptureStorageStory above — "storage"/"ραα*υ"
+    // above would otherwise force-route it here even though it is not grid/power-market news.
+    negative: [
+      "co2", "carbon capture", "carbon storage", "carbon dioxide",
+      "διοξειδιο του ανθρακα", "δεσμευσ* ανθρακα", "αποθηκευσ* co2", "αποθηκευσ* διοξειδιου",
+    ],
   },
   "infrastructure-works": {
     keywords: [
@@ -557,6 +562,22 @@ export function isWaterSewageStory(item = {}) {
   const title = item.title || "";
   if (!matchesAnyTerm(title, WATER_SEWAGE_TITLE_TERMS)) return false;
   return !matchesAnyTerm(title, WATER_SEWAGE_WORKS_EXCEPTIONS);
+}
+
+// CO2/carbon-capture-and-storage stories (e.g. a ΡΑΑΕΥ consultation on geological CO2 storage)
+// are an environmental/climate regulatory matter, not energy-grid/power-market news — even
+// though ΡΑΑΕΥ is the same tier-1 regulator that issues grid/spectrum decisions, and "storage"
+// reads like battery/grid storage to the keyword matcher. Keeps these out of the "energy"
+// category and out of lead contention (public-data.js leadPreferenceScore) without dropping
+// them: they still publish under "regulators".
+const CO2_STORAGE_TERMS = [
+  "co2", "carbon capture", "carbon storage", "carbon dioxide",
+  "διοξειδιο του ανθρακα", "δεσμευσ* ανθρακα", "αποθηκευσ* co2", "αποθηκευσ* διοξειδιου",
+];
+
+export function isCarbonCaptureStorageStory(item = {}) {
+  const text = `${item.title || ""} ${item.summary || ""}`;
+  return matchesAnyTerm(text, CO2_STORAGE_TERMS);
 }
 
 // round-7: sponsored / advertorial content is never shown. It is detected
