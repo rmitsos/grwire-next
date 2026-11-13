@@ -207,6 +207,27 @@ test("a regulator's consultation notice never leads, but still publishes; a pres
   assert.equal(buildHomepageSections([decision, plainTelco], { now }).lead?.url, "https://a.test/decision", "a decision can still lead");
 });
 
+test("the headline is a story from the last 24 hours when one is eligible, else the 72h set", async () => {
+  const { buildHomepageSections } = await import("../src/public-data.js");
+  const now = Date.now();
+  const hoursAgo = (h) => new Date(now - h * 3_600_000).toISOString();
+  // Two days old, but the stronger candidate on the old rules (curated tier-1 pick with a figure).
+  const older = {
+    url: "https://a.test/vodafone-286m", title: "Vodafone Ελλάδας: Έσοδα υπηρεσιών 286 εκατ. ευρώ στο α' εξάμηνο", summary: "",
+    sourceId: "infocom-telecoms", categories: ["telco"], score: 40, publishedAt: hoursAgo(50), metadata: {},
+  };
+  const today = {
+    url: "https://a.test/today", title: "Η Cosmote επεκτείνει το δίκτυο FTTH σε νέους δήμους", summary: "",
+    sourceId: "infocom-telecoms", categories: ["telco"], score: 8, publishedAt: hoursAgo(3), metadata: {},
+  };
+  assert.equal(buildHomepageSections([older, today], { now }).lead?.url, "https://a.test/today");
+  // Nothing from the last 24h: the 72h set still supplies a headline.
+  assert.equal(buildHomepageSections([older], { now }).lead?.url, "https://a.test/vodafone-286m");
+  // An editor's active headline (48h window) still wins even when it is over 24h old.
+  const editorHeadline = { ...older, url: "https://a.test/editor-pick", priority: "headline", publishedAt: hoursAgo(30) };
+  assert.equal(buildHomepageSections([editorHeadline, today], { now }).lead?.url, "https://a.test/editor-pick");
+});
+
 test("round-7 sponsored content is dropped only on an explicit marker, never by headline alone", async () => {
   const { sponsoredReason } = await import("../src/feed-rules.js");
   const plain = { title: "Project Continuum: Νέα ενεργειακή τεχνολογία για τα δίκτυα", summary: "Η νέα τεχνολογία αποθήκευσης…", url: "https://energypress.gr/news/project-continuum" };
