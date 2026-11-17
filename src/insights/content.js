@@ -231,6 +231,26 @@ function parseChartParagraph(rawText) {
   return { src, caption, alt, filename };
 }
 
+// ---- cover --------------------------------------------------------------------------------
+// "## Cover" / "## Εξώφυλλο": one paragraph naming a looping video (`.mp4`) and/or a still
+// image (`.jpg`/`.png`/`.gif`) in public/insights/, with the bold text as the alt text. Shown on
+// the homepage insight promo and at the top of the article.
+
+function parseCoverParagraph(rawText) {
+  const altMatch = /^\*\*([^*]+)\*\*/.exec(rawText);
+  const alt = altMatch ? altMatch[1].trim() : "";
+  const videoMatch = /`([^`]+?\.mp4)`/.exec(rawText);
+  const imageMatch = /`([^`]+?\.(?:jpe?g|png|gif|webp))`/.exec(rawText);
+  const video = videoMatch ? `/insights/${videoMatch[1]}` : null;
+  const image = imageMatch ? `/insights/${imageMatch[1]}` : null;
+  if (!video && !image) return null;
+  return { video, image, alt };
+}
+
+function isCoverHeading(text) {
+  return text === "Cover" || text === "Εξώφυλλο";
+}
+
 // ---- sources --------------------------------------------------------------------------------
 
 function parseSourceItem(rawItem) {
@@ -309,6 +329,18 @@ export function parseInsight(markdown, { slug, lang }) {
       .concat(bodyBlocksRaw.slice(chartHeadingIndex + 2));
   }
 
+  const coverHeadingIndex = finalBodyBlocksRaw.findIndex(
+    (block) => block.type === "heading" && block.level === 2 && isCoverHeading(block.text),
+  );
+  let cover = null;
+  if (coverHeadingIndex !== -1) {
+    const coverParagraph = finalBodyBlocksRaw[coverHeadingIndex + 1];
+    cover = parseCoverParagraph(coverParagraph ? coverParagraph.text : "");
+    finalBodyBlocksRaw = finalBodyBlocksRaw
+      .slice(0, coverHeadingIndex)
+      .concat(finalBodyBlocksRaw.slice(coverHeadingIndex + 2));
+  }
+
   const body = finalBodyBlocksRaw.map(inlineParseBlock);
 
   let sourcesHeading = null;
@@ -342,6 +374,7 @@ export function parseInsight(markdown, { slug, lang }) {
     standfirst,
     body,
     chart,
+    cover,
     sourcesHeading,
     sources,
     method,

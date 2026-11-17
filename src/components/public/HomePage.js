@@ -9,6 +9,7 @@ import { LANDING_ROUTES, sectionPath } from "@/landing/routes";
 import { getHomepageData, getNavVisibility, PUBLIC_CATEGORIES } from "@/public-data";
 import { INSIGHT_ORDER, getInsight, insightPath, insightsIndexPath, listInsights } from "@/insights/content";
 import { getInsightsCopy } from "@/insights/copy";
+import { InsightCover } from "@/components/insights/InsightCover";
 import { getNewsletterConfig } from "@/newsletter/config";
 
 // The lower half of the homepage is built only from what already exists: the section pages (with
@@ -60,14 +61,21 @@ export async function HomePage({ lang }) {
       )}
 
       {insight && (
-        <section className="insight-promo">
-          <span className="pub-label">{copy.insightLabel}</span>
-          {insight.draft && <span className="insight-draft-label">{getInsightsCopy(lang).draftLabel}</span>}
-          <h2>{insight.title}</h2>
-          {insight.standfirst.map((line, index) => <p key={index}>{line}</p>)}
-          <div className="insight-promo-links">
-            <Link href={insightPath(insight.slug, lang)}>{copy.insightRead}</Link>
-            <Link href={insightsIndexPath(lang)}>{copy.insightAll}</Link>
+        <section className={insight.cover ? "insight-promo has-cover" : "insight-promo"}>
+          {insight.cover && (
+            <Link className="insight-promo-cover" href={insightPath(insight.slug, lang)} tabIndex={-1} aria-hidden="true">
+              <InsightCover cover={insight.cover} priority />
+            </Link>
+          )}
+          <div className="insight-promo-text">
+            <span className="pub-label">{copy.insightLabel}</span>
+            {insight.draft && <span className="insight-draft-label">{getInsightsCopy(lang).draftLabel}</span>}
+            <h2>{insight.title}</h2>
+            {insight.standfirst.map((line, index) => <p key={index}>{line}</p>)}
+            <div className="insight-promo-links">
+              <Link href={insightPath(insight.slug, lang)}>{copy.insightRead}</Link>
+              <Link href={insightsIndexPath(lang)}>{copy.insightAll}</Link>
+            </div>
           </div>
         </section>
       )}

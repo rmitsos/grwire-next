@@ -500,3 +500,23 @@ test("insight route files exist and generate static params for both slugs", () =
     { slug: "starlink-numbers" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
   ]);
 });
+
+test("loader: Insight #4 has a cover (video + still), shown outside the body; older insights have none", () => {
+  for (const lang of ["en", "el"]) {
+    const insight = getInsight("starlink-numbers", lang);
+    assert.equal(insight.cover.video, "/insights/04-starlink-numbers-cover.mp4");
+    assert.equal(insight.cover.image, "/insights/04-starlink-numbers-cover.jpg");
+    assert.ok(insight.cover.alt.length > 10);
+    const body = JSON.stringify(insight.body);
+    assert.ok(!body.includes("cover.mp4"));
+    for (const slug of ["starlink-capex", "fibre-switch", "ai-greek-smes"]) {
+      assert.equal(getInsight(slug, lang).cover, null);
+    }
+  }
+});
+
+test("parseInsight: cover section with only a still image", () => {
+  const md = `<!-- ok -->\n\n**K**\n\n# T\n\nStandfirst.\n\n## Cover\n\n**Alt text here**. Image: \`x.gif\`.\n\n## Sources\n\n1. S\n`;
+  const insight = parseInsight(md, { slug: "s", lang: "en" });
+  assert.deepEqual(insight.cover, { video: null, image: "/insights/x.gif", alt: "Alt text here" });
+});
