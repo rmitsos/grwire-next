@@ -4,6 +4,7 @@ import { LANDING_ROUTES } from "@/landing/routes";
 import { getInsightsCopy } from "@/insights/copy";
 import { insightPath, insightsIndexPath } from "@/insights/content";
 import { Markdown, renderInlineNodes } from "@/components/insights/Markdown";
+import { InsightCover } from "@/components/insights/InsightCover";
 
 function formatDate(iso, lang) {
   if (!iso) return null;
@@ -31,6 +32,7 @@ export function InsightArticlePage({ lang, insight }) {
       <main>
         <article className="insight-article">
           <div className="wrap insight-article-wrap">
+            {insight.cover && <InsightCover cover={insight.cover} className="insight-cover" priority />}
             <p className="insight-kicker">
               {renderInlineNodes(insight.kicker)}
               {insight.draft && <span className="insight-draft-label">{copy.draftLabel}</span>}

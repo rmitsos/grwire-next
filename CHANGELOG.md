@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- Insight covers: an insight can name a looping cover video and still image in a `## Cover` / `## Εξώφυλλο` section (`parseCoverParagraph`, `src/insights/content.js`; new `InsightCover` component). The cover shows beside the homepage insight promo (above it on phones) and at the top of the article, under the site header. The video is muted, loops, plays inline, and readers who ask for reduced motion get the still. Insight #4 gets the owner's animated cover (`public/insights/04-starlink-numbers-cover.{mp4,jpg}`, 196 KB, converted from the 707 KB GIF). Owner's call, 2026-11-17: the cover must be on the first page and at the top of the article, not at the bottom.
 - Insight #4, "Starlink in Greece: growing or slowing? What the numbers show" (`content/insights/04-starlink-numbers.{el,en}.md`, slug `starlink-numbers`), first in `INSIGHT_ORDER` so it is also the homepage insight promo. Puts the market's subscriber estimates (100,000+, some above 200,000) next to OTE CEO Kostas Nebis's view that Starlink's growth slowed in 2026, and explains why both can hold. New chart `public/insights/04-starlink-numbers-chart{,.el}.png` (OTE 5G FWA 62,098 → 134,355, Sept 2025 → Sept 2026, from OTE's nine-month results). No other outlet or reporter is named. Owner's call, 2026-11-17.
 
 ### Changed

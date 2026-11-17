@@ -46,6 +46,10 @@ The next checkpoints are OTE's full-year 2026 results (February 2027), EETT's fi
 
 ---
 
+## Cover
+
+**Animated cover: "Starlink in Greece: growing or slowing? What the numbers show" (in Greek)**. Video: `04-starlink-numbers-cover.mp4`, poster: `04-starlink-numbers-cover.jpg`.
+
 ## Chart
 
 **OTE's 5G FWA connections, September 2025 and September 2026**: 62,098 · 134,355. Bars, one per period, telecom colour #1F5F8B. Source line: "Source: OTE, nine-month 2026 results (30/10/2026)." File: `04-starlink-numbers-chart.png`.
