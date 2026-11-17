@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added
+- Insight #4, "Starlink in Greece: growing or slowing? What the numbers show" (`content/insights/04-starlink-numbers.{el,en}.md`, slug `starlink-numbers`), first in `INSIGHT_ORDER` so it is also the homepage insight promo. Puts the market's subscriber estimates (100,000+, some above 200,000) next to OTE CEO Kostas Nebis's view that Starlink's growth slowed in 2026, and explains why both can hold. New chart `public/insights/04-starlink-numbers-chart{,.el}.png` (OTE 5G FWA 62,098 → 134,355, Sept 2025 → Sept 2026, from OTE's nine-month results). No other outlet or reporter is named. Owner's call, 2026-11-17.
+
 ### Changed
 - The homepage headline is now a story from the last 24 hours whenever one is eligible (`LEAD_PREFERRED_MAX_AGE_HOURS` in `src/feed-rules.js`, used in `buildHomepageSections`); an editor's active headline (48h) still counts. Only when nothing from the last 24h is eligible does it fall back to the 72h fresh set, then the backfill pool. Owner's call, 2026-11-12: fresh news on top every day.
 - A regulator's or ministry's consultation notice (tier-1 source, title mentions "διαβούλευση"/"consultation" and is not itself a decision) can no longer be the homepage headline (`isConsultationNotice` in `src/feed-rules.js`, new lead-only stage `consultation_lead` in `buildHomepageSections`). It still appears in its column and section page. A decision taken after a consultation can still lead, and a curated editor's pick is exempt. Owner's call, 2026-11-12, after a ΡΑΑΕΥ ΔΑΠΕΕΠ-fees consultation result replaced the CO2 story as headline.
