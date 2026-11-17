@@ -101,9 +101,9 @@ test("loader: fibre-switch source #7 has url null, source #8 has a url (both lan
   }
 });
 
-test("listInsights: order is starlink-capex, fibre-switch, ai-greek-smes, in both languages", () => {
-  assert.deepEqual(listInsights("el").map((i) => i.slug), ["starlink-capex", "fibre-switch", "ai-greek-smes"]);
-  assert.deepEqual(listInsights("en").map((i) => i.slug), ["starlink-capex", "fibre-switch", "ai-greek-smes"]);
+test("listInsights: order is starlink-numbers, starlink-capex, fibre-switch, ai-greek-smes, in both languages", () => {
+  assert.deepEqual(listInsights("el").map((i) => i.slug), ["starlink-numbers", "starlink-capex", "fibre-switch", "ai-greek-smes"]);
+  assert.deepEqual(listInsights("en").map((i) => i.slug), ["starlink-numbers", "starlink-capex", "fibre-switch", "ai-greek-smes"]);
 });
 
 test("loader: starlink-capex is published (not draft), in both languages", () => {
@@ -132,6 +132,21 @@ test("loader: starlink-capex is published (not draft), in both languages", () =>
   }
 });
 
+test("loader: starlink-numbers (Insight #4) is published, in both languages", () => {
+  const expected = {
+    en: { title: "Starlink in Greece: growing or slowing? What the numbers show", chartSrc: "/insights/04-starlink-numbers-chart.png" },
+    el: { title: "Starlink στην Ελλάδα: μεγαλώνει ή φρενάρει; Τι δείχνουν τα στοιχεία", chartSrc: "/insights/04-starlink-numbers-chart.el.png" },
+  };
+  for (const lang of ["en", "el"]) {
+    const insight = getInsight("starlink-numbers", lang);
+    assert.ok(insight, `starlink-numbers:${lang} should load`);
+    assert.equal(insight.title, expected[lang].title);
+    assert.equal(insight.sources.length, 4);
+    assert.equal(insight.draft, false);
+    assert.equal(insight.chart.src, expected[lang].chartSrc);
+  }
+});
+
 test("insightPath / insightsIndexPath", () => {
   assert.equal(insightPath("fibre-switch", "el"), "/insights/fibre-switch");
   assert.equal(insightPath("fibre-switch", "en"), "/en/insights/fibre-switch");
@@ -141,10 +156,10 @@ test("insightPath / insightsIndexPath", () => {
 
 test("insightStaticParams returns all slugs for both languages", () => {
   assert.deepEqual(insightStaticParams("el"), [
-    { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+    { slug: "starlink-numbers" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
   ]);
   assert.deepEqual(insightStaticParams("en"), [
-    { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+    { slug: "starlink-numbers" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
   ]);
 });
 
@@ -479,9 +494,9 @@ test("insight route files exist and generate static params for both slugs", () =
   }
 
   assert.deepEqual(insightStaticParams("el"), [
-    { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+    { slug: "starlink-numbers" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
   ]);
   assert.deepEqual(insightStaticParams("en"), [
-    { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+    { slug: "starlink-numbers" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
   ]);
 });
