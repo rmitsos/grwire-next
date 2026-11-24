@@ -5,6 +5,12 @@ import { matchesAnyTerm } from "../feed-rules.js";
  * Uses WordPress' public REST interface rather than RSS. The configured URL
  * may be a site root or a full /wp-json/wp/v2/posts endpoint.
  */
+function stripShortcodes(value) {
+  return typeof value === "string"
+    ? value.replace(/\[\/?[a-z_][a-z0-9_-]*(?:\s+[^\]]*)?\]/gi, " ")
+    : value;
+}
+
 export class WordPressSourceAdapter {
   constructor(options = {}) {
     this.fetch = options.fetch || globalThis.fetch;
@@ -45,7 +51,7 @@ export class WordPressSourceAdapter {
             id: String(post.id),
             url: post.link,
             title: post.title?.rendered,
-            summary: post.excerpt?.rendered,
+            summary: stripShortcodes(post.excerpt?.rendered),
             publishedAt: post.date_gmt || post.modified_gmt,
             metadata: { adapter: "wordpress" },
           },

@@ -66,10 +66,29 @@ function includesAny(text, terms = []) {
 // Entities/topics for the Greek telecom rule, pulled out so they can also be
 // used as "this is actually a telecom story" signals that override the
 // electricity-grid exclusions below (see TELCO_ENTITIES/TELECOM_SIGNALS).
-const TELCO_ENTITIES = ["ΟΤΕ", "OTE", "Cosmote", "COSMOTE", "Vodafone", "Nova", "United Group", "Intracom Telecom", "Intracom", "ΔΕΗ Fiber", "PPC Fiber", "ΕΕΤΤ", "EETT", "Grid Telecom"];
-const TELCO_STRONG_TOPICS = ["FTTH", "fiber", "fibre", "5G", "οπτική ίνα", "ευρυζων", "telecom", "τηλεπικοινων", "spectrum", "subsea cable", "network deployment", "carrier billing", "mobile billing", "mobile-billed", "electronic communications", "telecommunications bill", "Code of Conduct", "κώδικας δεοντολογίας", "υπηρεσίες αυξημένης χρέωσης", "χρεώσεις κινητής", "ΕΕΤΤ", "EETT", "Intracom Telecom", "roaming", "περιαγωγ", "numbering", "αριθμοδοτ"];
-const ENERGY_STRONG_TOPICS = ["substation", "interconnection", "grid", "storage", "BESS", "υποσταθ", "διασύνδεσ", "αποθήκευση", "offshore wind"];
-const INFRA_STRONG_TOPICS = ["data center", "subsea cable", "railway", "motorway", "metro", "port", "airport", "σιδηρόδρομ", "αυτοκινητόδρομ", "μετρό", "λιμάν", "αεροδρόμ", "ΣΔΙΤ", "PPP", "concession"];
+const TELCO_ENTITIES = [
+  "ΟΤΕ", "OTE", "Cosmote", "COSMOTE", "Vodafone", "Nova", "United Group", "United Fiber",
+  "Intracom Telecom", "Intracom", "ΔΕΗ Fiber", "PPC Fiber", "FiberGrid", "ΕΕΤΤ", "EETT",
+  "Grid Telecom", "Inalan", "Starlink", "Vantage Towers", "Digital Realty", "Lamda Hellix", "Data4", "Sparkle",
+];
+const TELCO_STRONG_TOPICS = [
+  "FTTH", "fiber", "fibre", "5G", "5G SA", "private 5G", "ιδιωτικό 5G", "FWA", "fixed wireless", "Starlink",
+  "οπτική ίνα", "οπτικές ίνες", "ευρυζων", "Gigabit Voucher", "UFBB", "Smart Readiness", "FiberGrid", "Inalan",
+  "δορυφορ", "telecom", "τηλεπικοινων", "spectrum", "subsea cable", "network deployment",
+  "carrier billing", "mobile billing", "mobile-billed", "electronic communications", "telecommunications bill",
+  "Code of Conduct", "κώδικας δεοντολογίας", "υπηρεσίες αυξημένης χρέωσης", "χρεώσεις κινητής",
+  "ΕΕΤΤ", "EETT", "Intracom Telecom", "roaming", "περιαγωγ", "numbering", "αριθμοδοτ",
+];
+const ENERGY_STRONG_TOPICS = [
+  "substation", "interconnection", "grid", "storage", "BESS", "υποσταθ", "διασύνδεσ", "αποθήκευση",
+  "offshore wind", "υπεράκτια αιολικά", "LNG", "FSRU", "Great Sea Interconnector", "GREGY",
+  "αντλησιοταμίευση", "pumped hydro", "smart meters", "έξυπνοι μετρητές", "PPA", "περικοπές", "curtailment", "ΔΑΠΕΕΠ", "DAPEEP",
+];
+const INFRA_STRONG_TOPICS = [
+  "data center", "κέντρο δεδομένων", "subsea cable", "railway", "motorway", "metro", "port", "airport",
+  "σιδηρόδρομ", "αυτοκινητόδρομ", "μετρό", "λιμάν", "αεροδρόμ", "ΣΔΙΤ", "PPP", "concession",
+  "ΒΟΑΚ", "Flyover", "Καστέλι", "Γραμμή 4", "Υπερταμείο", "ΤΑΙΠΕΔ",
+];
 
 // Fibre/telecom signals that mean an electricity-grid term (ΑΔΜΗΕ, ΔΕΔΔΗΕ,
 // "ηλεκτρικ", ...) is incidental context rather than the actual subject, per
@@ -271,9 +290,27 @@ const TIER1_TOPICAL_SECTIONS = Object.freeze({
   deals: "deals-companies",
 });
 
+const TENDER_SOURCE_IDS = new Set(["ted-greek-tenders", "diavgeia-tenders"]);
+
 function tier1ForcedCategories(item) {
   if (item.tier !== 1) return [];
   const text = `${item.title || ""} ${item.summary || ""}`;
+  if (TENDER_SOURCE_IDS.has(item.sourceId)) {
+    const forced = [{
+      ruleId: "tier1-tenders-routing", label: "Tier-1 procurement source", category: "tenders",
+      score: 18, accepted: true, reasons: ["tier-1 tender source: automatic tenders-contracts routing"],
+    }];
+    for (const [category, section] of Object.entries(TIER1_TOPICAL_SECTIONS)) {
+      if (specSectionKeywordMatch(text, section)) {
+        forced.push({
+          ruleId: "tier1-topical-routing", label: "Tier-1 topical section match", category,
+          score: 14, accepted: true, reasons: [`tier-1 source: ${section} keyword match`],
+        });
+        break;
+      }
+    }
+    return forced;
+  }
   // Scored below every DEFAULT_WATCH_RULES threshold (all 4) so that when a
   // tier-1 item also earns a real rule match (or the topical forced match
   // below), that one — not this always-present tag — becomes categories[0]
@@ -375,21 +412,28 @@ export const DEFAULT_WATCH_RULES = Object.freeze([
       { term: "δίκτυο μεταφοράς", unless: TELECOM_SIGNALS_OVER_ELECTRICITY },
       { term: "καλώδιο ρεύματος", unless: TELECOM_SIGNALS_OVER_ELECTRICITY },
     ],
-    requiredTopics: ["FTTH", "fiber", "fibre", "οπτική ίνα", "5G", "spectrum", "subsea cable", "network deployment", "δικτυακή ανάπτυξη", "telecom", "telecommunications", "τηλεπικοινων", "electronic communications", "carrier billing", "mobile billing", "mobile-billed", "telecommunications bill", "Code of Conduct", "κώδικας δεοντολογίας", "υπηρεσίες αυξημένης χρέωσης", "χρεώσεις κινητής", "Intracom Telecom", "roaming", "περιαγωγ", "numbering", "αριθμοδοτ"],
+    requiredTopics: [
+      "FTTH", "fiber", "fibre", "οπτική ίνα", "οπτικές ίνες", "5G", "FWA", "fixed wireless", "Starlink",
+      "private 5G", "ιδιωτικό 5G", "Gigabit Voucher", "UFBB", "Smart Readiness", "FiberGrid", "Inalan", "δορυφορ",
+      "spectrum", "subsea cable", "network deployment", "δικτυακή ανάπτυξη", "telecom", "telecommunications",
+      "τηλεπικοινων", "electronic communications", "carrier billing", "mobile billing", "mobile-billed",
+      "telecommunications bill", "Code of Conduct", "κώδικας δεοντολογίας", "υπηρεσίες αυξημένης χρέωσης",
+      "χρεώσεις κινητής", "Intracom Telecom", "roaming", "περιαγωγ", "numbering", "αριθμοδοτ",
+    ],
     minimumStrongTopics: 1,
-    preferredDomains: ["eett.gr", "cosmote.gr", "vodafone.gr", "nova.gr", "ot.gr", "intracom-telecom.com", "dei.gr"],
+    preferredDomains: ["eett.gr", "mindigital.gr", "cosmote.gr", "vodafone.gr", "nova.gr", "ot.gr", "intracom-telecom.com", "dei.gr", "unitedfiber.gr"],
     threshold: 4,
   },
   {
     id: "greek-energy-infrastructure",
     label: "Greek energy infrastructure",
     category: "energy",
-    entities: ["ΑΔΜΗΕ", "ADMIE", "IPTO", "ΔΕΔΔΗΕ", "HEDNO", "ΔΕΣΦΑ", "DESFA", "ΡΑΑΕΥ", "RAAEY", "ΔΕΗ", "PPC"],
-    topics: ["energy", "electricity", "renewable", "gas", "ενέργεια", "ηλεκτρ", "ΑΠΕ"],
+    entities: ["ΑΔΜΗΕ", "ADMIE", "IPTO", "ΔΕΔΔΗΕ", "HEDNO", "ΔΕΣΦΑ", "DESFA", "ΔΑΠΕΕΠ", "DAPEEP", "ΡΑΑΕΥ", "RAAEY", "ΔΕΗ", "PPC", "Metlen", "Motor Oil", "HelleniQ Energy", "Τέρνα Ενεργειακή", "Terna Energy"],
+    topics: ["energy", "electricity", "renewable", "gas", "ενέργεια", "ηλεκτρ", "ΑΠΕ", "LNG", "FSRU"],
     strongTopics: ENERGY_STRONG_TOPICS,
     geography: ["Greece", "Greek", "Ελλάδα", "ελλην"],
-    preferredDomains: ["admie.gr", "deddie.gr", "desfa.gr", "raaey.gr", "dei.gr"],
-    requiredTopics: ["grid", "substation", "interconnection", "storage", "BESS", "υποσταθ", "διασύνδεσ", "αποθήκευση", "offshore wind", "renewable", "ΑΠΕ"],
+    preferredDomains: ["admie.gr", "deddie.gr", "desfa.gr", "dapeep.gr", "raaey.gr", "dei.gr", "energypress.gr"],
+    requiredTopics: ["grid", "substation", "interconnection", "storage", "BESS", "υποσταθ", "διασύνδεσ", "αποθήκευση", "offshore wind", "υπεράκτια αιολικά", "renewable", "ΑΠΕ", "LNG", "FSRU", "Great Sea Interconnector", "GREGY", "αντλησιοταμίευση", "smart meters", "έξυπνοι μετρητές", "PPA", "περικοπές", "ΔΑΠΕΕΠ", "DAPEEP"],
     minimumStrongTopics: 1,
     threshold: 4,
   },
@@ -416,12 +460,12 @@ export const DEFAULT_WATCH_RULES = Object.freeze([
     id: "greek-infrastructure",
     label: "Greek infrastructure and construction",
     category: "infrastructure",
-    entities: ["AKTOR", "Intrakat", "GEK TERNA", "ΓΕΚ ΤΕΡΝΑ", "AVAX", "ΑΒΑΞ", "Metlen", "Ellaktor", "Ελλάκτωρ", "Circet"],
+    entities: ["AKTOR", "ΑΚΤΩΡ", "Intrakat", "GEK TERNA", "ΓΕΚ ΤΕΡΝΑ", "AVAX", "ΑΒΑΞ", "Metlen", "Ellaktor", "Ελλάκτωρ", "Circet", "Υπερταμείο", "Growthfund", "ΤΑΙΠΕΔ", "Fraport", "Ελληνικό Μετρό", "ΟΣΕ"],
     topics: ["infrastructure", "construction", "project", "παραχώρηση", "κατασκευ", "έργο"],
     strongTopics: INFRA_STRONG_TOPICS,
     geography: ["Greece", "Greek", "Ελλάδα", "ελλην"],
-    preferredDomains: ["ypodomes.com", "ered.gr"],
-    requiredTopics: ["data center", "subsea cable", "railway", "motorway", "metro", "port", "airport", "σιδηρόδρομ", "αυτοκινητόδρομ", "μετρό", "λιμάν", "αεροδρόμ", "ΣΔΙΤ", "PPP", "concession", "διαγωνισμ", "σύμβαση", "έργο ύψους"],
+    preferredDomains: ["ypodomes.com", "ered.gr", "growthfund.gr"],
+    requiredTopics: ["data center", "κέντρο δεδομένων", "subsea cable", "railway", "motorway", "metro", "port", "airport", "σιδηρόδρομ", "αυτοκινητόδρομ", "μετρό", "λιμάν", "αεροδρόμ", "ΣΔΙΤ", "PPP", "concession", "διαγωνισμ", "σύμβαση", "έργο ύψους", "ΒΟΑΚ", "Flyover", "Καστέλι", "Γραμμή 4"],
     minimumStrongTopics: 1,
     threshold: 4,
   },

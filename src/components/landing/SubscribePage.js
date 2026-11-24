@@ -1,5 +1,7 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { getLandingCopy } from "@/landing/copy";
+import { getPublicCopy } from "@/landing/public-copy";
 import { LANDING_ROUTES } from "@/landing/routes";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { LandingFooter } from "@/components/landing/LandingFooter";
@@ -8,7 +10,7 @@ import { StatusBanner } from "@/components/landing/StatusBanner";
 import { TelecomIcon, TRUST_ICONS } from "@/components/landing/icons";
 import { getLatestArticles } from "@/public-data";
 import { getNewsletterConfig } from "@/newsletter/config";
-import { insightPath } from "@/insights/content";
+import { INSIGHT_ORDER, getInsight, insightPath } from "@/insights/content";
 
 // Launch focus is telecom-fibre (landing-copy.md), so the sample cards show one latest article
 // per section the spec calls out, not every public category.
@@ -46,8 +48,11 @@ function formatSampleDate(iso) {
 
 export async function SubscribePage({ lang }) {
   const copy = getLandingCopy(lang);
+  const publicCopy = getPublicCopy(lang);
   const sourcePage = LANDING_ROUTES[lang].subscribe;
   const samples = await getSampleArticles();
+  const latestInsight = getInsight(INSIGHT_ORDER[0], lang);
+  const latestStat = latestInsight ? publicCopy.insightHighlights?.[latestInsight.slug] : null;
   // The sign-up API answers 503 "unavailable" until the newsletter env vars are set. Until then
   // the page says sign-up opens soon instead of showing a form that cannot work; the form comes
   // back by itself once the config is present (next revalidation, at most an hour).
@@ -83,6 +88,43 @@ export async function SubscribePage({ lang }) {
                 {copy.hero.fromLinkedIn.after}
               </p>
             </div>
+
+            <aside className="brief-preview" aria-label={copy.hero.briefPreview.eyebrow}>
+              <div className="brief-preview-chrome">
+                <span className="brief-preview-eyebrow">
+                  <i className="live-dot" aria-hidden="true" />
+                  {copy.hero.briefPreview.eyebrow}
+                </span>
+                <span className="brief-preview-badge">{copy.hero.briefPreview.badge}</span>
+              </div>
+              <div className="brief-preview-head">
+                <div className="brief-preview-from">{copy.hero.briefPreview.from}</div>
+                <div className="brief-preview-subject">{copy.hero.briefPreview.subject}</div>
+              </div>
+              {samples.length > 0 && (
+                <ul className="brief-preview-list">
+                  {samples.map(({ category, color, article }) => (
+                    <li key={category} style={{ "--c": color }}>
+                      <span className="brief-preview-sec">{copy.header.navSections[category][lang]}</span>
+                      <a href={article.url} target="_blank" rel="noreferrer">{article.title}</a>
+                      <span className="brief-preview-src">
+                        {[article.sourceName, formatSampleDate(article.publishedAt)].filter(Boolean).join(" · ")}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {latestInsight && (
+                <Link className="brief-preview-insight" href={insightPath(latestInsight.slug, lang)}>
+                  <div className="brief-preview-insight-top">
+                    <span>{copy.hero.briefPreview.insightTag}</span>
+                    {latestStat && <strong>{latestStat.stat}</strong>}
+                  </div>
+                  <p>{latestInsight.title}</p>
+                </Link>
+              )}
+              <div className="brief-preview-foot">{copy.hero.briefPreview.footerNote}</div>
+            </aside>
           </div>
         </section>
 

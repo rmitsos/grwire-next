@@ -54,8 +54,9 @@ export const SPEC_SECTION_KEYWORDS = Object.freeze({
       "οπτικ* ιν*", "ftth", "fttx", "fttb", "gigabit", "ευρυζωνικ*", "gigabit voucher",
       "λευκ* περιοχ*", "5g", "φασμα", "κεραι*", "ιστο*", "σταθμ* βασησ", "υποθαλασσι* καλωδι*",
       "κεντρ* δεδομενων", "data center*", "δικτυ* κορμου", "χονδρικ*", "οτε", "telekom",
-      "cosmote", "vodafone", "nova", "united fiber", "δεη fiber", "grid telecom", "εεττ",
-      "vdsl", "vectoring", "καμπιν*",
+      "cosmote", "vodafone", "nova", "united fiber", "δεη fiber", "fibergrid", "grid telecom", "inalan", "εεττ",
+      "vdsl", "vectoring", "καμπιν*", "starlink", "fwa", "fixed wireless", "private 5g", "ιδιωτικ* 5g",
+      "5g sa", "ufbb", "smart readiness", "δορυφορ*", "vantage towers", "ai factory", "pharos",
       "fibre", "fiber", "gigabit", "broadband", "spectrum", "tower*", "subsea cable",
       "submarine cable", "data centre*", "wholesale", "backhaul", "telecom*",
     ],
@@ -63,10 +64,11 @@ export const SPEC_SECTION_KEYWORDS = Object.freeze({
   },
   "energy-grids": {
     keywords: [
-      "αδμηε", "δεδδηε", "δεσφα", "διασυνδεσ*", "υποσταθμ*", "γραμμ* μεταφορασ",
+      "αδμηε", "δεδδηε", "δεσφα", "δαπεεπ", "dapeep", "διασυνδεσ*", "υποσταθμ*", "γραμμ* μεταφορασ",
       "δικτυ* διανομησ", "υψηλησ τασησ", "μεσησ τασησ", "αποθηκευσ* ενεργειασ", "μπαταρι*",
       "συνδεσ* απε", "ορ* συνδεσησ", "περικοπ*", "ραα*υ", "φυσικ* αερι*", "αγωγ*",
-      "μετασχηματιστ*", "φωτοβολταικ*", "απε",
+      "μετασχηματιστ*", "φωτοβολταικ*", "απε", "αντλησιοταμιευσ*", "υπερακτι* αιολικ*",
+      "εξυπν* μετρητ*", "smart meter*", "great sea interconnector", "gsi", "gregy", "fsru", "ppa",
       "transmission", "distribution", "interconnector", "interconnection", "substation",
       "storage", "bess", "grid connection", "curtailment", "transformer*", "high voltage",
       "pipeline", "lng",
@@ -74,15 +76,16 @@ export const SPEC_SECTION_KEYWORDS = Object.freeze({
     // CO2/carbon-capture-and-storage: see isCarbonCaptureStorageStory above — "storage"/"ραα*υ"
     // above would otherwise force-route it here even though it is not grid/power-market news.
     negative: [
-      "co2", "carbon capture", "carbon storage", "carbon dioxide",
-      "διοξειδιο του ανθρακα", "δεσμευσ* ανθρακα", "αποθηκευσ* co2", "αποθηκευσ* διοξειδιου",
+      "co2", "co₂", "carbon capture", "carbon storage", "carbon dioxide",
+      "διοξειδιο του ανθρακα", "δεσμευσ* ανθρακα", "αποθηκευσ* co2", "αποθηκευσ* co₂", "αποθηκευσ* διοξειδιου",
     ],
   },
   "infrastructure-works": {
     keywords: [
       "εργ*", "εργολαβι*", "σδιτ", "παραχωρησ*", "σιδηροδρομ*", "μετρο αθην*",
-      "μετρο θεσσαλονικ*", "αττικο μετρο", "σηραγγ*", "γεφυρ*", "οδικ* αξον*",
+      "μετρο θεσσαλονικ*", "αττικο μετρο", "ελληνικ* μετρο", "σηραγγ*", "γεφυρ*", "οδικ* αξον*",
       "αυτοκινητοδρομ*", "εκσκαφ*", "αδει* εκσκαφησ", "χωροθετησ*", "υποδομ*",
+      "βοακ", "flyover", "καστελ*", "γραμμη 4", "λιμαν*", "αεροδρομ*", "υπερταμει*", "ταιπεδ", "logistics",
       "ppp", "concession", "rail*", "metro", "tunnel*", "bridge*", "motorway",
       "civil works", "permit*",
     ],
@@ -252,9 +255,12 @@ export const NOISE_HARD_REJECT = Object.freeze({
 // so per the spec's fallback instruction this list is defined explicitly here;
 // used by watch-rules.js' deals-companies rule (requiredEntities/bannedEntities).
 export const SECTOR_ORGANIZATIONS = Object.freeze([
-  "ΟΤΕ", "OTE", "Cosmote", "Vodafone", "Nova", "United Fiber",
-  "ΔΕΗ", "PPC", "ΑΔΜΗΕ", "IPTO", "ΔΕΔΔΗΕ", "HEDNO", "ΔΕΣΦΑ", "ΔΕΠΑ",
-  "Grid Telecom", "Intracom", "ΓΕΚ ΤΕΡΝΑ", "GEK TERNA", "Aktor", "AKTOR", "Metlen",
+  "ΟΤΕ", "OTE", "Cosmote", "Vodafone", "Nova", "United Fiber", "Inalan", "Starlink", "FiberGrid",
+  "Digital Realty", "Lamda Hellix", "Data4", "Vantage Towers", "Sparkle",
+  "ΔΕΗ", "PPC", "ΑΔΜΗΕ", "IPTO", "ΔΕΔΔΗΕ", "HEDNO", "ΔΕΣΦΑ", "ΔΕΠΑ", "ΔΑΠΕΕΠ", "DAPEEP",
+  "Grid Telecom", "Intracom", "ΓΕΚ ΤΕΡΝΑ", "GEK TERNA", "Aktor", "AKTOR", "AVAX", "ΑΒΑΞ", "Ellaktor", "Ελλάκτωρ",
+  "Metlen", "Protergia", "Motor Oil", "HelleniQ Energy", "HelleniQ", "Τέρνα Ενεργειακή", "Terna Energy", "Elpedison",
+  "Fraport", "Υπερταμείο", "Growthfund", "ΤΑΙΠΕΔ",
 ]);
 
 // round-5 deals-companies gating (decisions.md): an item may carry the
@@ -571,8 +577,8 @@ export function isWaterSewageStory(item = {}) {
 // category and out of lead contention (public-data.js leadPreferenceScore) without dropping
 // them: they still publish under "regulators".
 const CO2_STORAGE_TERMS = [
-  "co2", "carbon capture", "carbon storage", "carbon dioxide",
-  "διοξειδιο του ανθρακα", "δεσμευσ* ανθρακα", "αποθηκευσ* co2", "αποθηκευσ* διοξειδιου",
+  "co2", "co₂", "carbon capture", "carbon storage", "carbon dioxide",
+  "διοξειδιο του ανθρακα", "δεσμευσ* ανθρακα", "αποθηκευσ* co2", "αποθηκευσ* co₂", "αποθηκευσ* διοξειδιου",
 ];
 
 export function isCarbonCaptureStorageStory(item = {}) {
@@ -731,9 +737,9 @@ export function isCyprusOnly(article = {}) {
 const TELCO_NETWORK_ANGLE_TERMS = [
   "δικτυ*", "οπτικ*", "ftth", "fttx", "fttb", "fttc", "5g", "φασμα*", "κεραι*", "παροχ*",
   "εεττ", "καλωδι*", "υποθαλασσ*",
-  "δορυφορ*", "χαλκ*",
+  "δορυφορ*", "χαλκ*", "starlink", "fwa", "ufbb", "gigabit", "ευρυζωνικ*", "broadband",
   "οτε", "telekom", "cosmote", "vodafone", "nova", "united fiber", "united group",
-  "δεη fiber", "grid telecom",
+  "δεη fiber", "fibergrid", "grid telecom", "inalan", "vantage towers",
 ];
 
 // round-4 fix: "δίκτυο συνεργατών/διανομής/πωλήσεων/καταστημάτων/..." (and the
@@ -798,7 +804,8 @@ export function specSectionKeywordMatch(text, section) {
 // out-rank routine tier-1 coverage for lead choice and backfill ordering.
 const TIER1_ACTION_WORD_TERMS = [
   "διαβουλευσ*", "αποφασ*", "νομοσχεδι*", "ρυθμισ*", "κανονισμ*", "προσκλησ*",
-  "προκηρυξ*", "διαγωνισμ*", "εγκρισ*", "αδειοδοτησ*",
+  "προκηρυξ*", "διακηρυξ*", "διαγωνισμ*", "κατακυρωσ*", "αναθεσ*", "ανακηρυξ*", "συμβασ*",
+  "εγκρισ*", "αδειοδοτησ*",
   "προγραμμα αναπτυξησ", "προγραμματος αναπτυξησ", "σχεδιο αναπτυξησ", "σχεδιου αναπτυξησ",
   "φασμα*", "δημοπρασι*", "εκχωρησ*",
 ];

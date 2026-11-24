@@ -316,4 +316,147 @@ export const SOURCES = [
     url: "https://news.google.com/rss/search?q=%28ADMIE%20OR%20IPTO%20OR%20HEDNO%20OR%20DEDDIE%20OR%20RAAEY%20OR%20PPC%20OR%20renewable%20OR%20storage%29%20Greece&hl=el&gl=GR&ceid=GR%3Ael",
     limit: 60,
   },
+  {
+    // Verified 2026-11-24: EU TED v3 API (200 OK JSON) for active Greek public
+    // procurement notices across telecom, energy-grid and civil-infrastructure CPVs.
+    id: "ted-greek-tenders",
+    name: "TED – Δημόσιοι Διαγωνισμοί ΕΕ",
+    type: "ted",
+    tier: 1,
+    url: "https://api.ted.europa.eu/v3/notices/search",
+    country: "GRC",
+    lookbackDays: 21,
+    minValueEur: 500_000,
+    titleFilter: [
+      "οπτικ* ιν*", "ftth", "5g", "τηλεπικοινων*", "ευρυζων*", "data center*", "κεντρ* δεδομενων",
+      "υποσταθμ*", "διασυνδεσ*", "ηλεκτρικ*", "ηλεκτροπαραγ*", "ενεργει*", "απε", "φωτοβολταικ*", "αιολικ*", "αποθηκευσ*", "μπαταρι*",
+      "φυσικ* αερι*", "αγωγ*", "σιδηροδρομ*", "μετρο", "αυτοκινητοδρομ*", "σηραγγ*", "γεφυρ*", "λιμαν*", "αεροδρομ*",
+      "αδμηε", "δεδδηε", "δεσφα", "οσε", "δεη", "οτε", "σδιτ", "παραχωρησ*",
+    ],
+    sections: ["tenders-contracts"],
+    weight: 1.0,
+    dayCap: 6,
+    homeCap: 2,
+    pollMin: 180,
+    limit: 40,
+  },
+  {
+    // Verified 2026-11-24: Greek Government Diavgeia OpenData API (200 OK JSON)
+    // for Δ.2.1 (Tender Summary) and Δ.2.2 (Contract Award) >= €500k in our sectors.
+    id: "diavgeia-tenders",
+    name: "Διαύγεια – Διαγωνισμοί & Αναθέσεις",
+    type: "diavgeia",
+    tier: 1,
+    url: "https://diavgeia.gov.gr/luminapi/opendata/search.json",
+    decisionTypes: ["Δ.2.1", "Δ.2.2"],
+    lookbackDays: 14,
+    minAmountEur: 500_000,
+    requireTitleFilter: true,
+    titleFilter: [
+      "οπτικ* ιν*", "ftth", "5g", "τηλεπικοινων*", "ευρυζων*", "data center*", "κεντρ* δεδομενων",
+      "υποσταθμ*", "διασυνδεσ*", "ηλεκτρικ*", "ηλεκτροπαραγ*", "απε", "φωτοβολταικ*", "αιολικ*", "αποθηκευσ*", "μπαταρι*",
+      "φυσικ* αερι*", "αγωγ*", "σιδηροδρομ*", "μετρο", "αυτοκινητοδρομ*", "σηραγγ*", "γεφυρ*", "λιμαν*", "αεροδρομ*",
+      "αδμηε", "δεδδηε", "δεσφα", "οσε", "σδιτ", "παραχωρησ*", "βοακ",
+    ],
+    sections: ["tenders-contracts"],
+    weight: 1.0,
+    dayCap: 6,
+    homeCap: 2,
+    pollMin: 180,
+    limit: 30,
+  },
+  {
+    // Verified 2026-11-24: Ministry of Digital Governance WP REST API (200 OK).
+    // Categories: 24 = Δελτία Τύπου - Ανακοινώσεις, 31 = Δημόσια Διαβούλευση.
+    id: "mindigital-announcements",
+    name: "Υπ. Ψηφιακής Διακυβέρνησης",
+    type: "wordpress",
+    tier: 1,
+    url: "https://www.mindigital.gr",
+    categories: [24, 31],
+    lookbackDays: 21,
+    titleFilter: [
+      "τηλεπικοινων*", "οπτικ* ιν*", "ftth", "5g", "ευρυζων*", "gigabit", "ufbb", "smart readiness",
+      "φασμα*", "δορυφορ*", "μικροδορυφορ*", "data center*", "κεντρ* δεδομενων", "ai factory", "pharos",
+      "υποθαλασσι*", "δικτυ*", "εεττ", "διαγωνισμ*", "διαβουλευσ*", "κυβερνοασφαλ*",
+    ],
+    sections: ["regulators-policy", "telecom-fibre"],
+    weight: 1.0,
+    dayCap: 6,
+    homeCap: 2,
+    limit: 30,
+  },
+  {
+    // Verified 2026-11-24: Growthfund / Υπερταμείο WP REST API (200 OK).
+    // Filtered to concessions, ports, airports, infrastructure, energy & telecom tenders.
+    id: "growthfund-announcements",
+    name: "Υπερταμείο – Growthfund",
+    type: "wordpress",
+    tier: 1,
+    url: "https://growthfund.gr",
+    lookbackDays: 21,
+    titleFilter: [
+      "διαγωνισμ*", "προτιμητε* επενδυτ*", "παραχωρησ*", "λιμαν*", "αεροδρομ*", "υποδομ*",
+      "ενεργει*", "δικτυ*", "τηλεπικοινων*", "σδιτ", "σιδηροδρομ*", "μεταφορ*", "μαριν*", "συμβασ*",
+    ],
+    sections: ["tenders-contracts", "infrastructure-works"],
+    weight: 0.95,
+    dayCap: 4,
+    homeCap: 1,
+    limit: 25,
+  },
+  {
+    // Verified 2026-11-24: DAPEEP (RES & Guarantees of Origin Operator) WP REST API (200 OK).
+    // Excludes all-ASCII English duplicate posts so Greek announcements appear once.
+    id: "dapeep-announcements",
+    name: "ΔΑΠΕΕΠ",
+    type: "wordpress",
+    tier: 3,
+    url: "https://www.dapeep.gr",
+    excludeTitlePatterns: ["^[A-Za-z0-9\\s\\-:.,()'/&]+$"],
+    lookbackDays: 21,
+    sections: ["energy-grids"],
+    weight: 0.9,
+    dayCap: 4,
+    homeCap: 1,
+    limit: 25,
+  },
+  {
+    // Verified 2026-11-24: Powergame WP REST API (200 OK).
+    // Categories: 10584 = ENERGYGAME.GR, 960 = GREEN POWER, 962 = START-UPS & DIGITAL.
+    id: "powergame-sector",
+    name: "Powergame",
+    type: "wordpress",
+    tier: 4,
+    url: "https://www.powergame.gr",
+    categories: [10584, 960, 962],
+    lookbackDays: 7,
+    dayCap: 6,
+    homeCap: 2,
+    limit: 30,
+  },
+  {
+    // Verified 2026-11-24: Euro2day Business & Deals RSS (200 OK).
+    id: "euro2day-business",
+    name: "Euro2day",
+    type: "rss",
+    tier: 4,
+    url: "https://www.euro2day.gr/rss.ashx?catid=124",
+    dayCap: 6,
+    homeCap: 2,
+    limit: 50,
+  },
+  {
+    // Narrower FTTH/5G/telecom Google News query replacing the disabled generic
+    // google-news-greek-telco feed (spec §2.3 gnews-fibre); explicitly excludes TV listings.
+    id: "gnews-fibre",
+    name: "Google News – Telecom & Fibre",
+    type: "rss",
+    tier: 4,
+    url: "https://news.google.com/rss/search?q=%28FTTH%20OR%20%22%CE%BF%CF%80%CF%84%CE%B9%CE%BA%CE%AE%20%CE%AF%CE%BD%CE%B1%22%20OR%20%22%CE%BF%CF%80%CF%84%CE%B9%CE%BA%CE%AD%CF%82%20%CE%AF%CE%BD%CE%B5%CF%82%22%20OR%20FiberGrid%20OR%20%22United%20Fiber%22%20OR%20Inalan%20OR%20%22Gigabit%20Voucher%22%20OR%20%22private%205G%22%20OR%20%CE%95%CE%95%CE%A4%CE%A4%29%20%28%CE%95%CE%BB%CE%BB%CE%AC%CE%B4%CE%B1%20OR%20%CE%9F%CE%A4%CE%95%20OR%20Cosmote%20OR%20Vodafone%20OR%20Nova%20OR%20%CE%94%CE%95%CE%97%29%20-%CF%84%CE%B7%CE%BB%CE%B5%CF%8C%CF%81%CE%B1%CF%83%CE%B7%20-%CF%80%CF%81%CF%8C%CE%B3%CF%81%CE%B1%CE%BC%CE%BC%CE%B1%20-%CE%BA%CE%B1%CE%BD%CE%AC%CE%BB%CE%B9%CE%B1%20-%CE%9F%CF%85%CE%BA%CF%81%CE%B1%CE%BD%CE%AF%CE%B1&hl=el&gl=GR&ceid=GR%3Ael",
+    sections: ["telecom-fibre"],
+    dayCap: 6,
+    homeCap: 2,
+    limit: 40,
+  },
 ];

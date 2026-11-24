@@ -6,6 +6,8 @@ import { canonicalizeUrl } from "./sources/utils.js";
 import { cleanOutgoingLink, publicSourceName, readFeedSummary } from "./public-links.js";
 import { SOURCES } from "../config/sources.js";
 import { CURATED_SCORE, isCuratedRow } from "./curated.js";
+import { detectArticleOrganizations } from "./article-organizations.js";
+import { ORGANIZATION_BY_ID } from "./organizations.js";
 import {
   BACKFILL_MAX_AGE_HOURS,
   BACKFILL_MIN_SCORE,
@@ -803,15 +805,23 @@ function toArticle(row) {
     publishers: [source?.name, hostname, row.metadata?.publisher, ...(row.metadata?.relatedPublishers || [])],
   });
   const publisher = row.metadata?.publisher || feed.publisher;
+  const cleanTitle = cleanTitleForSource(row.title, [source?.name, hostname, publisher]);
+  const entities = detectArticleOrganizations({ title: cleanTitle, summary: feed.summary })
+    .map((match) => ORGANIZATION_BY_ID[match.organizationId]?.name)
+    .filter(Boolean)
+    .slice(0, 3);
+  const sourceTier = source?.tier === 1 ? "official" : source?.tier === 3 ? "operator" : null;
   return {
     id: row.id,
     url: link.url,
     viaGoogleNews: link.viaGoogleNews,
-    title: cleanTitleForSource(row.title, [source?.name, hostname, publisher]),
+    title: cleanTitle,
     summary: feed.summary,
     publishedAt: row.published_at ? new Date(row.published_at).toISOString() : null,
     sourceId: row.source_id,
     sourceName: publicSourceName({ publisher, configuredName: source?.name, url: link.url }),
+    sourceTier,
+    entities,
     score: Number(row.score),
     priority: row.priority === "headline" ? "headline" : null,
     categories: row.categories || [],
@@ -825,6 +835,23 @@ function toArticle(row) {
       relatedPublishers: row.metadata?.relatedPublishers || [],
     },
   };
+}
+
+/**
+ * Counts public organisation mentions across a set of public articles so the
+ * front page and section pages can render clickable "In the news" entity chips.
+ */
+export function extractTrendingEntities(articles = [], { limit = 8 } = {}) {
+  const counts = new Map();
+  for (const article of articles) {
+    for (const name of article?.entities || []) {
+      counts.set(name, (counts.get(name) || 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([name, count]) => ({ name, count }));
 }
 
 function toStory(row) {

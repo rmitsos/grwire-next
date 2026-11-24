@@ -1,10 +1,13 @@
+import Link from "next/link";
 import { LandingHeader } from "@/components/landing/LandingHeader";
 import { LandingFooter } from "@/components/landing/LandingFooter";
 import { LANDING_ROUTES } from "@/landing/routes";
 import { getInsightsCopy } from "@/insights/copy";
-import { insightPath, insightsIndexPath } from "@/insights/content";
+import { getPublicCopy } from "@/landing/public-copy";
+import { insightPath, insightsIndexPath, listInsights } from "@/insights/content";
 import { Markdown, renderInlineNodes } from "@/components/insights/Markdown";
 import { InsightCover } from "@/components/insights/InsightCover";
+import { InsightReadingBar } from "@/components/insights/InsightReadingBar";
 
 function formatDate(iso, lang) {
   if (!iso) return null;
@@ -18,7 +21,10 @@ function formatDate(iso, lang) {
 
 export function InsightArticlePage({ lang, insight }) {
   const copy = getInsightsCopy(lang);
+  const publicCopy = getPublicCopy(lang);
   const dateLabel = formatDate(insight.date, lang);
+  const highlight = publicCopy.insightHighlights?.[insight.slug];
+  const relatedInsights = listInsights(lang).filter((item) => item.slug !== insight.slug);
 
   return (
     <>
@@ -43,9 +49,19 @@ export function InsightArticlePage({ lang, insight }) {
                 {line}
               </p>
             ))}
-            <p className="insight-meta">
-              {[dateLabel, copy.minReadLabel(insight.readingMinutes)].filter(Boolean).join(" · ")}
-            </p>
+            <div className="insight-meta-bar">
+              <p className="insight-meta">
+                {[dateLabel, copy.minReadLabel(insight.readingMinutes)].filter(Boolean).join(" · ")}
+              </p>
+              <InsightReadingBar title={insight.title} labels={publicCopy.wireUi} />
+            </div>
+
+            {highlight && (
+              <div className="insight-key-callout">
+                <strong>{highlight.stat}</strong>
+                <span>{highlight.label}</span>
+              </div>
+            )}
 
             <div className="insight-body">
               <Markdown blocks={insight.body} />
@@ -75,6 +91,25 @@ export function InsightArticlePage({ lang, insight }) {
                   ))}
                 </ol>
                 {insight.method && <p className="insight-method">{insight.method}</p>}
+              </section>
+            )}
+
+            {relatedInsights.length > 0 && (
+              <section className="insight-related">
+                <span className="pub-label">{publicCopy.home.insightsLabel}</span>
+                <h2>{publicCopy.home.insightsTitle}</h2>
+                <div className="insight-related-grid">
+                  {relatedInsights.map((item) => {
+                    const itemStat = publicCopy.insightHighlights?.[item.slug];
+                    return (
+                      <Link className="insight-related-card" href={insightPath(item.slug, lang)} key={item.slug}>
+                        {itemStat && <strong className="related-stat">{itemStat.stat}</strong>}
+                        <h3>{item.title}</h3>
+                        <span>{copy.readMore}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
               </section>
             )}
 

@@ -72,6 +72,14 @@ export const LANDING_COPY = {
       signupClosed: "Η εγγραφή ανοίγει σύντομα.",
       // landing-copy.md, "Context line for LinkedIn arrivals" — verbatim, split around the link text.
       fromLinkedIn: { before: "Ήρθατε από μια ανάρτηση στο LinkedIn; Η πλήρης ανάλυση βρίσκεται ", link: "εδώ →", after: "." },
+      briefPreview: {
+        eyebrow: "Πρωινό δελτίο · 08:00",
+        subject: "GR Wire: Τηλεπικοινωνίες, Ενέργεια & Υποδομές",
+        from: "GR Wire <news@mail.grwire.com>",
+        badge: "Χωρίς διαφημίσεις · Χωρίς tracking",
+        insightTag: "Τελευταίο Insight",
+        footerNote: "Κάθε στοιχείο συνδέεται απευθείας στην αρχική πηγή.",
+      },
     },
     subscribeForm: {
       fieldLabel: "Το email σας",
@@ -182,6 +190,14 @@ export const LANDING_COPY = {
       signupClosed: "Sign-up opens soon.",
       // landing-copy.md, "Context line for LinkedIn arrivals" — verbatim, split around the link text.
       fromLinkedIn: { before: "Came from a LinkedIn post? The full analysis is ", link: "here →", after: "." },
+      briefPreview: {
+        eyebrow: "Morning brief · 08:00",
+        subject: "GR Wire: Telecoms, Energy & Infrastructure",
+        from: "GR Wire <news@mail.grwire.com>",
+        badge: "No ads · No tracking",
+        insightTag: "Latest Insight",
+        footerNote: "Every figure links directly to its original source.",
+      },
     },
     subscribeForm: {
       fieldLabel: "Your email",
