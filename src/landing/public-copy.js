@@ -30,6 +30,9 @@ export const PUBLIC_COPY = {
       trendingLabel: "Στην επικαιρότητα",
       quickSearchPlaceholder: "Αναζήτηση εταιρείας ή έργου…",
       featuredInsightEyebrow: "Ανάλυση σε βάθος",
+      alsoOnWire: "Επίσης στην επικαιρότητα",
+      desksLabel: "Ροή ανά ενότητα",
+      readMoreWire: "Όλο το wire →",
     },
     tiers: {
       official: "Επίσημη πηγή",
@@ -129,6 +132,9 @@ export const PUBLIC_COPY = {
       trendingLabel: "In the news",
       quickSearchPlaceholder: "Search company or project…",
       featuredInsightEyebrow: "Featured analysis",
+      alsoOnWire: "Also on the wire",
+      desksLabel: "Live by section",
+      readMoreWire: "Full wire →",
     },
     tiers: {
       official: "Official source",

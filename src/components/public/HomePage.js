@@ -44,7 +44,14 @@ export async function HomePage({ lang }) {
   const moreInsights = listInsights(lang).filter((item) => item.slug !== insight?.slug);
   const landing = LANDING_COPY[lang];
   const signupOpen = getNewsletterConfig().enabled;
-  const showLatest = data.recent.length > 0 || !hasColumnItems;
+  // Promote up to 4 recent stories into the left column below the Lead Story so the two-column
+  // hero stays visually balanced alongside the Featured Insight Spotlight (once-per-story intact).
+  const frontBriefs = data.lead && insight ? (data.recent ?? []).slice(0, 4) : [];
+  const remainingRecent = (data.recent ?? []).slice(frontBriefs.length);
+  const showLatest = remainingRecent.length > 0 || !hasColumnItems;
+  const activeFrontDesks = tiles.filter(
+    (section) => section.slug !== "tenders" && (data.sectionSummary?.[section.slug]?.count || 0) > 0,
+  );
 
   // Front-page telemetry & trending entities derived purely from the homepage's already-placed stories.
   const placedStories = [
@@ -114,48 +121,137 @@ export async function HomePage({ lang }) {
       {(data.lead || insight) && (
         <section className={`pub-front-grid${data.lead && insight ? "" : " single"}`}>
           {data.lead && (
-            <article className="pub-lead pub-lead-card" style={{ "--accent": leadAccent }}>
-              <div className="pub-lead-top">
-                <span className="pub-label">{copy.leadLabel}</span>
-                <span className="pub-lead-sep" aria-hidden="true">·</span>
-                <span className="pub-lead-date">{formatWireDate(data.lead.publishedAt, lang)}</span>
-                {leadPrimary && (
-                  <Link className="lead-section-pill" href={sectionPath(lang, leadPrimary)} style={{ "--tab": leadAccent }}>
-                    <i className="sec-mini-dot" aria-hidden="true" />
-                    {sectionTitle(leadPrimary, lang)}
-                  </Link>
-                )}
-              </div>
-              <h2>
-                <a href={data.lead.url} target="_blank" rel="noreferrer">
-                  {data.lead.title}
-                  <span className="ext-arrow" aria-hidden="true">↗</span>
-                </a>
-              </h2>
-              <div className="wire-meta-row lead-meta-row">
-                {data.lead.sourceName && (
-                  <span className="wire-source" style={{ color: leadAccent }}>{data.lead.sourceName}</span>
-                )}
-                {data.lead.sourceTier && copy.tiers[data.lead.sourceTier] && (
-                  <span className={`tier-badge tier-${data.lead.sourceTier}`}>{copy.tiers[data.lead.sourceTier]}</span>
-                )}
-              </div>
-              {data.lead.viaGoogleNews && <p className="wire-via">{copy.viaGoogleNews}</p>}
-              {data.lead.summary && <p className="pub-lead-summary">{data.lead.summary}</p>}
-              {data.lead.entities?.length > 0 && (
-                <div className="lead-entities">
-                  {data.lead.entities.map((entity) => (
-                    <Link
-                      className="wire-entity-chip"
-                      href={`${LANDING_ROUTES[lang].search}?q=${encodeURIComponent(entity)}`}
-                      key={entity}
-                    >
-                      {entity}
+            <div className="pub-front-left">
+              <article className="pub-lead pub-lead-card" style={{ "--accent": leadAccent }}>
+                <div className="pub-lead-top">
+                  <span className="pub-label">{copy.leadLabel}</span>
+                  <span className="pub-lead-sep" aria-hidden="true">·</span>
+                  <span className="pub-lead-date">{formatWireDate(data.lead.publishedAt, lang)}</span>
+                  {leadPrimary && (
+                    <Link className="lead-section-pill" href={sectionPath(lang, leadPrimary)} style={{ "--tab": leadAccent }}>
+                      <i className="sec-mini-dot" aria-hidden="true" />
+                      {sectionTitle(leadPrimary, lang)}
                     </Link>
-                  ))}
+                  )}
                 </div>
+                <h2>
+                  <a href={data.lead.url} target="_blank" rel="noreferrer">
+                    {data.lead.title}
+                    <span className="ext-arrow" aria-hidden="true">↗</span>
+                  </a>
+                </h2>
+                <div className="wire-meta-row lead-meta-row">
+                  {data.lead.sourceName && (
+                    <span className="wire-source" style={{ color: leadAccent }}>{data.lead.sourceName}</span>
+                  )}
+                  {data.lead.sourceTier && copy.tiers[data.lead.sourceTier] && (
+                    <span className={`tier-badge tier-${data.lead.sourceTier}`}>{copy.tiers[data.lead.sourceTier]}</span>
+                  )}
+                </div>
+                {data.lead.viaGoogleNews && <p className="wire-via">{copy.viaGoogleNews}</p>}
+                {data.lead.summary && <p className="pub-lead-summary">{data.lead.summary}</p>}
+                {data.lead.entities?.length > 0 && (
+                  <div className="lead-entities">
+                    {data.lead.entities.map((entity) => (
+                      <Link
+                        className="wire-entity-chip"
+                        href={`${LANDING_ROUTES[lang].search}?q=${encodeURIComponent(entity)}`}
+                        key={entity}
+                      >
+                        {entity}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </article>
+
+              {insight && frontBriefs.length > 0 && (
+                <section className="pub-front-briefs" aria-label={copy.home.alsoOnWire}>
+                  <div className="front-briefs-head">
+                    <span className="pub-label">{copy.home.alsoOnWire}</span>
+                    <Link href={LANDING_ROUTES[lang].search}>{copy.home.readMoreWire}</Link>
+                  </div>
+                  <ul className="front-brief-list">
+                    {frontBriefs.map((article) => {
+                      const primary = article.categories?.[0];
+                      const accent = COLOR_BY_SECTION[primary] || "var(--sec-telecom-fibre)";
+                      return (
+                        <li className="front-brief-item" key={article.url}>
+                          <div className="front-brief-meta">
+                            {primary && (
+                              <span className="front-brief-sec" style={{ "--tab": accent }}>
+                                <i className="sec-mini-dot" aria-hidden="true" />
+                                {sectionTitle(primary, lang)}
+                              </span>
+                            )}
+                            {article.sourceName && <span className="front-brief-src">{article.sourceName}</span>}
+                            {article.sourceTier && copy.tiers[article.sourceTier] && (
+                              <span className={`tier-badge tier-${article.sourceTier}`}>{copy.tiers[article.sourceTier]}</span>
+                            )}
+                            <time className="front-brief-time" dateTime={article.publishedAt || undefined}>
+                              {formatWireDate(article.publishedAt, lang)}
+                            </time>
+                          </div>
+                          <h3>
+                            <a href={article.url} target="_blank" rel="noreferrer">
+                              {article.title}
+                              <span className="ext-arrow" aria-hidden="true">↗</span>
+                            </a>
+                          </h3>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {frontBriefs.length < 3 && activeFrontDesks.length > 0 && (
+                    <div className="front-brief-desks-bar">
+                      {activeFrontDesks.map((section) => (
+                        <Link
+                          className="front-desk-pill"
+                          href={sectionPath(lang, section.slug)}
+                          style={{ "--tab": section.color }}
+                          key={section.slug}
+                        >
+                          <i className="sec-mini-dot" aria-hidden="true" />
+                          <span>{sectionTitle(section.slug, lang)}</span>
+                          <strong>{data.sectionSummary[section.slug].count}</strong>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </section>
               )}
-            </article>
+
+              {insight && frontBriefs.length === 0 && activeFrontDesks.length > 0 && (
+                <section className="pub-front-briefs pub-front-desks" aria-label={copy.home.desksLabel}>
+                  <div className="front-briefs-head">
+                    <span className="pub-label">{copy.home.desksLabel}</span>
+                    <Link href={LANDING_ROUTES[lang].search}>{copy.home.readMoreWire}</Link>
+                  </div>
+                  <ul className="front-desk-list">
+                    {activeFrontDesks.map((section) => {
+                      const info = data.sectionSummary[section.slug];
+                      return (
+                        <li key={section.slug}>
+                          <Link className="front-desk-row" href={sectionPath(lang, section.slug)} style={{ "--tab": section.color }}>
+                            <span className="front-desk-body">
+                              <span className="front-desk-main">
+                                <i className="sec-mini-dot" aria-hidden="true" />
+                                <strong>{sectionTitle(section.slug, lang)}</strong>
+                                <span className="front-desk-latest">{formatWireDate(info.latestAt, lang)}</span>
+                              </span>
+                              {copy.sectionDecks?.[section.slug] && (
+                                <span className="front-desk-deck">{copy.sectionDecks[section.slug]}</span>
+                              )}
+                            </span>
+                            <span className="front-desk-count">{info.count}</span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              )}
+            </div>
           )}
 
           {insight && (
@@ -201,7 +297,7 @@ export async function HomePage({ lang }) {
             <div><span className="pub-label">{copy.latestLabel}</span><h2>{copy.latestTitle}</h2></div>
             <Link href={LANDING_ROUTES[lang].search}>{copy.searchLink}</Link>
           </div>
-          <WireList articles={data.recent} lang={lang} interactive filterable />
+          <WireList articles={remainingRecent} lang={lang} interactive filterable />
         </section>
       )}
 
