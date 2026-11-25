@@ -105,7 +105,7 @@ html:has(> body.landing) { scroll-padding-top: calc(var(--header-h) + 12px); }
 .lang-toggle a { padding: 7px 11px; text-decoration: none; color: var(--muted); display: inline-block; transition: color .15s ease, background .15s ease; }
 .lang-toggle a:hover { color: var(--ink); }
 .lang-toggle a.active { background: var(--ink); color: var(--paper); }
-.btn {
+.landing a.btn, .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -671,7 +671,7 @@ a:hover .ext-arrow { transform: translate(2px, -2px); color: var(--signal); }
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
 }
 .pub-lead-top { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .pub-lead-sep { color: var(--muted); }
@@ -1065,7 +1065,7 @@ html[lang="en"] .nf-el {
 .insight-promo.has-cover { display: grid; grid-template-columns: minmax(200px, 300px) 1fr; gap: 28px; align-items: center; }
 .insight-promo-cover { display: block; }
 .spotlight-cover-link .insight-cover-media video,
-.spotlight-cover-link .insight-cover-media img { aspect-ratio: 16 / 10; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 9px; }
+.spotlight-cover-link .insight-cover-media img { aspect-ratio: 1 / 1; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 10px; }
 @media (max-width: 700px) {
   .insight-promo.has-cover { grid-template-columns: 1fr; gap: 18px; }
   .insight-cover { max-width: none; }

@@ -319,14 +319,17 @@ export const SOURCES = [
   {
     // Verified 2026-11-24: EU TED v3 API (200 OK JSON) for active Greek public
     // procurement notices across telecom, energy-grid and civil-infrastructure CPVs.
+    // sectionOnly: tenders live under /tenders in the menu, never in the homepage news stream.
     id: "ted-greek-tenders",
     name: "TED – Δημόσιοι Διαγωνισμοί ΕΕ",
     type: "ted",
     tier: 1,
+    sectionOnly: true,
     url: "https://api.ted.europa.eu/v3/notices/search",
     country: "GRC",
     lookbackDays: 21,
     minValueEur: 500_000,
+    excludeTitlePatterns: ["πλυσ", "καθαριοτ", "καθαρισμ", "φυλαξ", "αποψιλ"],
     titleFilter: [
       "οπτικ* ιν*", "ftth", "5g", "τηλεπικοινων*", "ευρυζων*", "data center*", "κεντρ* δεδομενων",
       "υποσταθμ*", "διασυνδεσ*", "ηλεκτρικ*", "ηλεκτροπαραγ*", "ενεργει*", "απε", "φωτοβολταικ*", "αιολικ*", "αποθηκευσ*", "μπαταρι*",
@@ -336,22 +339,25 @@ export const SOURCES = [
     sections: ["tenders-contracts"],
     weight: 1.0,
     dayCap: 6,
-    homeCap: 2,
+    homeCap: 0,
     pollMin: 180,
     limit: 40,
   },
   {
     // Verified 2026-11-24: Greek Government Diavgeia OpenData API (200 OK JSON)
     // for Δ.2.1 (Tender Summary) and Δ.2.2 (Contract Award) >= €500k in our sectors.
+    // sectionOnly: tenders live under /tenders in the menu, never in the homepage news stream.
     id: "diavgeia-tenders",
     name: "Διαύγεια – Διαγωνισμοί & Αναθέσεις",
     type: "diavgeia",
     tier: 1,
+    sectionOnly: true,
     url: "https://diavgeia.gov.gr/luminapi/opendata/search.json",
     decisionTypes: ["Δ.2.1", "Δ.2.2"],
     lookbackDays: 14,
     minAmountEur: 500_000,
     requireTitleFilter: true,
+    excludeTitlePatterns: ["πλυσ", "καθαριοτ", "καθαρισμ", "φυλαξ", "αποψιλ"],
     titleFilter: [
       "οπτικ* ιν*", "ftth", "5g", "τηλεπικοινων*", "ευρυζων*", "data center*", "κεντρ* δεδομενων",
       "υποσταθμ*", "διασυνδεσ*", "ηλεκτρικ*", "ηλεκτροπαραγ*", "απε", "φωτοβολταικ*", "αιολικ*", "αποθηκευσ*", "μπαταρι*",
@@ -361,7 +367,7 @@ export const SOURCES = [
     sections: ["tenders-contracts"],
     weight: 1.0,
     dayCap: 6,
-    homeCap: 2,
+    homeCap: 0,
     pollMin: 180,
     limit: 30,
   },

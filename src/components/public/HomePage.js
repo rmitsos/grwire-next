@@ -36,7 +36,8 @@ export async function HomePage({ lang }) {
   // back (fewer than 3 items) is neither drawn nor linked.
   const columnSlugs = { filled: [] };
   for (const slug of Object.keys(PUBLIC_CATEGORIES)) {
-    if ((data.columns[slug] ?? []).length) columnSlugs.filled.push(slug);
+    // Tenders live under /tenders in the navigation menu, not as a homepage news column.
+    if (slug !== "tenders" && (data.columns[slug] ?? []).length) columnSlugs.filled.push(slug);
   }
   // One tile per section the nav shows, in nav order. A held-back section gets no tile and no link.
   const tiles = NAV_SECTIONS.filter((section) => navVisibility[section.slug]?.shown !== false);

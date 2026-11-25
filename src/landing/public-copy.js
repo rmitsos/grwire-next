@@ -49,6 +49,7 @@ export const PUBLIC_COPY = {
       openSource: "Άνοιγμα πηγής",
     },
     insightHighlights: {
+      "datacenter-grid": { stat: ">12 GW vs. 517 MW", label: "Αιτήσεις data centers στον ΑΔΜΗΕ έναντι όρων σύνδεσης" },
       "starlink-numbers": { stat: "134.355", label: "Συνδέσεις 5G FWA ΟΤΕ (Σεπτ. 2026) vs. >100.000 εκτιμήσεις Starlink" },
       "starlink-capex": { stat: "€600M+", label: "Στόχος επενδύσεων Telekom 2026" },
       "fibre-switch": { stat: "1 στα 3", label: "Σπίτια με διαθέσιμη ίνα που την έχουν επιλέξει" },
@@ -147,6 +148,7 @@ export const PUBLIC_COPY = {
       openSource: "Open source",
     },
     insightHighlights: {
+      "datacenter-grid": { stat: ">12 GW vs. 517 MW", label: "Data center grid requests at ADMIE vs. contracted MW" },
       "starlink-numbers": { stat: "134,355", label: "OTE 5G FWA lines (Sept 2026) vs. 100k+ Starlink est." },
       "starlink-capex": { stat: "€600M+", label: "Telekom 2026 capex target" },
       "fibre-switch": { stat: "1 in 3", label: "Homes passed with active FTTH" },

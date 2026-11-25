@@ -101,9 +101,26 @@ test("loader: fibre-switch source #7 has url null, source #8 has a url (both lan
   }
 });
 
-test("listInsights: order is starlink-numbers, starlink-capex, fibre-switch, ai-greek-smes, in both languages", () => {
-  assert.deepEqual(listInsights("el").map((i) => i.slug), ["starlink-numbers", "starlink-capex", "fibre-switch", "ai-greek-smes"]);
-  assert.deepEqual(listInsights("en").map((i) => i.slug), ["starlink-numbers", "starlink-capex", "fibre-switch", "ai-greek-smes"]);
+test("listInsights: order is datacenter-grid, starlink-numbers, starlink-capex, fibre-switch, ai-greek-smes, in both languages", () => {
+  assert.deepEqual(listInsights("el").map((i) => i.slug), ["datacenter-grid", "starlink-numbers", "starlink-capex", "fibre-switch", "ai-greek-smes"]);
+  assert.deepEqual(listInsights("en").map((i) => i.slug), ["datacenter-grid", "starlink-numbers", "starlink-capex", "fibre-switch", "ai-greek-smes"]);
+});
+
+test("loader: datacenter-grid (Insight #5) is published with bilingual charts, cover cards, and 5 sources", () => {
+  for (const [lang, expectedChart, expectedCover] of [
+    ["en", "/insights/05-datacenter-grid-chart.png", "/insights/05-datacenter-grid-cover.png"],
+    ["el", "/insights/05-datacenter-grid-chart.el.png", "/insights/05-datacenter-grid-cover.el.png"],
+  ]) {
+    const insight = getInsight("datacenter-grid", lang);
+    assert.ok(insight, `datacenter-grid:${lang} should load`);
+    assert.equal(insight.draft, false);
+    assert.equal(insight.sources.length, 5);
+    assert.equal(insight.chart.src, expectedChart);
+    assert.equal(insight.cover.video, null);
+    assert.equal(insight.cover.image, expectedCover);
+    assert.ok(existsSync(path.join(REPO_ROOT, "public", expectedChart.slice(1))));
+    assert.ok(existsSync(path.join(REPO_ROOT, "public", expectedCover.slice(1))));
+  }
 });
 
 test("loader: starlink-capex is published (not draft), in both languages", () => {
@@ -156,10 +173,10 @@ test("insightPath / insightsIndexPath", () => {
 
 test("insightStaticParams returns all slugs for both languages", () => {
   assert.deepEqual(insightStaticParams("el"), [
-    { slug: "starlink-numbers" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+    { slug: "datacenter-grid" }, { slug: "starlink-numbers" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
   ]);
   assert.deepEqual(insightStaticParams("en"), [
-    { slug: "starlink-numbers" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+    { slug: "datacenter-grid" }, { slug: "starlink-numbers" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
   ]);
 });
 
@@ -494,10 +511,10 @@ test("insight route files exist and generate static params for both slugs", () =
   }
 
   assert.deepEqual(insightStaticParams("el"), [
-    { slug: "starlink-numbers" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+    { slug: "datacenter-grid" }, { slug: "starlink-numbers" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
   ]);
   assert.deepEqual(insightStaticParams("en"), [
-    { slug: "starlink-numbers" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
+    { slug: "datacenter-grid" }, { slug: "starlink-numbers" }, { slug: "starlink-capex" }, { slug: "fibre-switch" }, { slug: "ai-greek-smes" },
   ]);
 });
 

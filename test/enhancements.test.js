@@ -12,7 +12,7 @@ import {
   hasTier1ActionWord,
 } from "../src/index.js";
 import { SOURCES } from "../config/sources.js";
-import { extractTrendingEntities, selectArticles } from "../src/public-data.js";
+import { extractTrendingEntities, selectArticles, buildHomepageSections } from "../src/public-data.js";
 
 test("createSourceAdapter supports ted and diavgeia adapters", () => {
   assert.ok(createSourceAdapter("ted") instanceof TedSourceAdapter);
@@ -185,4 +185,35 @@ test("config/sources.js registers the newly verified primary and sector sources"
   ]) {
     assert.ok(ids.has(id), `expected enabled source ${id}`);
   }
+});
+
+test("TED and Diavgeia tenders are sectionOnly: shown on /tenders, excluded from homepage news stream", () => {
+  const now = Date.parse("2026-11-24T12:00:00Z");
+  const rows = [
+    {
+      canonical_url: "https://diavgeia.gov.gr/decision/view/TEST1",
+      title: "Διαγωνισμός: Υποσταθμός υψηλής τάσης 5 εκατ. ευρώ",
+      summary: "Περίληψη διακήρυξης (Διαύγεια) · Ποσό: €5 εκατ.",
+      published_at: "2026-11-24T09:00:00Z",
+      source_id: "diavgeia-tenders",
+      metadata: {},
+    },
+    {
+      canonical_url: "https://www.ot.gr/ote-ftth-2026",
+      title: "ΟΤΕ: νέο πρόγραμμα ανάπτυξης FTTH στην Ελλάδα",
+      summary: "Επέκταση οπτικών ινών FTTH σε νέους δήμους.",
+      published_at: "2026-11-24T08:00:00Z",
+      source_id: "ot-gr",
+      metadata: {},
+    },
+  ];
+  const tendersPage = selectArticles(rows, { category: "tenders", now });
+  assert.equal(tendersPage.length, 1);
+  assert.equal(tendersPage[0].metadata.sectionOnly, true);
+
+  const all = selectArticles(rows, { now });
+  const home = buildHomepageSections(all, { now });
+  assert.equal(home.lead?.url, "https://www.ot.gr/ote-ftth-2026");
+  const homeUrls = [home.lead?.url, ...home.recent.map((a) => a.url), ...Object.values(home.columns).flat().map((a) => a.url)].filter(Boolean);
+  assert.ok(!homeUrls.some((u) => u.includes("diavgeia.gov.gr")));
 });

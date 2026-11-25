@@ -494,6 +494,10 @@ export function buildHomepageSections(articles = [], { now = Date.now(), onDrop,
     if (forLead && tier === 1 && !article.metadata?.curated && isConsultationNotice(article.title)) {
       return { ok: false, stage: "consultation_lead" };
     }
+    // Procurement / tender notices stay on /tenders under the menu, never as the homepage lead.
+    if (forLead && !article.metadata?.curated && article.categories?.[0] === "tenders") {
+      return { ok: false, stage: "tenders_lead" };
+    }
     const homeCap = SOURCE_BY_ID.get(article.sourceId)?.homeCap ?? DEFAULT_HOME_CAP_PER_SOURCE;
     if ((perSourceCount.get(article.sourceId) || 0) >= homeCap) return { ok: false, stage: "home_cap" };
     const specSection = homepageSectionOf(article);
@@ -826,11 +830,12 @@ function toArticle(row) {
     priority: row.priority === "headline" ? "headline" : null,
     categories: row.categories || [],
     relevance: row.relevance || [],
-    // An item is section-only while its link still points at news.google.com (unresolved);
-    // a link unwrapped at display time is a normal publisher link.
+    // An item is section-only while its link still points at news.google.com (unresolved)
+    // or when its source is configured as sectionOnly (e.g. TED/Diavgeia tender feeds that live
+    // under /tenders in the menu rather than the homepage news stream).
     metadata: {
       curated: isCuratedRow(row),
-      sectionOnly: link.viaGoogleNews,
+      sectionOnly: Boolean(link.viaGoogleNews || source?.sectionOnly),
       publisher: row.metadata?.publisher,
       relatedPublishers: row.metadata?.relatedPublishers || [],
     },
